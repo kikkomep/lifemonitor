@@ -95,7 +95,7 @@ def __prepare_pr_head__(repo: InstallationGithubWorkflowRepository,
         try:
             branch = repo.get_branch(head)
             if branch and not allow_update:
-                return head
+                delete_branch(repo, head)
             branch_ref = repo.get_git_ref(f'head/{head}')
             branch_exists = True
         except GithubException as e:
