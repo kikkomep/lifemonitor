@@ -874,7 +874,7 @@ def find_refs_by_commit(repo: pygit2.Repository, commit: str):
 def find_commit_info(repo: pygit2.Repository, commit=None, ref=None) -> pygit2.Object:
     assert isinstance(repo, pygit2.Repository), repo
     for c in repo.walk(ref or repo.head.target):
-        if not commit or c.hex == commit or str(c.hex) == str(commit):
+        if not commit or c.id == commit or str(c.id) == str(commit):
             return c
     return None
 
