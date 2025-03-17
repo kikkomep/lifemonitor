@@ -52,7 +52,7 @@ requests~=2.32.3
 rich~=13.9.4
 rocrate==0.13.0
 snakemake==7.32.4
-roc-validator==0.5.0
+roc-validator==0.6.2
 SQLAlchemy==1.4.41
 urllib3==1.26.19
 uwsgi==2.0.28
