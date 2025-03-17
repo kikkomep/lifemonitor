@@ -36,20 +36,18 @@ lm = LifeMonitor.get_instance()
 logger = logging.getLogger(__name__)
 
 
-def validate_workflow(wf_uuid: str, severity: str, format: str) -> dict:
-    # workflow_version: WorkflowVersion = __get_workflow_version__(wf_uuid, "latest")
+def validate_workflow(wf_uuid: str, severity: str) -> dict:
     w = Workflow.find_by_uuid(wf_uuid)
-    return validation_workflow_version_object(w.latest_version, severity, format)
+    return validation_workflow_version_object(w.latest_version, severity)
 
 
-def validate_workflow_version(wf_uuid: str, wf_version: str, severity: str, format) -> dict:
+def validate_workflow_version(wf_uuid: str, wf_version: str, severity: str) -> dict:
     workflow_version: WorkflowVersion = Workflow.find_by_uuid(wf_uuid).versions[wf_version]
-    return validation_workflow_version_object(workflow_version, severity, format)
+    return validation_workflow_version_object(workflow_version, severity)
 
 
 def validation_workflow_version_object(workflow_version: WorkflowVersion,
-                                       severity: Optional[str] = None,
-                                       format: str = "json") -> dict:
+                                       severity: Optional[str] = None) -> dict:
     logger.debug(f"Validating workflow {workflow_version}")
     assert workflow_version is not None, "Workflow version not defined"
     assert isinstance(workflow_version, WorkflowVersion), "Invalid workflow version object"
