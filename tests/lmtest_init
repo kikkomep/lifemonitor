@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 # Copyright (c) 2020-2024 CRS4
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -18,27 +20,6 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import logging
+export PYTHONPATH="."
 
-import psycopg2
-
-from lifemonitor.app import create_app
-from tests.conftest import _get_app_settings
-from tests.conftest_helpers import init_db
-
-logger = logging.getLogger()
-
-
-def init_test_env():
-    settings = _get_app_settings()
-
-    app = create_app(settings=settings, load_jobs=False)
-    with app.app_context():
-        try:
-            init_db(settings)
-        except psycopg2.errors.UniqueViolation:
-            logger.info("Database already initialized")
-
-
-if __name__ == "__main__":
-    init_test_env()
+python3 tests/__init__.py $@
