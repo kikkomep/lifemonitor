@@ -189,11 +189,8 @@ permissions: certs
 	&& mkdir -p /tmp/lifemonitor-logs
 
 
-aux_images: tests/config/registries/seek/seek.Dockerfile certs
+aux_images: certs webserver ## Build auxiliary Docker images
 	@printf "\n$(bold)Building auxiliary Docker images...$(reset)\n" ; \
-	docker build -f tests/config/registries/seek/seek.Dockerfile \
-	       -t crs4/lifemonitor-tests:seek \
-	       tests/config/registries/seek/ ; \
 	printf "$(done)\n"
 
 start: images compose-files prod reset_compose permissions ## Start LifeMonitor in a Production environment
@@ -221,7 +218,7 @@ start-dev: images compose-files dev reset_compose permissions ## Start LifeMonit
 	&& $(docker_compose) -f docker-compose.yml up -d redis db dev_proxy github_event_proxy init lm worker ws_server prometheus nginx ;\
 	printf "$(done)\n"
 
-start-testing: compose-files aux_images ro_crates images reset_compose permissions ## Start LifeMonitor in a Testing environment
+start-testing: compose-files aux_images ro_crates images reset_compose permissions start-aux-services ## Start LifeMonitor in a Testing environment
 	@printf "\n$(bold)Starting testing services...$(reset)\n" ; \
 	base=$$(if [[ -f "docker-compose.yml" ]]; then echo "-f docker-compose.yml"; fi) ; \
 	echo "$$(USER_UID=$$(id -u) USER_GID=$$(id -g) \
@@ -233,11 +230,9 @@ start-testing: compose-files aux_images ro_crates images reset_compose permissio
 				-f docker-compose.test.yml \
 				config)" > docker-compose.yml \
 	&& cp {,.test.}docker-compose.yml \
-	&& $(docker_compose) -f docker-compose.yml up -d db lmtests seek jenkins webserver worker ws_server \
-	&& $(docker_compose) -f ./docker-compose.yml \
-		exec -T lmtests /bin/bash -c "tests/wait-for-seek.sh 600" \
-	&& $(docker_compose) exec lmtests pytest tests/test_users.py::test_user1[RegistryType.SEEK] > /dev/null 2>&1 || echo "Testing environment initialized!" \
-	&& $(docker_compose) restart db lmtests \
+	&& docker cp tests/wait-for-seek.sh seek:/seek/wait-for-seek.sh \
+	&& docker exec seek /bin/bash -c "/seek/wait-for-seek.sh 600" \
+	&& $(docker_compose) -f docker-compose.yml up -d db redis init lmtests jenkins webserver \
 	&& printf "$(done)\n"
 
 start-maintenance: compose-files aux_images ro_crates images reset_compose permissions ## Start LifeMonitor in a Testing environment
@@ -267,9 +262,11 @@ start-nginx: certs docker-compose.base.yml permissions ## Start a nginx front-en
 start-aux-services: aux_images ro_crates docker-compose.extra.yml permissions ## Start auxiliary services (i.e., Jenkins, Seek) useful for development and testing
 	@printf "\n$(bold)Starting auxiliary services...$(reset)\n" ; \
 	base=$$(if [[ -f "docker-compose.yml" ]]; then echo "-f docker-compose.yml"; fi) ; \
+	$(docker_compose) -f tests/config/registries/seek/docker-compose.yml up -d ;\
 	echo "$$(USER_UID=$$(id -u) USER_GID=$$(id -g) \
 	      $(docker_compose) $${base} -f docker-compose.extra.yml config)" > docker-compose.yml \
-	      && $(docker_compose) up -d seek jenkins ; \
+	      && $(docker_compose) up -d jenkins \
+		  && bash tests/config/registries/seek/restore.sh ; \
 	printf "$(done)\n"
 
 # start-jupyter: aux_images docker-compose.extra.yml ## Start jupyter service
@@ -303,6 +300,7 @@ tests: start-testing ## CI utility to setup, run tests and teardown a testing en
 
 stop-aux-services: docker-compose.extra.yml ## Stop all auxiliary services (i.e., Jenkins, Seek)
 	@echo "$(bold)Teardown auxiliary services...$(reset)" ; \
+	$(docker_compose) -f tests/config/registries/seek/docker-compose.yml stop ;\
 	$(docker_compose) -f docker-compose.extra.yml $(log_level_opt) stop ; \
 	printf "$(done)\n"
 
@@ -319,11 +317,12 @@ stop-nginx: docker-compose.yml ## Stop the nginx front-end proxy for the LifeMon
 stop-testing: compose-files ## Stop all the services in the Testing Environment
 	@echo "$(bold)Stopping services...$(reset)" ; \
 	USER_UID=$$(id -u) USER_GID=$$(id -g) \
+	$(docker_compose) -f tests/config/registries/seek/docker-compose.yml stop ;\
 	$(docker_compose) -f docker-compose.extra.yml \
 				   -f docker-compose.base.yml \
 				   -f docker-compose.dev.yml \
 				   -f docker-compose.test.yml \
-				   $(log_level_opt) stop db lmtests seek jenkins webserver worker ws_server ; \
+				   $(log_level_opt) stop db lmtests jenkins webserver worker ws_server ; \
 	printf "$(done)\n"
 
 stop-dev: compose-files ## Stop all services in the Develop Environment
@@ -372,6 +371,7 @@ reset_compose:
 down: ## Teardown all the services
 	@if [[ -f "docker-compose.yml" ]]; then \
 	echo "$(bold)Teardown all services...$(reset)" ; \
+	$(docker_compose) -f tests/config/registries/seek/docker-compose.yml down ;\
 	USER_UID=$$(id -u) USER_GID=$$(id -g) \
 	$(docker_compose) down ; \
 	printf "$(done)\n" ; \
@@ -382,6 +382,7 @@ down: ## Teardown all the services
 clean: ## Clean up the working environment (i.e., running services, network, volumes, certs and temp files)
 	@if [[ -f "docker-compose.yml" ]]; then \
 		echo "$(bold)Teardown all services...$(reset)" ; \
+		$(docker_compose) -f tests/config/registries/seek/docker-compose.yml down -v --remove-orphans ;\
 		USER_UID=$$(id -u) USER_GID=$$(id -g) \
 		$(docker_compose) down -v --remove-orphans ; \
 		printf "$(done)\n"; \
