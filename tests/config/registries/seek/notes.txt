@@ -5,7 +5,7 @@ admin
 ---------------------
 username: admin
 password: workflowhub
-api-key: ZRBhqf9eeRasjqMw90pgEeMpTZ7__-w_571S7__D
+api-key: wGEVBDn8iw3Vx-CshuDMMPo9u-FJC30plZCFGum_
 visible-workflows: 1
 
 
@@ -15,7 +15,7 @@ username: user1
 password: workflowhub
 project: Default, SharedProject, User1Project
 institutions: Default
-api-key: S9_41Cb2Wm8Ho9qOd0FDjs4zhJNwhSESe-dfwqt-
+api-key: X5gciwSEXIgov4bVhSSHEvAdZvdogVRO-M6VxQl3
 visible-workflows: 5
 workflows:
     - name: sort-and-change-case
@@ -40,5 +40,5 @@ username: user2
 password: workflowhub
 projects: Default, SharedProject 
 institutions: Default
-api-token: 30GcRIdyV7uGvfXYa1squEW6IT3-n1zCjYxQY4Tt
+api-token: B7h6aCYuIl4Hw1PvQR1qWu0i1Qrg9p9l308O6YDI
 visible-workflows: 2
