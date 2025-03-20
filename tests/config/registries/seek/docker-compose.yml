@@ -88,6 +88,33 @@ services:
     networks:
       - life_monitor
 
+  seek_data: # The SEEK application
+    image: crs4/lifemonitor:seek-data
+    container_name: seek-data
+    command: sleep infinity
+    restart: always
+    environment:
+      RAILS_ENV: production
+      SOLR_PORT: 8983
+      SOLR_HOST: solr
+      NO_ENTRYPOINT_WORKERS: 1
+      RAILS_LOG_LEVEL: info # debug, info, warn, error or fatal
+    env_file:
+      - db.env
+    volumes:
+      - seek-filestore:/seek/filestore
+      - seek-cache:/seek/tmp/cache
+      - ./nginx.conf:/seek/nginx.conf:ro
+      - ./certs/lm.crt:/certs/lm.crt:ro
+      - ./certs/lm.key:/certs/lm.key:ro
+    depends_on:
+      - seek_db
+      - solr
+    links:
+      - seek_db
+      - solr
+    networks:
+      - life_monitor
 
 volumes:
   seek-filestore:
