@@ -1,0 +1,122 @@
+services:
+  
+  seek_db: # Database implementation, in this case MySQL
+    image: mysql:8.0
+    container_name: seek-mysql
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --log-error-verbosity=1
+    restart: always
+    stop_grace_period: 1m30s
+    ports:
+      - "3306:3306"
+    env_file:
+      - db.env
+    volumes:
+      - seek-mysql-db:/var/lib/mysql
+    networks:
+      - life_monitor
+
+  seek: # The SEEK application
+
+    image: fairdom/seek:main
+
+    container_name: seek
+    command: docker/entrypoint.sh
+    restart: always
+    environment:
+      RAILS_ENV: production
+      SOLR_PORT: 8983
+      SOLR_HOST: solr
+      NO_ENTRYPOINT_WORKERS: 1
+      RAILS_LOG_LEVEL: info # debug, info, warn, error or fatal
+    env_file:
+      - db.env
+    volumes:
+      - seek-filestore:/seek/filestore
+      - seek-cache:/seek/tmp/cache
+      - ./nginx.conf:/seek/nginx.conf:ro
+      - ./certs/lm.crt:/certs/lm.crt:ro
+      - ./certs/lm.key:/certs/lm.key:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - seek_db
+      - solr
+    links:
+      - seek_db
+      - solr
+    networks:
+      - life_monitor
+
+  seek_workers: # The SEEK delayed job workers
+      image: fairdom/seek:main
+      container_name: seek-workers
+      command: docker/start_workers.sh
+      restart: always
+      environment:
+        RAILS_ENV: production
+        SOLR_PORT: 8983
+        SOLR_HOST: solr
+        RAILS_LOG_LEVEL: info # debug, info, warn, error or fatal
+        QUIET_SUPERCRONIC: 1 # remove to show supercronic activity logs
+      env_file:
+        - db.env
+      volumes:
+        - seek-filestore:/seek/filestore
+        - seek-cache:/seek/tmp/cache
+      depends_on:
+        - seek_db
+        - solr
+      links:
+        - seek_db
+        - solr
+      networks:
+      - life_monitor
+
+  solr:
+    image: fairdom/seek-solr:8.11
+    container_name: seek-solr
+    restart: always
+    environment:
+      SOLR_JAVA_MEM: -Xms512m -Xmx1024m
+    volumes:
+      - seek-solr-data:/var/solr/
+    entrypoint:
+      - docker-entrypoint.sh
+      - solr-precreate
+      - seek
+      - /opt/solr/server/solr/configsets/seek_config
+    networks:
+      - life_monitor
+
+
+volumes:
+  seek-filestore:
+    # external: true
+  seek-mysql-db:
+    # external: true
+  seek-solr-data:
+    # external: true
+  seek-cache:
+    # external: true
+
+
+networks:
+  life_monitor:
+    # You can easily connect this docker-compose with a
+    # local instance of the Seek/WorkflowHub docker-compose by putting them
+    # both on the same Docker network.  The configuration below will
+    # instantiate the life monitor services on a docker network called
+    # `life_monitor` which is owned and managed by the LifeMonitor docker-compose.
+    # To connect LifeMonitor to an existing network, set the property `name` below
+    # to the name of the network name you'd like to connect and set
+    # the property `external` to `true`, to declare the network as externally managed.
+    # See the docker-compose network configuration reference for more details.
+    name: life_monitor
+    # external: true
+    # If are not using an external network, you can customize
+    # the network address by uncommenting the lines below
+    # driver: bridge
+    # ipam:
+    #   driver: default
+    #   config:
+    #     - subnet: 192.168.238.0/24
