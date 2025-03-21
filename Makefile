@@ -121,6 +121,7 @@ certs:
 	  mv certs/cert.pem certs/lm.crt && \
 	  mv certs/key.pem certs/lm.key && \
 	  chmod 644 certs/*.{key,crt}; \
+	  ln -s "$(pwd)/certs/" $(pwd)/tests/config/registries/seek/certs ; \
 	  printf "\n$(done)\n"; \
 	else \
 	  echo "$(yellow)WARNING: Using existing certificates$(reset)" ; \
