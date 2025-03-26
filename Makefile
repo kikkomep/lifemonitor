@@ -234,6 +234,7 @@ start-testing: compose-files aux_images ro_crates images reset_compose permissio
 	&& docker cp tests/wait-for-seek.sh seek:/seek/wait-for-seek.sh \
 	&& docker exec seek /bin/bash -c "/seek/wait-for-seek.sh 600" \
 	&& $(docker_compose) -f docker-compose.yml up -d db redis init lmtests jenkins webserver \
+	&& $(docker_compose) -f docker-compose.yml restart lmtests \
 	&& printf "$(done)\n"
 
 start-maintenance: compose-files aux_images ro_crates images reset_compose permissions ## Start LifeMonitor in a Testing environment
