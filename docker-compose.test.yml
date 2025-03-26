@@ -15,7 +15,6 @@ services:
       -c "
       wait-for-postgres.sh &&
       wait-for-redis.sh &&
-      ./lm-admin db init &&
       ./tests/lmtest_init &&
       /usr/local/bin/lm_entrypoint.sh
       "

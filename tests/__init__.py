@@ -36,8 +36,8 @@ def init_test_env():
     with app.app_context():
         try:
             init_db(settings)
-        except psycopg2.errors.UniqueViolation:
-            logger.info("Database already initialized")
+        except Exception as e:
+            logger.info("Database already initialized: %s", e)
 
 
 if __name__ == "__main__":
