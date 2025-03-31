@@ -43,7 +43,7 @@ services:
       - "./tests/settings.conf:/lm/settings.conf:ro" # default settings
       - "/tmp/lifemonitor-logs:/var/log/lm"
     ports:
-      - "8000:8000"
+      - "8000"
     networks:
       - life_monitor
 
