@@ -78,12 +78,12 @@ jobs:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
       - name: Generate certificates
         run: make certs
       # So now you can use Actions' own caching!
       - name: Cache Docker layers
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: /tmp/.buildx-cache
           key: ${{ runner.os }}-buildx-${{ github.sha }}
@@ -122,7 +122,7 @@ jobs:
             org.opencontainers.image.version=${{ env.SOFTWARE_VERSION }}.build${{ github.run_number }}
       # Build and tag LifeMonitor Docker image
       - name: Build Docker image
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: docker/lifemonitor.Dockerfile
@@ -176,7 +176,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       # Push LifeMonitor Docker image
       - name: Build and push
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v6
         if: ${{ env.ENABLE_DOCKER_PUSH == 'true' }}
         with:
           context: .
