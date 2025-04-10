@@ -110,29 +110,29 @@ prod:
 dev:
 	$(eval LM_MODE=dev)
 
-certs:
-	@if ! [[ -f "certs/lm.key" && -f "certs/lm.key" && -f "certs/lifemonitor.ca.crt" ]]; then \
-	  printf "\n$(bold)Generating certificates...$(reset)\n" ; \
-	  mkdir -p certs && \
-	  ./utils/certs/gencerts.sh && \
-	  cp utils/certs/data/ca.* certs/ && \
-	  cp utils/certs/data/lm/*.pem certs/ && \
-	  mv certs/ca.pem certs/lifemonitor.ca.crt && \
-	  mv certs/cert.pem certs/lm.crt && \
-	  mv certs/key.pem certs/lm.key && \
-	  chmod 644 certs/*.{key,crt}; \
-	  cp -a "$$(pwd)/certs/" $$(pwd)/tests/config/registries/seek/certs ; \
-	  printf "\n$(done)\n"; \
+certs: 
+	@if ! [[ -f "certs/lm.key" && -f "certs/lifemonitor.ca.crt" ]]; then \
+		printf "\n$(bold)Generating certificates...$(reset)\n" ; \
+		mkdir -p certs && \
+		./utils/certs/gencerts.sh && \
+		cp utils/certs/data/ca.* certs/ && \
+		cp utils/certs/data/lm/*.pem certs/ && \
+		mv certs/ca.pem certs/lifemonitor.ca.crt && \
+		mv certs/cert.pem certs/lm.crt && \
+		mv certs/key.pem certs/lm.key && \
+		chmod 644 certs/*.{key,crt}; \
+		cp -a "$$(pwd)/certs/" $$(pwd)/tests/config/registries/seek/certs ; \
+		printf "\n$(done)\n"; \
 	else \
-	  echo "$(yellow)WARNING: Using existing certificates$(reset)" ; \
+		echo "$(yellow)WARNING: Using existing certificates$(reset)" ; \
 	fi ;\
 	if ! [[ -f "certs/jwt-key" && -f "certs/jwt-key.pub" ]]; then \
-	  printf "\n$(bold)Generating JWT keys...$(reset)\n" ; \
-	  openssl genrsa -out certs/jwt-key 4096 ; \
-	  openssl rsa -in certs/jwt-key -pubout > certs/jwt-key.pub ; \
-	  printf "\n$(done)\n"; \
+		printf "\n$(bold)Generating JWT keys...$(reset)\n" ; \
+		openssl genrsa -out certs/jwt-key 4096 ; \
+		openssl rsa -in certs/jwt-key -pubout > certs/jwt-key.pub ; \
+		printf "\n$(done)\n" ; \
 	else \
-	  echo "$(yellow)WARNING: Using existing JWT keys $(reset)" ; \
+		echo "$(yellow)WARNING: Using existing JWT keys $(reset)" ; \
 	fi
 
 lifemonitor: docker/lifemonitor.Dockerfile certs app.py gunicorn.conf.py ## Build LifeMonitor Docker image
@@ -401,7 +401,7 @@ clean: ## Clean up the working environment (i.e., running services, network, vol
 help: ## Show help
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-.PHONY: all images aux_images certs prod dev \
+.PHONY: all images aux_images prod dev \
 		lifemonitor smeeio ro_crates webserver \
 		start start-dev start-testing start-nginx start-aux-services \
 		run-tests tests \
