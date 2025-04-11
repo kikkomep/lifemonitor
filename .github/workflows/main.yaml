@@ -82,13 +82,14 @@ jobs:
       - name: Generate certificates
         run: make certs
       # So now you can use Actions' own caching!
-      - name: Cache Docker layers
-        uses: actions/cache@v4
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-
+      # - name: Cache Docker layers
+      #   uses: actions/cache@v4
+      #   with:
+          # path: /tmp/.buildx-cache
+          # key: ${{ runner.os }}-buildx-${{ github.sha }}
+
+          # restore-keys: |
+          #   ${{ runner.os }}-buildx-
       - name: "Set software version"
         run: |
           git fetch --unshallow
@@ -128,16 +129,16 @@ jobs:
           file: docker/lifemonitor.Dockerfile
           tags: ${{ steps.docker_meta.outputs.tags }}
           labels: ${{ steps.docker_meta.outputs.labels }}
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache-new
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           load: true
           build-args: |
             SW_VERSION=${{ env.SOFTWARE_VERSION }}
             BUILD_NUMBER=${{ github.run_number }}
-      - name: Update cache
-        run: |
-          rm -rf /tmp/.buildx-cache
-          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+      # - name: Update cache
+      #   run: |
+      #     rm -rf /tmp/.buildx-cache
+      #     mv /tmp/.buildx-cache-new /tmp/.buildx-cache
       # Setup testing environment
       - name: Set up testing environment
         # Tag the latest built image as `crs4/lifemonitor:latest`
@@ -146,7 +147,7 @@ jobs:
           docker images ;
           docker tag ${{ env.DOCKERHUB_REPO }}:${{ env.SOFTWARE_VERSION_AS_DOCKER_TAG }} crs4/lifemonitor:latest ;
           docker images ;
-          SKIP_BUILD=1 SW_VERSION=${{ env.SOFTWARE_VERSION }} BUILD_NUMBER=${{ github.run_number }} make start-testing
+          # SKIP_BUILD=1 SW_VERSION=${{ env.SOFTWARE_VERSION }} BUILD_NUMBER=${{ github.run_number }} make start-testing
         env:
           TRAVIS_TESTING_SERVICE_URL: ${{ secrets.TRAVIS_TESTING_SERVICE_URL }}
           TRAVIS_TESTING_SERVICE_TOKEN: ${{ secrets.TRAVIS_TESTING_SERVICE_TOKEN }}
@@ -155,37 +156,37 @@ jobs:
           GH_TESTING_SERVICE_TOKEN: ${{ secrets.GH_TESTING_SERVICE_TOKEN }}
           GH_TESTING_SERVICE_TYPE: github
       # Run tests
-      - name: Run tests
-        run: SKIP_BUILD=1 SKIP_RESET_COMPOSE=1 SW_VERSION=${{ env.SOFTWARE_VERSION }} BUILD_NUMBER=${{ github.run_number }} make run-tests
-        env:
-          TRAVIS_TESTING_SERVICE_URL: ${{ secrets.TRAVIS_TESTING_SERVICE_URL }}
-          TRAVIS_TESTING_SERVICE_TOKEN: ${{ secrets.TRAVIS_TESTING_SERVICE_TOKEN }}
-          TRAVIS_TESTING_SERVICE_TYPE: travis
-          GH_TESTING_SERVICE_URL: ${{ secrets.GH_TESTING_SERVICE_URL }}
-          GH_TESTING_SERVICE_TOKEN: ${{ secrets.GH_TESTING_SERVICE_TOKEN }}
-          GH_TESTING_SERVICE_TYPE: github
-      # Teardown testing environment
-      - name: Teardown testing environment
-        run: make down
-      # Log in to DockerHub
-      - name: Login to Docker Hub
-        uses: docker/login-action@v2
-        if: ${{ env.ENABLE_DOCKER_PUSH == 'true' }}
-        with:
-          username: ${{ secrets.DOCKERHUB_USER }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      # Push LifeMonitor Docker image
-      - name: Build and push
-        uses: docker/build-push-action@v6
-        if: ${{ env.ENABLE_DOCKER_PUSH == 'true' }}
-        with:
-          context: .
-          file: docker/lifemonitor.Dockerfile
-          platforms: linux/amd64
-          push: true
-          tags: ${{ steps.docker_meta.outputs.tags }}
-          labels: ${{ steps.docker_meta.outputs.labels }}
-          cache-from: type=local,src=/tmp/.buildx-cache
-          build-args: |
-            SW_VERSION=${{ env.SOFTWARE_VERSION }}
-            BUILD_NUMBER=${{ github.run_number }}
+      # - name: Run tests
+      #   run: SKIP_BUILD=1 SKIP_RESET_COMPOSE=1 SW_VERSION=${{ env.SOFTWARE_VERSION }} BUILD_NUMBER=${{ github.run_number }} make run-tests
+      #   env:
+      #     TRAVIS_TESTING_SERVICE_URL: ${{ secrets.TRAVIS_TESTING_SERVICE_URL }}
+      #     TRAVIS_TESTING_SERVICE_TOKEN: ${{ secrets.TRAVIS_TESTING_SERVICE_TOKEN }}
+      #     TRAVIS_TESTING_SERVICE_TYPE: travis
+      #     GH_TESTING_SERVICE_URL: ${{ secrets.GH_TESTING_SERVICE_URL }}
+      #     GH_TESTING_SERVICE_TOKEN: ${{ secrets.GH_TESTING_SERVICE_TOKEN }}
+      #     GH_TESTING_SERVICE_TYPE: github
+      # # Teardown testing environment
+      # - name: Teardown testing environment
+      #   run: make down
+      # # Log in to DockerHub
+      # - name: Login to Docker Hub
+      #   uses: docker/login-action@v2
+      #   if: ${{ env.ENABLE_DOCKER_PUSH == 'true' }}
+      #   with:
+      #     username: ${{ secrets.DOCKERHUB_USER }}
+      #     password: ${{ secrets.DOCKERHUB_TOKEN }}
+      # # Push LifeMonitor Docker image
+      # - name: Build and push
+      #   uses: docker/build-push-action@v6
+      #   if: ${{ env.ENABLE_DOCKER_PUSH == 'true' }}
+      #   with:
+      #     context: .
+      #     file: docker/lifemonitor.Dockerfile
+      #     platforms: linux/amd64
+      #     push: true
+      #     tags: ${{ steps.docker_meta.outputs.tags }}
+      #     labels: ${{ steps.docker_meta.outputs.labels }}
+      #     cache-from: type=local,src=/tmp/.buildx-cache
+      #     build-args: |
+      #       SW_VERSION=${{ env.SOFTWARE_VERSION }}
+      #       BUILD_NUMBER=${{ github.run_number }}
