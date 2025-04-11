@@ -70,7 +70,7 @@ RUN chmod 755 \
     && mv /nextflow /usr/local/bin
 
 # Set the container entrypoint
-ENTRYPOINT /usr/local/bin/lm_entrypoint.sh
+ENTRYPOINT ["/usr/local/bin/lm_entrypoint.sh"]
 
 # Prepare data folder
 RUN mkdir -p /var/data/lm \
