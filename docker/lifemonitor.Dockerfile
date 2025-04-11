@@ -100,16 +100,19 @@ RUN find /lm/lifemonitor/ -type d -exec chmod a+r {} \;
 ##################################################################
 ## Node Stage
 ##################################################################
-FROM node:18-alpine3.20 AS node
+FROM node:lts-slim AS node
 
 # Update npm
 RUN npm -g install npm
 # Log node and npm versions
 RUN echo "Node version: $(node -v)" && echo "NPM version: $(npm -v)"
 # Create static folder
-RUN mkdir -p /static && apk add --no-cache bash python3 py3-setuptools make g++ \
-    && addgroup -S lm && adduser -S lm -G lm \
-    && chown -R lm:lm /static
+RUN mkdir -p /static && apt-get update && apt-get install -y --no-install-recommends \
+    bash python3 python3-setuptools make g++ \
+    && groupadd -r lm && useradd -r -g lm lm \
+    && chown -R lm:lm /static \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+# Set the default working directory
 WORKDIR /static/src
 # Copy package.json
 COPY lifemonitor/static/src/package.json package.json
