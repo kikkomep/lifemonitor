@@ -155,6 +155,8 @@ jobs:
           GH_TESTING_SERVICE_URL: ${{ secrets.GH_TESTING_SERVICE_URL }}
           GH_TESTING_SERVICE_TOKEN: ${{ secrets.GH_TESTING_SERVICE_TOKEN }}
           GH_TESTING_SERVICE_TYPE: github
+          CACHE_FROM: type=gha
+          CACHE_TO: type=gha,mode=max
       # Run tests
       # - name: Run tests
       #   run: SKIP_BUILD=1 SKIP_RESET_COMPOSE=1 SW_VERSION=${{ env.SOFTWARE_VERSION }} BUILD_NUMBER=${{ github.run_number }} make run-tests
