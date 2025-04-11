@@ -16,6 +16,12 @@ ENV USER_ID=${USER_ID:-1000}
 ARG GROUP_ID
 ENV GROUP_ID=${GROUP_ID:-1000}
 
+ARG PIP_CACHE_DIR
+ENV PIP_CACHE_DIR=${PIP_CACHE_DIR}
+
+ARG NPM_CACHE_DIR
+ENV NPM_CACHE_DIR=${NPM_CACHE_DIR}
+
 # Create a user 'lm' with HOME at /lm and set 'lm' as default git user
 RUN groupadd -g ${GROUP_ID} lm && \
     useradd -u ${USER_ID} -g lm -d /lm -m lm
@@ -27,7 +33,7 @@ ENV USER=lm
 COPY --chown=lm:lm requirements.txt certs/*.crt /lm/
 
 # Install requirements and install certificates
-RUN pip3 install --no-cache-dir --upgrade pip
+RUN --mount=type=cache,target=${PIP_CACHE_DIR} pip3 install --upgrade pip
 RUN pip3 install --no-cache-dir -r /lm/requirements.txt
 
 # Update Environment

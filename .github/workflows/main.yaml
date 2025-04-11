@@ -82,14 +82,13 @@ jobs:
       - name: Generate certificates
         run: make certs
       # So now you can use Actions' own caching!
-      # - name: Cache Docker layers
-      #   uses: actions/cache@v4
-      #   with:
-          # path: /tmp/.buildx-cache
-          # key: ${{ runner.os }}-buildx-${{ github.sha }}
-
-          # restore-keys: |
-          #   ${{ runner.os }}-buildx-
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
       - name: "Set software version"
         run: |
           git fetch --unshallow
@@ -135,6 +134,8 @@ jobs:
           build-args: |
             SW_VERSION=${{ env.SOFTWARE_VERSION }}
             BUILD_NUMBER=${{ github.run_number }}
+            PIP_CACHE_DIR=/tmp/.buildx-cache/pip
+            NPM_CONFIG_CACHE=/tmp/.buildx-cache/npm
       # - name: Update cache
       #   run: |
       #     rm -rf /tmp/.buildx-cache
