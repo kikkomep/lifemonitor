@@ -108,8 +108,11 @@ RUN find /lm/lifemonitor/ -type d -exec chmod a+r {} \;
 ##################################################################
 FROM node:lts-slim AS node
 
+# Inherit from base
+ARG NPM_CACHE_DIR
+
 # Update npm
-RUN --mount=type=cache,target=${PIP_CACHE_DIR} npm --cache ${PIP_CACHE_DIR} -g install npm
+RUN --mount=type=cache,target=${NPM_CACHE_DIR} npm --cache ${NPM_CACHE_DIR} -g install npm
 # Log node and npm versions
 RUN echo "Node version: $(node -v)" && echo "NPM version: $(npm -v)"
 # Create static folder
