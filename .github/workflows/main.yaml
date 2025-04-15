@@ -87,9 +87,9 @@ jobs:
         with:
           path: /tmp/.buildx-cache
           # key: ${{ runner.os }}-buildx-${{ github.sha }}
-          key: ${{ runner.os }}-buildx
+          key: lifemonitor-buildx
           restore-keys: |
-            ${{ runner.os }}-buildx-
+            lifemonitor-buildx-
       - name: "Set software version"
         run: |
           git fetch --unshallow
