@@ -109,7 +109,7 @@ RUN find /lm/lifemonitor/ -type d -exec chmod a+r {} \;
 FROM node:lts-slim AS node
 
 # Update npm
-RUN npm -g install npm
+RUN --mount=type=cache,target=${PIP_CACHE_DIR} npm --cache ${PIP_CACHE_DIR} -g install npm
 # Log node and npm versions
 RUN echo "Node version: $(node -v)" && echo "NPM version: $(npm -v)"
 # Create static folder
@@ -123,7 +123,7 @@ WORKDIR /static/src
 # Copy package.json
 COPY lifemonitor/static/src/package.json package.json
 # Install npm dependencies
-RUN npm install
+RUN --mount=type=cache,target=${PIP_CACHE_DIR} npm --cache ${PIP_CACHE_DIR} install
 # Copy and build static files
 # Use a separated run to take advantage
 # of node_modules cache from the previous layer

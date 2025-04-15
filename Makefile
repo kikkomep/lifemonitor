@@ -35,7 +35,7 @@ builder :=
 ifeq ($(DOCKER_BUILDKIT),1)
 	build_kit = DOCKER_BUILDKIT=1
 	ifdef BUILDX_BUILDER
-		builder_opt = --builder ${BUILDX_BUILDER}
+		builder_opt = --builder ${BUILDX_BUILDER} --build-arg PIP_CACHE_DIR=/tmp/.buildx-cache/pip --build-arg NPM_CONFIG_CACHE=/tmp/.buildx-cache/npm
 	endif
 	build_cmd = buildx build --output=type=docker ${builder_opt}
 	ifdef CACHE_TO

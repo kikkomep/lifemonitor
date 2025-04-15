@@ -135,7 +135,7 @@ jobs:
             SW_VERSION=${{ env.SOFTWARE_VERSION }}
             BUILD_NUMBER=${{ github.run_number }}
             PIP_CACHE_DIR=/tmp/.buildx-cache/pip
-            NPM_CONFIG_CACHE=/tmp/.buildx-cache/npm
+            NPM_CACHE_DIR=/tmp/.buildx-cache/npm
       # - name: Update cache
       #   run: |
       #     rm -rf /tmp/.buildx-cache
