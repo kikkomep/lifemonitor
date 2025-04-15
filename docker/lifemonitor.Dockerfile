@@ -123,7 +123,7 @@ WORKDIR /static/src
 # Copy package.json
 COPY lifemonitor/static/src/package.json package.json
 # Install npm dependencies
-RUN --mount=type=cache,target=${PIP_CACHE_DIR} npm --cache ${PIP_CACHE_DIR} install
+RUN --mount=type=cache,target=${NPM_CACHE_DIR} npm --cache ${NPM_CACHE_DIR} install
 # Copy and build static files
 # Use a separated run to take advantage
 # of node_modules cache from the previous layer

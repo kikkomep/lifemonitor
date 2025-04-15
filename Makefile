@@ -35,7 +35,7 @@ builder :=
 ifeq ($(DOCKER_BUILDKIT),1)
 	build_kit = DOCKER_BUILDKIT=1
 	ifdef BUILDX_BUILDER
-		builder_opt = --builder ${BUILDX_BUILDER} --build-arg PIP_CACHE_DIR=/tmp/.buildx-cache/pip --build-arg NPM_CONFIG_CACHE=/tmp/.buildx-cache/npm
+		builder_opt = --builder ${BUILDX_BUILDER}
 	endif
 	build_cmd = buildx build --output=type=docker ${builder_opt}
 	ifdef CACHE_TO
@@ -142,6 +142,7 @@ lifemonitor: docker/lifemonitor.Dockerfile certs app.py gunicorn.conf.py ## Buil
 		printf "\n$(bold)Building LifeMonitor Docker image...$(reset)\n" ; \
 		$(build_kit) docker $(build_cmd) \
 			--build-arg USER_ID=$(id -u) --build-arg GROUP_ID=$(id -g) \
+			--build-arg PIP_CACHE_DIR=/tmp/.buildx-cache/pip --build-arg NPM_CONFIG_CACHE=/tmp/.buildx-cache/npm \
 			$(cache_from_opt) $(cache_to_opt) \
 			${sw_version_arg} ${build_number_arg} ${tags_opt} ${labels_opt} ${platforms_opt} \
 			-f docker/lifemonitor.Dockerfile -t crs4/lifemonitor . ;\
