@@ -147,7 +147,11 @@ RUN if [ -n "${NPM_CACHE_DIR}" ]; then \
 # Use a separated run to take advantage
 # of node_modules cache from the previous layer
 COPY lifemonitor/static/src .
-RUN npm run production
+RUN if [ -n "${NPM_CACHE_DIR}" ]; then \
+    npm --cache ${NPM_CACHE_DIR} run production; \
+    else \
+    npm run production; \
+    fi
 
 
 ##################################################################
