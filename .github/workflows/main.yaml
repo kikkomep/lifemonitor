@@ -42,6 +42,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          cache: "pip"
       - name: Install flake8
         run: pip install flake8
       - name: Run checks
@@ -61,6 +62,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          cache: "pip"
       - name: Install OpenAPI Spec Validator
         run: pip install openapi-spec-validator
       - name: Run checks
@@ -89,7 +91,7 @@ jobs:
           # key: ${{ runner.os }}-buildx-${{ github.sha }}
           key: lifemonitor-buildx
           restore-keys: |
-            lifemonitor-buildx-
+            lifemonitor-buildx
       - name: "Set software version"
         run: |
           git fetch --unshallow
