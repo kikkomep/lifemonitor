@@ -33,8 +33,16 @@ ENV USER=lm
 COPY --chown=lm:lm requirements.txt certs/*.crt /lm/
 
 # Install requirements and install certificates
-RUN --mount=type=cache,target=${PIP_CACHE_DIR} pip3 install --upgrade pip
-RUN --mount=type=cache,target=${PIP_CACHE_DIR} pip3 install -r /lm/requirements.txt
+RUN if [ -n "${PIP_CACHE_DIR}" ]; then \
+    pip3 install --upgrade pip --cache-dir=${PIP_CACHE_DIR}; \
+    else \
+    pip3 install --upgrade pip; \
+    fi
+RUN if [ -n "${PIP_CACHE_DIR}" ]; then \
+    pip3 install -r /lm/requirements.txt --cache-dir=${PIP_CACHE_DIR}; \
+    else \
+    pip3 install -r /lm/requirements.txt; \
+    fi
 
 # Update Environment
 ENV PYTHONPATH=/lm:/usr/local/lib/python3.10/dist-packages:/usr/lib/python3/dist-packages \
@@ -112,7 +120,11 @@ FROM node:lts-slim AS node
 ARG NPM_CACHE_DIR
 
 # Update npm
-RUN --mount=type=cache,target=${NPM_CACHE_DIR} npm --cache ${NPM_CACHE_DIR} -g install npm
+RUN if [ -n "${NPM_CACHE_DIR}" ]; then \
+    npm --cache ${NPM_CACHE_DIR} -g install npm; \
+    else \
+    npm -g install npm; \
+    fi
 # Log node and npm versions
 RUN echo "Node version: $(node -v)" && echo "NPM version: $(npm -v)"
 # Create static folder
@@ -126,7 +138,11 @@ WORKDIR /static/src
 # Copy package.json
 COPY lifemonitor/static/src/package.json package.json
 # Install npm dependencies
-RUN --mount=type=cache,target=${NPM_CACHE_DIR} npm --cache ${NPM_CACHE_DIR} install
+RUN if [ -n "${NPM_CACHE_DIR}" ]; then \
+    npm --cache ${NPM_CACHE_DIR} install; \
+    else \
+    npm install; \
+    fi
 # Copy and build static files
 # Use a separated run to take advantage
 # of node_modules cache from the previous layer
