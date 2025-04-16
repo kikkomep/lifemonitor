@@ -102,14 +102,23 @@ jobs:
       - name: Generate certificates
         run: make certs
       # So now you can use Actions' own caching!
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        id: openapi-spec-validator-cache
+        with:
+          path: ${{ env.pythonLocation }}-openapi-spec-validator
+          # key: ${{ env.pythonLocation }}-${{ hashFiles('requirements.txt') }}-${{ hashFiles('requirements-ml.txt') }}
+          key: ${{ env.pythonLocation }}-openapi-spec-validator
+          restore-keys:
+            ${{ env.pythonLocation }}-openapi-spec-validator
+      
       - name: Cache Docker layers
         uses: actions/cache@v4
         with:
-          path: /tmp/.buildx-cache
-          # key: ${{ runner.os }}-buildx-${{ github.sha }}
-          key: lifemonitor-buildx
+          path: /buildx-cache
+          key: lifemonitor-${{ env.pythonLocation }}-${{ hashFiles('requirements.txt') }}
           restore-keys: |
-            lifemonitor-buildx
+            lifemonitor-${{ env.pythonLocation }}-${{ hashFiles('requirements.txt') }}
       - name: "Set software version"
         run: |
           git fetch --unshallow
@@ -155,8 +164,8 @@ jobs:
           build-args: |
             SW_VERSION=${{ env.SOFTWARE_VERSION }}
             BUILD_NUMBER=${{ github.run_number }}
-            PIP_CACHE_DIR=/tmp/.buildx-cache/pip
-            NPM_CACHE_DIR=/tmp/.buildx-cache/npm
+            PIP_CACHE_DIR=/buildx-cache/pip
+            NPM_CACHE_DIR=/buildx-cache/npm
       # - name: Update cache
       #   run: |
       #     rm -rf /tmp/.buildx-cache
