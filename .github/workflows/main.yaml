@@ -52,7 +52,7 @@ jobs:
           restore-keys:
             ${{ env.pythonLocation }}
       - name: Install flake8
-        if: steps.cache-primes.outputs.cache-hit != 'true'
+        if: steps.flake8-primes.outputs.cache-hit != 'true'
         run: pip install flake8
       - name: Run checks
         run: flake8 -v .
@@ -71,8 +71,17 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-          cache: "pip"
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        id: openapi-spec-validator-cache
+        with:
+          path: ${{ env.pythonLocation }}
+          # key: ${{ env.pythonLocation }}-${{ hashFiles('requirements.txt') }}-${{ hashFiles('requirements-ml.txt') }}
+          key: ${{ env.pythonLocation }}
+          restore-keys:
+            ${{ env.pythonLocation }}
       - name: Install OpenAPI Spec Validator
+        if: steps.openapi-spec-validator-cache.outputs.cache-hit != 'true'
         run: pip install openapi-spec-validator
       - name: Run checks
         run: openapi-spec-validator specs/api.yaml
