@@ -30,7 +30,7 @@ RUN groupadd -g ${GROUP_ID} lm && \
 ENV USER=lm
 
 # Copy requirements and certificates
-COPY --chown=lm:lm requirements.txt certs/*.crt /lm/
+COPY --chown=lm:lm requirements.txt /lm/
 
 # Install requirements and install certificates
 RUN if [ -n "${PIP_CACHE_DIR}" ]; then \
@@ -68,6 +68,9 @@ COPY \
     docker/worker_entrypoint.sh \
     docker/wss-entrypoint.sh \
     /usr/local/bin/
+
+# Copy requirements and certificates
+COPY --chown=lm:lm certs/*.crt /lm/
 
 # Update permissions and install optional certificates
 RUN chmod 755 \
