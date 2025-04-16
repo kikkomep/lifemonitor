@@ -43,14 +43,16 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Cache dependencies
-        uses: actions/cache@v2
-        id: cache
+        uses: actions/cache@v4
+        id: flake8-cache
         with:
           path: ${{ env.pythonLocation }}
-          key: ${{ env.pythonLocation }}-${{ hashFiles('requirements.txt') }}-${{ hashFiles('requirements-ml.txt') }}
+          # key: ${{ env.pythonLocation }}-${{ hashFiles('requirements.txt') }}-${{ hashFiles('requirements-ml.txt') }}
+          key: ${{ env.pythonLocation }}
           restore-keys:
-            ${{ env.pythonLocation }}-
+            ${{ env.pythonLocation }}
       - name: Install flake8
+        if: steps.cache-primes.outputs.cache-hit != 'true'
         run: pip install flake8
       - name: Run checks
         run: flake8 -v .
