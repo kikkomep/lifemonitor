@@ -33,12 +33,14 @@ ENV USER=lm
 COPY --chown=lm:lm requirements.txt /lm/
 
 # Install requirements and install certificates
-RUN if [ -n "${PIP_CACHE_DIR}" ]; then \
+RUN --mount=type=cache,target=${PIP_CACHE_DIR} \
+    if [ -n "${PIP_CACHE_DIR}" ]; then \
     pip3 install --upgrade pip --cache-dir=${PIP_CACHE_DIR}; \
     else \
     pip3 install --upgrade pip; \
     fi
-RUN if [ -n "${PIP_CACHE_DIR}" ]; then \
+RUN --mount=type=cache,target=${PIP_CACHE_DIR} \
+    if [ -n "${PIP_CACHE_DIR}" ]; then \
     pip3 install -r /lm/requirements.txt --cache-dir=${PIP_CACHE_DIR}; \
     else \
     pip3 install -r /lm/requirements.txt; \
@@ -123,7 +125,8 @@ FROM node:lts-slim AS node
 ARG NPM_CACHE_DIR
 
 # Update npm
-RUN if [ -n "${NPM_CACHE_DIR}" ]; then \
+RUN --mount=type=cache,target=${NPM_CACHE_DIR} \
+    if [ -n "${NPM_CACHE_DIR}" ]; then \
     npm --cache ${NPM_CACHE_DIR} -g install npm; \
     else \
     npm -g install npm; \
@@ -141,7 +144,8 @@ WORKDIR /static/src
 # Copy package.json
 COPY lifemonitor/static/src/package.json package.json
 # Install npm dependencies
-RUN if [ -n "${NPM_CACHE_DIR}" ]; then \
+RUN --mount=type=cache,target=${NPM_CACHE_DIR} \
+    if [ -n "${NPM_CACHE_DIR}" ]; then \
     npm --cache ${NPM_CACHE_DIR} install; \
     else \
     npm install; \
@@ -150,7 +154,8 @@ RUN if [ -n "${NPM_CACHE_DIR}" ]; then \
 # Use a separated run to take advantage
 # of node_modules cache from the previous layer
 COPY lifemonitor/static/src .
-RUN if [ -n "${NPM_CACHE_DIR}" ]; then \
+RUN --mount=type=cache,target=${NPM_CACHE_DIR} \
+    if [ -n "${NPM_CACHE_DIR}" ]; then \
     npm --cache ${NPM_CACHE_DIR} run production; \
     else \
     npm run production; \
