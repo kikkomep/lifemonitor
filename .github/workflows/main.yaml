@@ -160,8 +160,8 @@ jobs:
           labels: ${{ steps.docker_meta.outputs.labels }}
           # cache-from: type=gha
           # cache-to: type=gha,mode=max
-          cache-from: type=local,src=/buildx-cache
-          cache-to: type=local,dest=/buildx-cache,mode=max
+          cache-from: type=local,src=/tmp/buildx-cache
+          cache-to: type=local,dest=/tmp/buildx-cache,mode=max
           load: true
           build-args: |
             SW_VERSION=${{ env.SOFTWARE_VERSION }}
