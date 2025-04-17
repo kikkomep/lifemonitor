@@ -27,6 +27,8 @@ env:
   # enable Docker push only if the required secrets are defined
   ENABLE_DOCKER_PUSH: ${{ secrets.DOCKERHUB_USER != null && secrets.DOCKERHUB_TOKEN != null }}
   DOCKER_BUILDKIT: 1
+  CACHE_FROM: "~/.buildx-cache"
+  CACHE_TO: "~/.buildx-cache"
 
 jobs:
   # Verifies pep8, pyflakes and circular complexity
