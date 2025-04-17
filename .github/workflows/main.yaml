@@ -122,46 +122,46 @@ jobs:
           echo "SOFTWARE_VERSION_AS_DOCKER_TAG=$( echo ${sw_version} | tr + _ )" >> $GITHUB_ENV
           echo "USE_SOFTWARE_VERSION=$( if [[ $(git tag --points-at HEAD) ]]; then echo true; else echo false; fi )" >> $GITHUB_ENV
       # Set Docker image
-      - name: Set Docker repository
-        run: |
-          echo "DOCKERHUB_REPO=$( if [[ -n "${{ secrets.DOCKERHUB_REPO }}" ]]; then 
-          echo "${{ secrets.DOCKERHUB_REPO }}"; 
-          else echo "${{ github.repository_owner }}/lifemonitor"; fi )" >> $GITHUB_ENV
-      # Extract Docker metadata and set labels and tags
-      - name: Extract Docker metadata
-        id: docker_meta
-        uses: docker/metadata-action@v4
-        with:
-          images: ${{ env.DOCKERHUB_REPO }}
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=semver,enable=${{env.USE_SOFTWARE_VERSION}},pattern={{version}}
-            type=semver,enable=${{env.USE_SOFTWARE_VERSION}},event=tag,pattern={{major}}.{{minor}}
-            type=semver,enable=${{env.USE_SOFTWARE_VERSION}},pattern={{major}}.{{minor}}.build${{ github.run_number }}
-            type=raw,event=tag,value=${{ env.SOFTWARE_VERSION_AS_DOCKER_TAG }}
-            type=raw,event=tag,value=${{ env.SOFTWARE_VERSION_AS_DOCKER_TAG}}.build${{ github.run_number }}
-            type=sha
-          labels: |
-            org.opencontainers.image.version=${{ env.SOFTWARE_VERSION }}.build${{ github.run_number }}
-      # Build and tag LifeMonitor Docker image
-      - name: Build Docker image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: docker/lifemonitor.Dockerfile
-          tags: ${{ steps.docker_meta.outputs.tags }}
-          labels: ${{ steps.docker_meta.outputs.labels }}
-          # cache-from: type=gha
-          # cache-to: type=gha,mode=max
-          cache-from: type=local,src=/tmp/buildx-cache
-          cache-to: type=local,dest=/tmp/buildx-cache,mode=max
-          load: true
-          build-args: |
-            SW_VERSION=${{ env.SOFTWARE_VERSION }}
-            BUILD_NUMBER=${{ github.run_number }}
-            PIP_CACHE_DIR=/buildx-cache/pip
-            NPM_CACHE_DIR=/buildx-cache/npm
+      # - name: Set Docker repository
+      #   run: |
+      #     echo "DOCKERHUB_REPO=$( if [[ -n "${{ secrets.DOCKERHUB_REPO }}" ]]; then 
+      #     echo "${{ secrets.DOCKERHUB_REPO }}"; 
+      #     else echo "${{ github.repository_owner }}/lifemonitor"; fi )" >> $GITHUB_ENV
+      # # Extract Docker metadata and set labels and tags
+      # - name: Extract Docker metadata
+      #   id: docker_meta
+      #   uses: docker/metadata-action@v4
+      #   with:
+      #     images: ${{ env.DOCKERHUB_REPO }}
+      #     tags: |
+      #       type=ref,event=branch
+      #       type=ref,event=pr
+      #       type=semver,enable=${{env.USE_SOFTWARE_VERSION}},pattern={{version}}
+      #       type=semver,enable=${{env.USE_SOFTWARE_VERSION}},event=tag,pattern={{major}}.{{minor}}
+      #       type=semver,enable=${{env.USE_SOFTWARE_VERSION}},pattern={{major}}.{{minor}}.build${{ github.run_number }}
+      #       type=raw,event=tag,value=${{ env.SOFTWARE_VERSION_AS_DOCKER_TAG }}
+      #       type=raw,event=tag,value=${{ env.SOFTWARE_VERSION_AS_DOCKER_TAG}}.build${{ github.run_number }}
+      #       type=sha
+      #     labels: |
+      #       org.opencontainers.image.version=${{ env.SOFTWARE_VERSION }}.build${{ github.run_number }}
+      # # Build and tag LifeMonitor Docker image
+      # - name: Build Docker image
+      #   uses: docker/build-push-action@v6
+      #   with:
+      #     context: .
+      #     file: docker/lifemonitor.Dockerfile
+      #     tags: ${{ steps.docker_meta.outputs.tags }}
+      #     labels: ${{ steps.docker_meta.outputs.labels }}
+      #     # cache-from: type=gha
+      #     # cache-to: type=gha,mode=max
+      #     cache-from: type=local,src=/tmp/buildx-cache
+      #     cache-to: type=local,dest=/tmp/buildx-cache,mode=max
+      #     load: true
+      #     build-args: |
+      #       SW_VERSION=${{ env.SOFTWARE_VERSION }}
+      #       BUILD_NUMBER=${{ github.run_number }}
+      #       PIP_CACHE_DIR=/buildx-cache/pip
+      #       NPM_CACHE_DIR=/buildx-cache/npm
       # - name: Update cache
       #   run: |
       #     rm -rf /tmp/.buildx-cache
