@@ -10,6 +10,22 @@ else
     NETWORK_DATA="$(ip -oneline addr)"
 fi
 
+# Set Cache FROM and TO from env
+CACHE_FROM="${CACHE_FROM:-}"
+CACHE_TO="${CACHE_TO:-}"
+if [[ -n "${CACHE_FROM}" ]]; then
+    CACHE_FROM="--cache-from ${CACHE_FROM}"
+fi
+if [[ -n "${CACHE_TO}" ]]; then
+    CACHE_TO="--cache-to ${CACHE_TO}"
+fi
+
+# check if docker buildx is available
+if ! docker buildx version >/dev/null 2>&1; then
+    echo "Docker buildx is not available. Please install it." >&2
+    exit 1
+fi
+
 # check if GNU sed is available
 gsed=sed
 if uname -a | grep -q Darwin; then
@@ -38,7 +54,7 @@ current_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 cmd="minica -ca-cert \"${CA_NAME}.pem\" -ca-key \"${CA_NAME}.key\" -domains \"${DOMAINS}\" -ip-addresses \"${IPADDRESSES}\""
 
 # generate the image
-docker build -f "${current_path}/Dockerfile" -t "${IMAGE_NAME}" "${current_path}"
+docker buildx build ${CACHE_FROM} ${CACHE_TO} -f "${current_path}/Dockerfile" -t "${IMAGE_NAME}" "${current_path}"
 
 # generate certs
 rm -rf "${current_path}/data"
