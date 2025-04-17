@@ -14,10 +14,10 @@ fi
 CACHE_FROM="${CACHE_FROM:-}"
 CACHE_TO="${CACHE_TO:-}"
 if [[ -n "${CACHE_FROM}" ]]; then
-    CACHE_FROM="--cache-from ${CACHE_FROM}"
+    CACHE_FROM="--cache-from=${CACHE_FROM}"
 fi
 if [[ -n "${CACHE_TO}" ]]; then
-    CACHE_TO="--cache-to ${CACHE_TO}"
+    CACHE_TO="--cache-to=${CACHE_TO}"
 fi
 
 # check if docker buildx is available
