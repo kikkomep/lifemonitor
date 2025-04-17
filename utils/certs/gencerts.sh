@@ -12,12 +12,14 @@ fi
 
 # Set Cache FROM and TO from env
 CACHE_FROM="${CACHE_FROM:-}"
+CACHE_FROM_TYPE="${CACHE_FROM_TYPE:-local}"
 CACHE_TO="${CACHE_TO:-}"
+CACHE_TO_TYPE="${CACHE_TO_TYPE:-local}"
 if [[ -n "${CACHE_FROM}" ]]; then
-    CACHE_FROM="--cache-from=type=local,src=${CACHE_FROM}"
+    CACHE_FROM="--cache-from=type=${CACHE_FROM_TYPE},src=${CACHE_FROM}"
 fi
 if [[ -n "${CACHE_TO}" ]]; then
-    CACHE_TO="--cache-to=type=local,dest=${CACHE_TO}"
+    CACHE_TO="--cache-to=type=${CACHE_TO_TYPE},dest=${CACHE_TO}"
 fi
 
 # check if docker buildx is available
