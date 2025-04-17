@@ -27,8 +27,8 @@ env:
   # enable Docker push only if the required secrets are defined
   ENABLE_DOCKER_PUSH: ${{ secrets.DOCKERHUB_USER != null && secrets.DOCKERHUB_TOKEN != null }}
   DOCKER_BUILDKIT: 1
-  CACHE_FROM: "/tmp/.buildx-cache"
-  CACHE_TO: "/tmp/.buildx-cache"
+  CACHE_FROM: "~/.buildx-cache"
+  CACHE_TO: "~/.buildx-cache"
 
 jobs:
   # Verifies pep8, pyflakes and circular complexity
@@ -106,7 +106,7 @@ jobs:
         uses: actions/cache@v4
         id: buildx-cache
         with:
-          path: /tmp/.buildx-cache
+          path: ~/.buildx-cache
           # key: ${{ env.pythonLocation }}-${{ hashFiles('requirements.txt') }}-${{ hashFiles('requirements-ml.txt') }}
           key: lifemonitor-buildx-cache
           # restore-keys:
