@@ -100,17 +100,17 @@ jobs:
         uses: actions/checkout@v4
       # - name: Set up QEMU
       #   uses: docker/setup-qemu-action@v2
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
       - name: Cache dependencies
         uses: actions/cache@v4
-        id: buildx-cache
+        id: lifemonitor-buildx-cache
         with:
-          path: ~/.buildx-cache
+          path: /var/lib/docker
           # key: ${{ env.pythonLocation }}-${{ hashFiles('requirements.txt') }}-${{ hashFiles('requirements-ml.txt') }}
           key: lifemonitor-buildx-cache
           # restore-keys:
           #   lifemonitor-buildx-cache
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
       - name: List available Docker images
         run: "docker images"
       - name: Generate certificates
