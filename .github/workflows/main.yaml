@@ -104,7 +104,7 @@ jobs:
         uses: actions/cache@v4
         id: buildx-cache
         with:
-          path: $HOME/.buildx-cache
+          path: ~/.buildx-cache
           # key: ${{ env.pythonLocation }}-${{ hashFiles('requirements.txt') }}-${{ hashFiles('requirements-ml.txt') }}
           key: lifemonitor-buildx-cache
           # restore-keys:
