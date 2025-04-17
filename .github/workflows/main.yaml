@@ -100,26 +100,19 @@ jobs:
       #   uses: docker/setup-qemu-action@v2
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      - name: Generate certificates
-        run: make certs
-      # So now you can use Actions' own caching!
       - name: Cache dependencies
         uses: actions/cache@v4
-        id: openapi-spec-validator-cache
+        id: buildx-cache
         with:
-          path: ${{ env.pythonLocation }}-openapi-spec-validator
+          path: ${{ HOME }}/.buildx-cache
           # key: ${{ env.pythonLocation }}-${{ hashFiles('requirements.txt') }}-${{ hashFiles('requirements-ml.txt') }}
-          key: ${{ env.pythonLocation }}-openapi-spec-validator
-          restore-keys:
-            ${{ env.pythonLocation }}-openapi-spec-validator
-      
-      - name: Cache Docker layers
-        uses: actions/cache@v4
-        with:
-          path: /buildx-cache
-          key: lifemonitor-${{ env.pythonLocation }}-${{ hashFiles('requirements.txt') }}
-          restore-keys: |
-            lifemonitor-${{ env.pythonLocation }}-${{ hashFiles('requirements.txt') }}
+          key: lifemonitor-buildx-cache
+          # restore-keys:
+          #   lifemonitor-buildx-cache
+      - name: List available Docker images
+        run: "docker images"
+      - name: Generate certificates
+        run: make certs
       - name: "Set software version"
         run: |
           git fetch --unshallow
