@@ -54,7 +54,13 @@ current_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 cmd="minica -ca-cert \"${CA_NAME}.pem\" -ca-key \"${CA_NAME}.key\" -domains \"${DOMAINS}\" -ip-addresses \"${IPADDRESSES}\""
 
 # generate the image
-docker buildx build ${CACHE_FROM} ${CACHE_TO} -f "${current_path}/Dockerfile" -t "${IMAGE_NAME}" "${current_path}"
+docker buildx build \
+    ${CACHE_FROM} \
+    ${CACHE_TO} \
+    --load \
+    -f "${current_path}/Dockerfile" \
+    -t "${IMAGE_NAME}" \
+    "${current_path}"
 
 # generate certs
 rm -rf "${current_path}/data"
