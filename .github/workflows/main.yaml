@@ -28,7 +28,9 @@ env:
   ENABLE_DOCKER_PUSH: ${{ secrets.DOCKERHUB_USER != null && secrets.DOCKERHUB_TOKEN != null }}
   DOCKER_BUILDKIT: 1
   CACHE_FROM: "~/.buildx-cache"
+  CACHE_FROM_TYPE: "gha"
   CACHE_TO: "~/.buildx-cache"
+  CACHE_TO_TYPE: "gha,mode=max"
 
 jobs:
   # Verifies pep8, pyflakes and circular complexity
@@ -100,15 +102,15 @@ jobs:
         uses: actions/checkout@v4
       # - name: Set up QEMU
       #   uses: docker/setup-qemu-action@v2
-      - name: Cache dependencies
-        uses: actions/cache@v4
-        id: lifemonitor-buildx-cache
-        with:
-          path: /var/lib/docker
-          # key: ${{ env.pythonLocation }}-${{ hashFiles('requirements.txt') }}-${{ hashFiles('requirements-ml.txt') }}
-          key: lifemonitor-buildx-cache
-          # restore-keys:
-          #   lifemonitor-buildx-cache
+      # - name: Cache dependencies
+      #   uses: actions/cache@v4
+      #   id: lifemonitor-buildx-cache
+      #   with:
+      #     path: /var/lib/docker
+      #     # key: ${{ env.pythonLocation }}-${{ hashFiles('requirements.txt') }}-${{ hashFiles('requirements-ml.txt') }}
+      #     key: lifemonitor-buildx-cache
+      #     # restore-keys:
+      #     #   lifemonitor-buildx-cache
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: List available Docker images
