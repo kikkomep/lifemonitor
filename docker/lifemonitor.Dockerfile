@@ -16,18 +16,20 @@ ENV USER_ID=${USER_ID:-1000}
 ARG GROUP_ID
 ENV GROUP_ID=${GROUP_ID:-1000}
 
+# Set the default user
+ENV USER=lm
+
+# Set the pip cache directory
 ARG PIP_CACHE_DIR
 ENV PIP_CACHE_DIR=${PIP_CACHE_DIR:-/lm/.cache/pip}
 
+# Set the pip cache directory
 ARG NPM_CACHE_DIR
 ENV NPM_CACHE_DIR=${NPM_CACHE_DIR:-/lm/.npm}
 
 # Create a user 'lm' with HOME at /lm and set 'lm' as default git user
 RUN groupadd -g ${GROUP_ID} lm && \
     useradd -u ${USER_ID} -g lm -d /lm -m lm
-
-# Set the default user
-ENV USER=lm
 
 # Install requirements and install certificates
 RUN --mount=type=cache,target=${PIP_CACHE_DIR} \
@@ -48,6 +50,69 @@ ENV PYTHONPATH=/lm:/usr/local/lib/python3.10/dist-packages:/usr/lib/python3/dist
 
 # Install Nextflow
 RUN curl -fsSL get.nextflow.io | bash
+
+
+# Prepare data folder
+RUN mkdir -p /var/data/lm \
+    && chown -R lm:lm /var/data/lm \
+    && ln -s /var/data/lm /lm/data \
+    && chown -R lm:lm /lm/data \
+    && mkdir -p /var/log/lm && chown -R lm:lm /var/log/lm \
+    && mkdir /lm/.nextflow && chmod -R 777 /lm/.nextflow
+
+# Set the default user
+USER lm
+
+# Set default Git user
+RUN git config --global user.name "LifeMonitor[bot]" \
+    && git config --global user.email "noreply@lifemonitor.eu"
+
+
+##################################################################
+## Node Stage
+##################################################################
+FROM node:lts-slim AS node
+
+# Inherit from base
+ARG NPM_CACHE_DIR
+ENV NPM_CACHE_DIR=${NPM_CACHE_DIR:-/lm/.npm}
+
+# Update npm
+RUN --mount=type=cache,target="${NPM_CACHE_DIR}"" \
+    npm --cache ${NPM_CACHE_DIR} -g install npm
+
+# Log node and npm versions
+RUN echo "Node version: $(node -v)" && echo "NPM version: $(npm -v)"
+# Create static folder
+RUN mkdir -p /static && apt-get update && apt-get install -y --no-install-recommends \
+    bash python3 python3-setuptools make g++ \
+    && groupadd -r lm && useradd -r -g lm lm \
+    && chown -R lm:lm /static \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Copy package.json
+COPY lifemonitor/static/src/package.json package.json
+# Install npm dependencies
+
+RUN --mount=type=bind,source=lifemonitor/static/src,target=/lm/lifemonitor/static/src \
+    --mount=type=cache,target=${NPM_CACHE_DIR} \
+    cd /lm/lifemonitor/static/src && \
+    npm --cache ${NPM_CACHE_DIR} install && \
+    npm --cache ${NPM_CACHE_DIR} run production
+
+
+##################################################################
+## Target Stage
+##################################################################
+FROM base AS target
+
+# Set software and build number
+ARG SW_VERSION
+ARG BUILD_NUMBER
+ENV LM_SW_VERSION=$SW_VERSION
+ENV LM_BUILD_NUMBER=$BUILD_NUMBER
+
+COPY --from=node --chown=lm:lm /static/dist /lm/lifemonitor/static/dist
 
 # Set the final working directory
 WORKDIR /lm
@@ -82,21 +147,6 @@ RUN chmod 755 \
 # Set the container entrypoint
 ENTRYPOINT ["/usr/local/bin/lm_entrypoint.sh"]
 
-# Prepare data folder
-RUN mkdir -p /var/data/lm \
-    && chown -R lm:lm /var/data/lm \
-    && ln -s /var/data/lm /lm/data \
-    && chown -R lm:lm /lm/data \
-    && mkdir -p /var/log/lm && chown -R lm:lm /var/log/lm \
-    && mkdir /lm/.nextflow && chmod -R 777 /lm/.nextflow
-
-# Set the default user
-USER lm
-
-# Set default Git user
-RUN git config --global user.name "LifeMonitor[bot]" \
-    && git config --global user.email "noreply@lifemonitor.eu"
-
 # Copy lifemonitor app
 COPY --chown=lm:lm app.py ws.py lm-metrics-server lm-admin lm gunicorn.conf.py /lm/
 COPY --chown=lm:lm specs /lm/specs
@@ -107,53 +157,5 @@ COPY --chown=lm:lm cli /lm/cli
 # Ensure read access to source code to unprivileged users
 RUN find /lm/lifemonitor/ -type d -exec chmod a+r {} \;
 
-##################################################################
-## Node Stage
-##################################################################
-FROM node:lts-slim AS node
-
-# Inherit from base
-ARG NPM_CACHE_DIR
-ENV NPM_CACHE_DIR=${NPM_CACHE_DIR:-/lm/.npm}
-
-# Update npm
-RUN --mount=type=cache,target="${NPM_CACHE_DIR}"" \
-    npm --cache ${NPM_CACHE_DIR} -g install npm
-
-# Log node and npm versions
-RUN echo "Node version: $(node -v)" && echo "NPM version: $(npm -v)"
-# Create static folder
-RUN mkdir -p /static && apt-get update && apt-get install -y --no-install-recommends \
-    bash python3 python3-setuptools make g++ \
-    && groupadd -r lm && useradd -r -g lm lm \
-    && chown -R lm:lm /static \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
-# Set the default working directory
-WORKDIR /static/src
-# Copy package.json
-COPY lifemonitor/static/src/package.json package.json
-# Install npm dependencies
-RUN --mount=type=cache,target=${NPM_CACHE_DIR} \
-    npm --cache ${NPM_CACHE_DIR} install
-
-# Copy and build static files
-# Use a separated run to take advantage
-# of node_modules cache from the previous layer
-# TODO: use the --mount bind option to mount the node_modules folder
-COPY lifemonitor/static/src .
-RUN --mount=type=cache,target=${NPM_CACHE_DIR} \
-    npm --cache ${NPM_CACHE_DIR} run production
-
-
-##################################################################
-## Target Stage
-##################################################################
-FROM base AS target
-
-# Set software and build number
-ARG SW_VERSION
-ARG BUILD_NUMBER
-ENV LM_SW_VERSION=$SW_VERSION
-ENV LM_BUILD_NUMBER=$BUILD_NUMBER
-
-COPY --from=node --chown=lm:lm /static/dist /lm/lifemonitor/static/dist
+# Set the default user
+USER lm
