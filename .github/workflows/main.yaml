@@ -126,11 +126,11 @@ jobs:
           echo "SOFTWARE_VERSION_AS_DOCKER_TAG=$( echo ${sw_version} | tr + _ )" >> $GITHUB_ENV
           echo "USE_SOFTWARE_VERSION=$( if [[ $(git tag --points-at HEAD) ]]; then echo true; else echo false; fi )" >> $GITHUB_ENV
       # Set Docker image
-      # - name: Set Docker repository
-      #   run: |
-      #     echo "DOCKERHUB_REPO=$( if [[ -n "${{ secrets.DOCKERHUB_REPO }}" ]]; then 
-      #     echo "${{ secrets.DOCKERHUB_REPO }}"; 
-      #     else echo "${{ github.repository_owner }}/lifemonitor"; fi )" >> $GITHUB_ENV
+      - name: Set Docker repository
+        run: |
+          echo "DOCKERHUB_REPO=$( if [[ -n "${{ secrets.DOCKERHUB_REPO }}" ]]; then 
+          echo "${{ secrets.DOCKERHUB_REPO }}"; 
+          else echo "${{ github.repository_owner }}/lifemonitor"; fi )" >> $GITHUB_ENV
       # # Extract Docker metadata and set labels and tags
       # - name: Extract Docker metadata
       #   id: docker_meta
