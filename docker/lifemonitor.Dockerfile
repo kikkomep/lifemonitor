@@ -34,8 +34,9 @@ COPY --chown=lm:lm requirements.txt /lm/
 
 # Install requirements and install certificates
 RUN --mount=type=cache,target=${PIP_CACHE_DIR} \
-    pip3 install --upgrade pip --cache-dir=${PIP_CACHE_DIR} \
-    pip3 install -r /lm/requirements.txt --cache-dir=${PIP_CACHE_DIR}
+    pip install --upgrade pip --cache-dir=${PIP_CACHE_DIR}
+RUN --mount=type=cache,target=${PIP_CACHE_DIR} \
+    pip install -r /lm/requirements.txt --cache-dir=${PIP_CACHE_DIR}
 
 # Update Environment
 ENV PYTHONPATH=/lm:/usr/local/lib/python3.10/dist-packages:/usr/lib/python3/dist-packages \
