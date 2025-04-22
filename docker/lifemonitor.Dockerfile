@@ -114,14 +114,12 @@ FROM node:lts-slim AS node
 
 # Inherit from base
 ARG NPM_CACHE_DIR
+ENV NPM_CACHE_DIR=${NPM_CACHE_DIR:-/lm/.npm}
 
 # Update npm
-RUN --mount=type=cache,target=${NPM_CACHE_DIR} \
-    if [ -n "${NPM_CACHE_DIR}" ]; then \
-    npm --cache ${NPM_CACHE_DIR} -g install npm; \
-    else \
-    npm -g install npm; \
-    fi
+RUN --mount=type=cache,target="${NPM_CACHE_DIR}"" \
+    npm --cache ${NPM_CACHE_DIR} -g install npm
+
 # Log node and npm versions
 RUN echo "Node version: $(node -v)" && echo "NPM version: $(npm -v)"
 # Create static folder
