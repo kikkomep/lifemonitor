@@ -131,23 +131,23 @@ jobs:
           echo "DOCKERHUB_REPO=$( if [[ -n "${{ secrets.DOCKERHUB_REPO }}" ]]; then 
           echo "${{ secrets.DOCKERHUB_REPO }}"; 
           else echo "${{ github.repository_owner }}/lifemonitor"; fi )" >> $GITHUB_ENV
-      # # Extract Docker metadata and set labels and tags
-      # - name: Extract Docker metadata
-      #   id: docker_meta
-      #   uses: docker/metadata-action@v4
-      #   with:
-      #     images: ${{ env.DOCKERHUB_REPO }}
-      #     tags: |
-      #       type=ref,event=branch
-      #       type=ref,event=pr
-      #       type=semver,enable=${{env.USE_SOFTWARE_VERSION}},pattern={{version}}
-      #       type=semver,enable=${{env.USE_SOFTWARE_VERSION}},event=tag,pattern={{major}}.{{minor}}
-      #       type=semver,enable=${{env.USE_SOFTWARE_VERSION}},pattern={{major}}.{{minor}}.build${{ github.run_number }}
-      #       type=raw,event=tag,value=${{ env.SOFTWARE_VERSION_AS_DOCKER_TAG }}
-      #       type=raw,event=tag,value=${{ env.SOFTWARE_VERSION_AS_DOCKER_TAG}}.build${{ github.run_number }}
-      #       type=sha
-      #     labels: |
-      #       org.opencontainers.image.version=${{ env.SOFTWARE_VERSION }}.build${{ github.run_number }}
+      # Extract Docker metadata and set labels and tags
+      - name: Extract Docker metadata
+        id: docker_meta
+        uses: docker/metadata-action@v4
+        with:
+          images: ${{ env.DOCKERHUB_REPO }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,enable=${{env.USE_SOFTWARE_VERSION}},pattern={{version}}
+            type=semver,enable=${{env.USE_SOFTWARE_VERSION}},event=tag,pattern={{major}}.{{minor}}
+            type=semver,enable=${{env.USE_SOFTWARE_VERSION}},pattern={{major}}.{{minor}}.build${{ github.run_number }}
+            type=raw,event=tag,value=${{ env.SOFTWARE_VERSION_AS_DOCKER_TAG }}
+            type=raw,event=tag,value=${{ env.SOFTWARE_VERSION_AS_DOCKER_TAG}}.build${{ github.run_number }}
+            type=sha
+          labels: |
+            org.opencontainers.image.version=${{ env.SOFTWARE_VERSION }}.build${{ github.run_number }}
       # # Build and tag LifeMonitor Docker image
       # - name: Build Docker image
       #   uses: docker/build-push-action@v6
