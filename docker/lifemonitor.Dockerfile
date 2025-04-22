@@ -18,9 +18,6 @@ ENV USER_ID=${USER_ID:-1000}
 ARG GROUP_ID
 ENV GROUP_ID=${GROUP_ID:-1000}
 
-# Set the default user
-ENV USER=lm
-
 # Set the pip cache directory
 ARG PIP_CACHE_DIR
 ENV PIP_CACHE_DIR=${PIP_CACHE_DIR:-/lm/.cache/pip}
@@ -73,36 +70,36 @@ RUN git config --global user.name "LifeMonitor[bot]" \
 ##################################################################
 ## Node Stage
 ##################################################################
-FROM node:lts-slim AS node
+# FROM node:lts-slim AS node
 
-# Inherit from base
-ARG NPM_CACHE_DIR
-ENV NPM_CACHE_DIR=${NPM_CACHE_DIR:-/lm/.npm}
+# # Inherit from base
+# ARG NPM_CACHE_DIR
+# ENV NPM_CACHE_DIR=${NPM_CACHE_DIR:-/lm/.npm}
 
-# Update npm
-RUN --mount=type=cache,target="${NPM_CACHE_DIR}"" \
-    npm --cache ${NPM_CACHE_DIR} -g install npm
+# # Update npm
+# RUN --mount=type=cache,target="${NPM_CACHE_DIR}"" \
+#     npm --cache ${NPM_CACHE_DIR} -g install npm
 
-# Log node and npm versions
-RUN echo "Node version: $(node -v)" && echo "NPM version: $(npm -v)"
+# # Log node and npm versions
+# RUN echo "Node version: $(node -v)" && echo "NPM version: $(npm -v)"
 # Create static folder
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    mkdir -p /static && apt-get update && apt-get install -y --no-install-recommends \
-    bash python3 python3-setuptools make g++ \
-    && groupadd -r lm && useradd -r -g lm lm \
-    && chown -R lm:lm /static \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+# RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+#     --mount=type=cache,target=/var/lib/apt,sharing=locked \
+#     mkdir -p /static && apt-get update && apt-get install -y --no-install-recommends \
+#     bash python3 python3-setuptools make g++ \
+#     && groupadd -r lm && useradd -r -g lm lm \
+#     && chown -R lm:lm /static \
+#     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Copy package.json
-COPY lifemonitor/static/src/package.json package.json
-# Install npm dependencies
+# # Copy package.json
+# COPY lifemonitor/static/src/package.json package.json
+# # Install npm dependencies
 
-RUN --mount=type=bind,source=lifemonitor/static/src,target=/lm/lifemonitor/static/src \
-    --mount=type=cache,target=${NPM_CACHE_DIR} \
-    cd /lm/lifemonitor/static/src && \
-    npm --cache ${NPM_CACHE_DIR} install && \
-    npm --cache ${NPM_CACHE_DIR} run production
+# RUN --mount=type=bind,source=lifemonitor/static/src,target=/lm/lifemonitor/static/src \
+#     --mount=type=cache,target=${NPM_CACHE_DIR} \
+#     cd /lm/lifemonitor/static/src && \
+#     npm --cache ${NPM_CACHE_DIR} install && \
+#     npm --cache ${NPM_CACHE_DIR} run production
 
 
 ##################################################################
@@ -116,7 +113,7 @@ ARG BUILD_NUMBER
 ENV LM_SW_VERSION=$SW_VERSION
 ENV LM_BUILD_NUMBER=$BUILD_NUMBER
 
-COPY --from=node --chown=lm:lm /static/dist /lm/lifemonitor/static/dist
+# COPY --from=node --chown=lm:lm /static/dist /lm/lifemonitor/static/dist
 
 # Set the final working directory
 WORKDIR /lm
