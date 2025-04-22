@@ -29,13 +29,12 @@ RUN groupadd -g ${GROUP_ID} lm && \
 # Set the default user
 ENV USER=lm
 
-# Copy requirements and certificates
-COPY --chown=lm:lm requirements.txt /lm/
-
 # Install requirements and install certificates
 RUN --mount=type=cache,target=${PIP_CACHE_DIR} \
     pip install --upgrade pip --cache-dir=${PIP_CACHE_DIR}
-RUN --mount=type=cache,target=${PIP_CACHE_DIR} \
+
+RUN --mount=type=bind,source=requirements.txt,target=/lm/requirements.txt \
+    --mount=type=cache,target=${PIP_CACHE_DIR} \
     pip install -r /lm/requirements.txt --cache-dir=${PIP_CACHE_DIR}
 
 # Update Environment
