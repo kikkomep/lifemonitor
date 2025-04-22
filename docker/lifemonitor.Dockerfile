@@ -1,7 +1,9 @@
 FROM python:3.12-slim-bookworm AS base
 
 # Install base requirements
-RUN apt-get update -q \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update -q \
     && apt-get install -y --no-install-recommends \
     bash lftp curl rsync build-essential  \
     redis-tools git \
@@ -84,7 +86,9 @@ RUN --mount=type=cache,target="${NPM_CACHE_DIR}"" \
 # Log node and npm versions
 RUN echo "Node version: $(node -v)" && echo "NPM version: $(npm -v)"
 # Create static folder
-RUN mkdir -p /static && apt-get update && apt-get install -y --no-install-recommends \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    mkdir -p /static && apt-get update && apt-get install -y --no-install-recommends \
     bash python3 python3-setuptools make g++ \
     && groupadd -r lm && useradd -r -g lm lm \
     && chown -R lm:lm /static \
