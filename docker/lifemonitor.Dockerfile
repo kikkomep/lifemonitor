@@ -2,11 +2,11 @@ FROM python:3.12-slim-bookworm AS base
 
 # Install base requirements
 RUN apt-get update -q \
- && apt-get install -y --no-install-recommends \
-        bash lftp curl rsync build-essential  \
-        redis-tools git \
-        postgresql-client default-jre \
- && apt-get clean -y && rm -rf /var/lib/apt/lists
+    && apt-get install -y --no-install-recommends \
+    bash lftp curl rsync build-essential  \
+    redis-tools git \
+    postgresql-client default-jre \
+    && apt-get clean -y && rm -rf /var/lib/apt/lists
 
 # Set the parametric USER ID
 ARG USER_ID
@@ -17,10 +17,10 @@ ARG GROUP_ID
 ENV GROUP_ID=${GROUP_ID:-1000}
 
 ARG PIP_CACHE_DIR
-ENV PIP_CACHE_DIR=${PIP_CACHE_DIR}
+ENV PIP_CACHE_DIR=${PIP_CACHE_DIR:-/lm/.cache/pip}
 
 ARG NPM_CACHE_DIR
-ENV NPM_CACHE_DIR=${NPM_CACHE_DIR}
+ENV NPM_CACHE_DIR=${NPM_CACHE_DIR:-/lm/.npm}
 
 # Create a user 'lm' with HOME at /lm and set 'lm' as default git user
 RUN groupadd -g ${GROUP_ID} lm && \
@@ -34,17 +34,8 @@ COPY --chown=lm:lm requirements.txt /lm/
 
 # Install requirements and install certificates
 RUN --mount=type=cache,target=${PIP_CACHE_DIR} \
-    if [ -n "${PIP_CACHE_DIR}" ]; then \
-    pip3 install --upgrade pip --cache-dir=${PIP_CACHE_DIR}; \
-    else \
-    pip3 install --upgrade pip; \
-    fi
-RUN --mount=type=cache,target=${PIP_CACHE_DIR} \
-    if [ -n "${PIP_CACHE_DIR}" ]; then \
-    pip3 install -r /lm/requirements.txt --cache-dir=${PIP_CACHE_DIR}; \
-    else \
-    pip3 install -r /lm/requirements.txt; \
-    fi
+    pip3 install --upgrade pip --cache-dir=${PIP_CACHE_DIR} \
+    pip3 install -r /lm/requirements.txt --cache-dir=${PIP_CACHE_DIR}
 
 # Update Environment
 ENV PYTHONPATH=/lm:/usr/local/lib/python3.10/dist-packages:/usr/lib/python3/dist-packages \
@@ -145,21 +136,15 @@ WORKDIR /static/src
 COPY lifemonitor/static/src/package.json package.json
 # Install npm dependencies
 RUN --mount=type=cache,target=${NPM_CACHE_DIR} \
-    if [ -n "${NPM_CACHE_DIR}" ]; then \
-    npm --cache ${NPM_CACHE_DIR} install; \
-    else \
-    npm install; \
-    fi
+    npm --cache ${NPM_CACHE_DIR} install
+
 # Copy and build static files
 # Use a separated run to take advantage
 # of node_modules cache from the previous layer
+# TODO: use the --mount bind option to mount the node_modules folder
 COPY lifemonitor/static/src .
 RUN --mount=type=cache,target=${NPM_CACHE_DIR} \
-    if [ -n "${NPM_CACHE_DIR}" ]; then \
-    npm --cache ${NPM_CACHE_DIR} run production; \
-    else \
-    npm run production; \
-    fi
+    npm --cache ${NPM_CACHE_DIR} run production
 
 
 ##################################################################
