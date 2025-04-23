@@ -168,6 +168,9 @@ jobs:
       #   run: |
       #     rm -rf /tmp/.buildx-cache
       #     mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+      # List available Docker images
+      - name: List Docker images
+        run: "docker images"
       # Setup testing environment
       # - name: Set up testing environment
       #   # Tag the latest built image as `crs4/lifemonitor:latest`
