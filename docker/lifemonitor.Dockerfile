@@ -147,9 +147,6 @@ RUN chmod 755 \
     && update-ca-certificates || true \
     && mv /nextflow /usr/local/bin
 
-# Set the container entrypoint
-ENTRYPOINT ["/usr/local/bin/lm_entrypoint.sh"]
-
 # Copy lifemonitor app
 COPY --chown=lm:lm app.py ws.py lm-metrics-server lm-admin lm gunicorn.conf.py /lm/
 COPY --chown=lm:lm specs /lm/specs
@@ -162,3 +159,6 @@ RUN find /lm/lifemonitor/ -type d -exec chmod a+r {} \;
 
 # Set the default user
 USER lm
+
+# Set the container entrypoint
+ENTRYPOINT ["/usr/local/bin/lm_entrypoint.sh"]
