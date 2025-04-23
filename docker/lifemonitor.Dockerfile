@@ -70,36 +70,37 @@ RUN git config --global user.name "LifeMonitor[bot]" \
 ##################################################################
 ## Node Stage
 ##################################################################
-# FROM node:lts-slim AS node
+FROM node:lts-slim AS node
 
-# # Inherit from base
-# ARG NPM_CACHE_DIR
-# ENV NPM_CACHE_DIR=${NPM_CACHE_DIR:-/lm/.npm}
+# Inherit from base
+ARG NPM_CACHE_DIR
+ENV NPM_CACHE_DIR=${NPM_CACHE_DIR:-/lm/.npm}
 
-# # Update npm
-# RUN --mount=type=cache,target="${NPM_CACHE_DIR}"" \
-#     npm --cache ${NPM_CACHE_DIR} -g install npm
+# Update npm
+RUN --mount=type=cache,target="${NPM_CACHE_DIR}"" \
+    npm --cache ${NPM_CACHE_DIR} -g install npm
 
-# # Log node and npm versions
-# RUN echo "Node version: $(node -v)" && echo "NPM version: $(npm -v)"
+# Log node and npm versions
+RUN echo "Node version: $(node -v)" && echo "NPM version: $(npm -v)"
+
 # Create static folder
-# RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-#     --mount=type=cache,target=/var/lib/apt,sharing=locked \
-#     mkdir -p /static && apt-get update && apt-get install -y --no-install-recommends \
-#     bash python3 python3-setuptools make g++ \
-#     && groupadd -r lm && useradd -r -g lm lm \
-#     && chown -R lm:lm /static \
-#     && apt-get clean && rm -rf /var/lib/apt/lists/*
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    mkdir -p /static && apt-get update && apt-get install -y --no-install-recommends \
+    bash python3 python3-setuptools make g++ \
+    && groupadd -r lm && useradd -r -g lm lm \
+    && chown -R lm:lm /static \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# # Copy package.json
-# COPY lifemonitor/static/src/package.json package.json
-# # Install npm dependencies
+# Copy package.json
+COPY lifemonitor/static/src/package.json package.json
 
-# RUN --mount=type=bind,source=lifemonitor/static/src,target=/lm/lifemonitor/static/src \
-#     --mount=type=cache,target=${NPM_CACHE_DIR} \
-#     cd /lm/lifemonitor/static/src && \
-#     npm --cache ${NPM_CACHE_DIR} install && \
-#     npm --cache ${NPM_CACHE_DIR} run production
+# Install npm dependencies
+RUN --mount=type=bind,source=lifemonitor/static/src,target=/lm/lifemonitor/static/src \
+    --mount=type=cache,target=${NPM_CACHE_DIR} \
+    cd /lm/lifemonitor/static/src && \
+    npm --cache ${NPM_CACHE_DIR} install && \
+    npm --cache ${NPM_CACHE_DIR} run production
 
 
 ##################################################################
@@ -112,8 +113,6 @@ ARG SW_VERSION
 ARG BUILD_NUMBER
 ENV LM_SW_VERSION=$SW_VERSION
 ENV LM_BUILD_NUMBER=$BUILD_NUMBER
-
-# COPY --from=node --chown=lm:lm /static/dist /lm/lifemonitor/static/dist
 
 # Set the final working directory
 WORKDIR /lm
@@ -153,6 +152,9 @@ COPY --chown=lm:lm specs /lm/specs
 COPY --chown=lm:lm lifemonitor /lm/lifemonitor
 COPY --chown=lm:lm migrations /lm/migrations
 COPY --chown=lm:lm cli /lm/cli
+
+# Copy compiled Javascript code
+COPY --from=node --chown=lm:lm /static/dist /lm/lifemonitor/static/dist
 
 # Ensure read access to source code to unprivileged users
 RUN find /lm/lifemonitor/ -type d -exec chmod a+r {} \;
