@@ -75,7 +75,7 @@ def git_ref(request):
         logger.debug("Not param for test_instance fixture")
     # set repo ref
     if ref_type and ref_value:
-        ref = f"refs/{'heads' if ref_type=='branch' else 'tags'}/{ref_value}"
+        ref = f"refs/{'heads' if ref_type == 'branch' else 'tags'}/{ref_value}"
     return ref_type, ref_value, ref
 
 
