@@ -100,7 +100,9 @@ RUN --mount=type=bind,source=lifemonitor/static/src,target=/lm/lifemonitor/stati
     --mount=type=cache,target=${NPM_CACHE_DIR} \
     cd /lm/lifemonitor/static/src && \
     npm --cache ${NPM_CACHE_DIR} install && \
-    npm --cache ${NPM_CACHE_DIR} run production
+    npm --cache ${NPM_CACHE_DIR} run production && \
+    mkdir -p /static && \
+    cp -R /lm/lifemonitor/static/src/dist /static
 
 
 ##################################################################
