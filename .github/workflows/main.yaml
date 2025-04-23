@@ -206,15 +206,15 @@ jobs:
           CACHE_FROM: type=gha
           CACHE_TO: type=gha,mode=max
       # Run tests
-      # - name: Run tests
-      #   run: SKIP_BUILD=1 SKIP_RESET_COMPOSE=1 SW_VERSION=${{ env.SOFTWARE_VERSION }} BUILD_NUMBER=${{ github.run_number }} make run-tests
-      #   env:
-      #     TRAVIS_TESTING_SERVICE_URL: ${{ secrets.TRAVIS_TESTING_SERVICE_URL }}
-      #     TRAVIS_TESTING_SERVICE_TOKEN: ${{ secrets.TRAVIS_TESTING_SERVICE_TOKEN }}
-      #     TRAVIS_TESTING_SERVICE_TYPE: travis
-      #     GH_TESTING_SERVICE_URL: ${{ secrets.GH_TESTING_SERVICE_URL }}
-      #     GH_TESTING_SERVICE_TOKEN: ${{ secrets.GH_TESTING_SERVICE_TOKEN }}
-      #     GH_TESTING_SERVICE_TYPE: github
+      - name: Run tests
+        run: SKIP_BUILD=1 SKIP_RESET_COMPOSE=1 SW_VERSION=${{ env.SOFTWARE_VERSION }} BUILD_NUMBER=${{ github.run_number }} make run-tests
+        env:
+          TRAVIS_TESTING_SERVICE_URL: ${{ secrets.TRAVIS_TESTING_SERVICE_URL }}
+          TRAVIS_TESTING_SERVICE_TOKEN: ${{ secrets.TRAVIS_TESTING_SERVICE_TOKEN }}
+          TRAVIS_TESTING_SERVICE_TYPE: travis
+          GH_TESTING_SERVICE_URL: ${{ secrets.GH_TESTING_SERVICE_URL }}
+          GH_TESTING_SERVICE_TOKEN: ${{ secrets.GH_TESTING_SERVICE_TOKEN }}
+          GH_TESTING_SERVICE_TYPE: github
       # Teardown testing environment
       - name: Teardown testing environment
         run: make down
