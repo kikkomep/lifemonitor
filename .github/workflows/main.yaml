@@ -27,9 +27,9 @@ env:
   # enable Docker push only if the required secrets are defined
   ENABLE_DOCKER_PUSH: ${{ secrets.DOCKERHUB_USER != null && secrets.DOCKERHUB_TOKEN != null }}
   DOCKER_BUILDKIT: 1
-  # CACHE_FROM: "~/.buildx-cache"
+  CACHE_FROM: "/tmp/.buildx-cache"
   CACHE_FROM_TYPE: "gha"
-  # CACHE_TO: "~/.buildx-cache"
+  CACHE_TO: "/tmp/.buildx-cache"
   CACHE_TO_TYPE: "gha,mode=max"
 
 jobs:
@@ -111,8 +111,6 @@ jobs:
       #     key: lifemonitor-buildx-cache
       #     # restore-keys:
       #     #   lifemonitor-buildx-cache
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
       # - name: Load image from GHA cache
       #   uses: docker/build-push-action@v5
       #   with:
@@ -121,6 +119,15 @@ jobs:
       #     tags: |
       #       crs4/minica:latest            
       #     cache-from: type=gha
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
       - name: List available Docker images
         run: "docker images"
       - name: Generate certificates
