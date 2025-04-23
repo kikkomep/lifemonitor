@@ -102,31 +102,6 @@ jobs:
         uses: actions/checkout@v4
       # - name: Set up QEMU
       #   uses: docker/setup-qemu-action@v2
-      # - name: Cache dependencies
-      #   uses: actions/cache@v4
-      #   id: lifemonitor-buildx-cache
-      #   with:
-      #     path: /var/lib/docker
-      #     # key: ${{ env.pythonLocation }}-${{ hashFiles('requirements.txt') }}-${{ hashFiles('requirements-ml.txt') }}
-      #     key: lifemonitor-buildx-cache
-      #     # restore-keys:
-      #     #   lifemonitor-buildx-cache
-      # - name: Load image from GHA cache
-      #   uses: docker/build-push-action@v5
-      #   with:
-      #     context: .
-      #     load: true  # Loads the image into the Docker daemon
-      #     tags: |
-      #       crs4/minica:latest            
-      #     cache-from: type=gha
-      # - name: Cache Docker layers
-      #   uses: actions/cache@v4
-      #   with:
-      #     path: /var/lib/docker
-      #     key: lifemonitor-buildx-${{ github.ref_name }}-${{ github.sha }}
-      #     restore-keys: |
-      #       lifemonitor-buildx-${{ github.ref_name }}-
-      #       lifemonitor-buildx-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: List available Docker images
@@ -174,16 +149,10 @@ jobs:
           labels: ${{ steps.docker_meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          # cache-from: type=local,src=/tmp/buildx-cache
-          # cache-to: type=local,dest=/tmp/buildx-cache,mode=max
           load: true
           build-args: |
             SW_VERSION=${{ env.SOFTWARE_VERSION }}
             BUILD_NUMBER=${{ github.run_number }}
-      # - name: Update cache
-      #   run: |
-      #     rm -rf /tmp/.buildx-cache
-      #     mv /tmp/.buildx-cache-new /tmp/.buildx-cache
       # List available Docker images
       - name: List Docker images
         run: "docker images"
