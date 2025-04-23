@@ -92,22 +92,22 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     && chown -R lm:lm /static \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Copy package.json
-COPY lifemonitor/static/src/package.json package.json
-
-# Install npm dependencies
+# Install node dependencies
 RUN --mount=type=bind,source=lifemonitor/static/src,target=/lm/lifemonitor/static/src,rw=true \
     --mount=type=cache,target=${NPM_CACHE_DIR} \
     cd /lm/lifemonitor/static/src && \
     npm --cache ${NPM_CACHE_DIR} install && \
-    npm --cache ${NPM_CACHE_DIR} run production && \
     mkdir -p /static && \
-    cp -R /lm/lifemonitor/static/src/dist /static
+    cp -r /lm/lifemonitor/static/src /static
 
+# Build static files
+RUN --mount=type=cache,target=${NPM_CACHE_DIR} \
+    cd /static/src && \
+    npm --cache ${NPM_CACHE_DIR} run production
 
-##################################################################
-## Target Stage
-##################################################################
+# ##################################################################
+# ## Target Stage
+# ##################################################################
 FROM base AS target
 
 # Set software and build number
