@@ -118,8 +118,10 @@ ENV LM_BUILD_NUMBER=$BUILD_NUMBER
 # Set the final working directory
 WORKDIR /lm
 
+USER root
+
 # Copy utility scripts
-COPY \
+COPY --chown=lm:lm \
     docker/wait-for-postgres.sh \
     docker/wait-for-redis.sh \
     docker/wait-for-file.sh \
