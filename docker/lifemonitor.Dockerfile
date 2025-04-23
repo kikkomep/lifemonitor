@@ -96,7 +96,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 COPY lifemonitor/static/src/package.json package.json
 
 # Install npm dependencies
-RUN --mount=type=bind,source=lifemonitor/static/src,target=/lm/lifemonitor/static/src \
+RUN --mount=type=bind,source=lifemonitor/static/src,target=/lm/lifemonitor/static/src,rw=true \
     --mount=type=cache,target=${NPM_CACHE_DIR} \
     cd /lm/lifemonitor/static/src && \
     npm --cache ${NPM_CACHE_DIR} install && \
