@@ -15,11 +15,13 @@ CACHE_FROM="${CACHE_FROM:-}"
 CACHE_FROM_TYPE="${CACHE_FROM_TYPE:-local}"
 CACHE_TO="${CACHE_TO:-}"
 CACHE_TO_TYPE="${CACHE_TO_TYPE:-local}"
-if [[ -n "${CACHE_FROM}" ]]; then
-    CACHE_FROM="--cache-from=type=${CACHE_FROM_TYPE},src=${CACHE_FROM}"
+if [[ -n "${CACHE_FROM_TYPE}" ]]; then
+    CACHE_FROM="--cache-from=type=${CACHE_FROM_TYPE}"
+    [[ -n "${CACHE_FROM}" ]] && CACHE_FROM+=",src=${CACHE_FROM}"
 fi
-if [[ -n "${CACHE_TO}" ]]; then
-    CACHE_TO="--cache-to=type=${CACHE_TO_TYPE},dest=${CACHE_TO}"
+if [[ -n "${CACHE_TO_TYPE}" ]]; then
+    CACHE_TO="--cache-to=type=${CACHE_TO_TYPE}"
+    [[ -n "${CACHE_TO}" ]] && CACHE_TO+=",dest=${CACHE_TO}"
 fi
 
 # check if docker buildx is available
