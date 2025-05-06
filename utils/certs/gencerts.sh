@@ -12,9 +12,9 @@ fi
 
 # Set Cache FROM and TO from env
 CACHE_FROM="${CACHE_FROM:-}"
-CACHE_FROM_TYPE="${CACHE_FROM_TYPE:-local}"
+CACHE_FROM_TYPE="${CACHE_FROM_TYPE:-}"
 CACHE_TO="${CACHE_TO:-}"
-CACHE_TO_TYPE="${CACHE_TO_TYPE:-local}"
+CACHE_TO_TYPE="${CACHE_TO_TYPE:-}"
 if [[ -n "${CACHE_FROM_TYPE}" ]]; then
     CACHE_FROM="--cache-from=type=${CACHE_FROM_TYPE}"
     [[ -n "${CACHE_FROM}" ]] && CACHE_FROM+=",src=${CACHE_FROM}"
