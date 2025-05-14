@@ -104,6 +104,9 @@ compose-files: docker-compose.base.yml \
 	docker-compose.monitoring.yml \
 	settings.conf
 
+log_path:
+	mkdir -p /tmp/lifemonitor-logs
+
 prod:
 	$(eval LM_MODE=prod)
 
@@ -198,7 +201,7 @@ aux_images: tests/config/registries/seek/seek.Dockerfile certs
 	#        tests/config/registries/seek/ ; \
 	printf "$(done)\n"
 
-start: images compose-files prod reset_compose permissions ## Start LifeMonitor in a Production environment
+start: images compose-files log_path prod reset_compose permissions ## Start LifeMonitor in a Production environment
 	@printf "\n$(bold)Starting production services...$(reset)\n" ; \
 	base=$$(if [[ -f "docker-compose.yml" ]]; then echo "-f docker-compose.yml"; fi) ; \
 	echo "$$(USER_UID=$$(id -u) USER_GID=$$(id -g) \
@@ -210,7 +213,7 @@ start: images compose-files prod reset_compose permissions ## Start LifeMonitor 
 	&& $(docker_compose) -f docker-compose.yml up -d redis db init lm worker ws_server nginx prometheus ;\
 	printf "$(done)\n"
 
-start-dev: images compose-files dev reset_compose permissions ## Start LifeMonitor in a Development environment
+start-dev: images compose-files dev log_path reset_compose permissions ## Start LifeMonitor in a Development environment
 	@printf "\n$(bold)Starting development services...$(reset)\n" ; \
 	base=$$(if [[ -f "docker-compose.yml" ]]; then echo "-f docker-compose.yml"; fi) ; \
 	echo "$$(USER_UID=$$(id -u) USER_GID=$$(id -g) \
@@ -223,7 +226,7 @@ start-dev: images compose-files dev reset_compose permissions ## Start LifeMonit
 	&& $(docker_compose) -f docker-compose.yml up -d redis db dev_proxy github_event_proxy init lm worker ws_server prometheus nginx ;\
 	printf "$(done)\n"
 
-start-testing: compose-files aux_images ro_crates images reset_compose permissions ## Start LifeMonitor in a Testing environment
+start-testing: compose-files aux_images ro_crates log_path images reset_compose permissions ## Start LifeMonitor in a Testing environment
 	@printf "\n$(bold)Starting testing services...$(reset)\n" ; \
 	base=$$(if [[ -f "docker-compose.yml" ]]; then echo "-f docker-compose.yml"; fi) ; \
 	echo "$$(USER_UID=$$(id -u) USER_GID=$$(id -g) \
@@ -242,7 +245,7 @@ start-testing: compose-files aux_images ro_crates images reset_compose permissio
 	&& $(docker_compose) restart db lmtests \
 	&& printf "$(done)\n"
 
-start-maintenance: compose-files aux_images ro_crates images reset_compose permissions ## Start LifeMonitor in a Testing environment
+start-maintenance: compose-files aux_images ro_crates log_path images reset_compose permissions ## Start LifeMonitor in a Testing environment
 	@printf "\n$(bold)Starting testing services...$(reset)\n" ; \
 	base=$$(if [[ -f "docker-compose.yml" ]]; then echo "-f docker-compose.yml"; fi) ; \
 	echo "$$(USER_UID=$$(id -u) USER_GID=$$(id -g) \
@@ -392,6 +395,7 @@ clean: ## Clean up the working environment (i.e., running services, network, vol
 	fi
 	@printf "\n$(bold)Removing certs...$(reset) " ; \
 	rm -rf certs && rm -rf utils/certs/data && rm -rf tests/config/registries/seek/certs \
+	rm -rf /tmp/lifemonitor-logs \
 	@printf "$(done)\n"
 	@printf "\n$(bold)Removing temp files...$(reset) " ; \
 	rm -rf {,.prod.,.dev.,.test.}docker-compose.yml
