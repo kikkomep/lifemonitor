@@ -92,6 +92,11 @@ ifdef PLATFORMS
 	platforms_opt := $(call get_opts,platforms,$(PLATFORMS))
 endif
 
+# handle seek wait time
+seek_final_wait_time := 0
+ifdef SEEK_FINAL_WAIT_TIME
+	seek_final_wait_time := $(SEEK_FINAL_WAIT_TIME)
+endif
 
 all: images
 
@@ -239,7 +244,7 @@ start-dev: images compose-files dev log_path reset_compose permissions ## Start 
 	&& cp {,.test.}docker-compose.yml \
 	&& $(docker_compose) -f docker-compose.yml up -d db lmtests seek jenkins webserver worker ws_server \
 	&& $(docker_compose) -f ./docker-compose.yml \
-		exec -T lmtests /bin/bash -c "tests/wait-for-seek.sh 600" \
+		exec -T lmtests /bin/bash -c "SEEK_FINAL_WAIT_TIME=$(seek_final_wait_time) tests/wait-for-seek.sh 600" \
 	&& $(docker_compose) exec lmtests pytest tests/test_users.py::test_user1[RegistryType.SEEK] > /dev/null 2>&1 || echo "Testing environment initialized!" \
 	&& $(docker_compose) restart db lmtests \
 	&& printf "$(done)\n" 
