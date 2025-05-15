@@ -326,6 +326,7 @@ stop-testing: compose-files ## Stop all the services in the Testing Environment
 	USER_UID=$$(id -u) USER_GID=$$(id -g) \
 	$(docker_compose) -f docker-compose.extra.yml \
 				   -f docker-compose.base.yml \
+				   -f docker-compose.monitoring.yml \
 				   -f docker-compose.dev.yml \
 				   -f docker-compose.test.yml \
 				   $(log_level_opt) stop db lmtests seek jenkins webserver worker ws_server ; \
