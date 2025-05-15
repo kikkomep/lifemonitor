@@ -51,7 +51,7 @@ jobs:
         uses: actions/cache@v4
         id: flake8-cache
         with:
-          path: ${{ env.pythonLocation }}
+          path: ${{ env.pythonLocation }}-flake8
           # key: ${{ env.pythonLocation }}-${{ hashFiles('requirements.txt') }}-${{ hashFiles('requirements-ml.txt') }}
           key: ${{ env.pythonLocation }}-flake8
           restore-keys:
