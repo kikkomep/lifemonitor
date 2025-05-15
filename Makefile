@@ -226,9 +226,8 @@ start-dev: images compose-files dev log_path reset_compose permissions ## Start 
 	&& $(docker_compose) -f docker-compose.yml up -d redis db dev_proxy github_event_proxy init lm worker ws_server prometheus nginx ;\
 	printf "$(done)\n"
 
-start-testing: compose-files aux_images ro_crates log_path images reset_compose permissions ## Start LifeMonitor in a Testing environment
-	@printf "\n$(bold)Starting testing services...$(reset)\n" ; \
-	base=$$(if [[ -f "docker-compose.yml" ]]; then echo "-f docker-compose.yml"; fi) ; \
+.start-testing: compose-files aux_images ro_crates log_path images reset_compose permissions ## Start LifeMonitor in a Testing environment
+	@base=$$(if [[ -f "docker-compose.yml" ]]; then echo "-f docker-compose.yml"; fi) ; \
 	echo "$$(USER_UID=$$(id -u) USER_GID=$$(id -g) \
 			$(docker_compose) $${base} \
 				-f docker-compose.extra.yml \
@@ -243,7 +242,15 @@ start-testing: compose-files aux_images ro_crates log_path images reset_compose 
 		exec -T lmtests /bin/bash -c "tests/wait-for-seek.sh 600" \
 	&& $(docker_compose) exec lmtests pytest tests/test_users.py::test_user1[RegistryType.SEEK] > /dev/null 2>&1 || echo "Testing environment initialized!" \
 	&& $(docker_compose) restart db lmtests \
-	&& printf "$(done)\n"
+	&& printf "$(done)\n" 
+
+start-testing:
+	@printf "\n$(bold)Starting testing services...$(reset)\n " ; \
+	if [ -f /tmp/.lifemonitor-testing-started ]; then \
+		printf "$(yellow)WARNING: Testing environment already started, skipping...$(reset)" ; \
+	else \
+		$(MAKE) .start-testing && touch /tmp/.lifemonitor-testing-started ; \
+	fi
 
 start-maintenance: compose-files aux_images ro_crates log_path images reset_compose permissions ## Start LifeMonitor in a Testing environment
 	@printf "\n$(bold)Starting testing services...$(reset)\n" ; \
@@ -285,8 +292,10 @@ start-aux-services: aux_images ro_crates docker-compose.extra.yml permissions ##
 # 	      && $(docker_compose) up -d jupyter ; \
 # 	printf "$(done)\n"
 
-run-tests: start-testing ## Run all tests in the Testing Environment
-	@printf "\n$(bold)Running tests...$(reset)\n" ; \
+run-tests: ## Run all tests in the Testing Environment
+	@export SKIP_RESET_COMPOSE=1 ; \
+	$(MAKE) start-testing ; \
+	printf "\n$(bold)Running tests...$(reset)\n" ; \
 	$(docker_compose) exec -T lmtests /bin/bash -c "pytest --durations=10 --color=yes tests"
 
 
@@ -330,6 +339,7 @@ stop-testing: compose-files ## Stop all the services in the Testing Environment
 				   -f docker-compose.dev.yml \
 				   -f docker-compose.test.yml \
 				   $(log_level_opt) stop db lmtests seek jenkins webserver worker ws_server ; \
+	rm -f  /tmp/.lifemonitor-testing-started ; \
 	printf "$(done)\n"
 
 stop-dev: compose-files ## Stop all services in the Develop Environment
@@ -361,7 +371,7 @@ stop-all: ## Stop all the services
 
 reset_compose:
 	@if [[ $${SKIP_RESET_COMPOSE} -eq 1 ]]; then \
-		echo "$(bold)Skip reset of docker-compose services $(reset)" ;\
+		echo -e "\n$(bold)Skip reset of docker-compose services $(reset)" ;\
 	elif [[ -f "docker-compose.yml" ]]; then \
 		cmp -s docker-compose.yml .$(LM_MODE).docker-compose.yml ; \
 		RETVAL=$$? ; \
@@ -371,6 +381,7 @@ reset_compose:
 			USER_UID=$$(id -u) USER_GID=$$(id -g) \
 			$(docker_compose) down ; \
 			rm docker-compose.yml ; \
+			rm -rf /tmp/.lifemonitor-testing-started ; \
 			printf "$(done)\n" ; \
 		fi \
 	fi
@@ -380,6 +391,7 @@ down: ## Teardown all the services
 	echo "$(bold)Teardown all services...$(reset)" ; \
 	USER_UID=$$(id -u) USER_GID=$$(id -g) \
 	$(docker_compose) down ; \
+	rm -rf /tmp/.lifemonitor-testing-started ; \
 	printf "$(done)\n" ; \
 	else \
 		printf "\n$(yellow)WARNING: nothing to remove. 'docker-compose.yml' file not found!$(reset)\n\n" ; \
@@ -397,6 +409,7 @@ clean: ## Clean up the working environment (i.e., running services, network, vol
 	@printf "\n$(bold)Removing certs...$(reset) " ; \
 	rm -rf certs && rm -rf utils/certs/data && rm -rf tests/config/registries/seek/certs \
 	rm -rf /tmp/lifemonitor-logs \
+	rm -rf /tmp/.lifemonitor-testing-started \
 	@printf "$(done)\n"
 	@printf "\n$(bold)Removing temp files...$(reset) " ; \
 	rm -rf {,.prod.,.dev.,.test.}docker-compose.yml
@@ -409,7 +422,7 @@ help: ## Show help
 
 .PHONY: all images aux_images prod dev certs \
 		lifemonitor smeeio ro_crates webserver \
-		start start-dev start-testing start-nginx start-aux-services \
+		start start-dev start-testing .start-testing start-nginx start-aux-services \
 		run-tests tests \
 		stop-aux-services stop-nginx stop-testing \
 		stop-dev stop stop-all down reset_compose clean
