@@ -165,6 +165,8 @@ jobs:
           docker tag ${{ env.DOCKERHUB_REPO }}:${{ env.SOFTWARE_VERSION_AS_DOCKER_TAG }} crs4/lifemonitor:latest ;
           docker images ;
           SKIP_BUILD=1 SW_VERSION=${{ env.SOFTWARE_VERSION }} BUILD_NUMBER=${{ github.run_number }} SEEK_FINAL_WAIT_TIME=30 make start-testing ;
+          sleep 30 ;
+          docker compose logs ;
         env:
           TRAVIS_TESTING_SERVICE_URL: ${{ secrets.TRAVIS_TESTING_SERVICE_URL }}
           TRAVIS_TESTING_SERVICE_TOKEN: ${{ secrets.TRAVIS_TESTING_SERVICE_TOKEN }}
