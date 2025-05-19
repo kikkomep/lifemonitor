@@ -41,9 +41,9 @@ def check_config(func):
     @functools.wraps(func)
     def check_config_impl(*args, **kwargs):
         storage: RemoteStorage = args[0]
-        assert isinstance(storage, RemoteStorage), "Invali argument"
+        assert isinstance(storage, RemoteStorage), "Invalid argument"
         if not storage._enabled:
-            logger.warning("S3 Storage not properly configured")
+            logger.debug("S3 Storage not configured")
             return False
         return func(*args, **kwargs)
     return check_config_impl
