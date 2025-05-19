@@ -430,7 +430,7 @@ def workflows_post(*args, **kwargs):
 
 def process_workflows_post(body, _registry=None, _submitter_id=None,
                            async_processing: Optional[bool] = None, job: Job = None):
-    logger.warning("The current body: %r", body)
+    logger.debug("The current body: %r", body)
     # check if there exists a submitter and/or a registry in the current request
     registry, submitter = __check_submitter_and_registry__(body, _registry, _submitter_id)
     # extract roc_link or rocrate from the request
