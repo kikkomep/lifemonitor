@@ -301,7 +301,7 @@ run-tests: ## Run all tests in the Testing Environment
 	@export SKIP_RESET_COMPOSE=1 ; \
 	$(MAKE) start-testing ; \
 	printf "\n$(bold)Running tests...$(reset)\n" ; \
-	$(docker_compose) exec -T lmtests /bin/bash -c "pytest --durations=10 --color=yes -vsx tests"
+	$(docker_compose) exec -T lmtests /bin/bash -c "pytest --durations=10 --color=yes tests"
 
 
 tests: start-testing ## CI utility to setup, run tests and teardown a testing environment
