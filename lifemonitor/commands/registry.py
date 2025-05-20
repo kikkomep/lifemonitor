@@ -44,11 +44,11 @@ supported_registries = ["seek"]
 
 def print_registry_info(registry):
     output = f"""\n
-{'*'*100}
+{'*' * 100}
 Workflow Registry '{registry.name}' (uuid: {registry.uuid}, type: {registry.type}) registered!
-{'*'*100}\n\n
+{'*' * 100}\n\n
 OAuth2 settings to connect to LifeMonitor:
-{'-'*100}
+{'-' * 100}
 REGISTRY NAME: {registry.name}
 REGISTRY API URL: {registry.uri}
 REGISTRY CLIENT NAME: {registry.client_name}
@@ -154,7 +154,7 @@ def list_registries():
         if len(registries) == 0:
             print("\n No Workflow Registry found !!!\n")
         else:
-            print(f"\n Workflow Registries:\n{'*'*80}")
+            print(f"\n Workflow Registries:\n{'*' * 80}")
             for r in registries:
                 print(f"{r.uuid} (name='{r.name}', type={r.type})")
             print("\n")

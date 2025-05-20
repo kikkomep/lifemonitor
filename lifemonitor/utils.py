@@ -641,6 +641,7 @@ def download_file_from_remote_url(url, target_path: str = None,
             with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
                 _download_from_remote(url, tmp_file, authorization=authorization)
                 target_path = tmp_file.path
+        logger.debug("Downloaded file: %r", target_path)
         return target_path
     except urllib.error.URLError as e:
         handle_download_exception(url, e)
@@ -873,7 +874,7 @@ def find_refs_by_commit(repo: pygit2.Repository, commit: str):
 def find_commit_info(repo: pygit2.Repository, commit=None, ref=None) -> pygit2.Object:
     assert isinstance(repo, pygit2.Repository), repo
     for c in repo.walk(ref or repo.head.target):
-        if not commit or c.hex == commit or str(c.hex) == str(commit):
+        if not commit or c.id == commit or str(c.id) == str(commit):
             return c
     return None
 

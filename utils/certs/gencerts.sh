@@ -10,6 +10,26 @@ else
     NETWORK_DATA="$(ip -oneline addr)"
 fi
 
+# Set Cache FROM and TO from env
+CACHE_FROM="${CACHE_FROM:-}"
+CACHE_FROM_TYPE="${CACHE_FROM_TYPE:-}"
+CACHE_TO="${CACHE_TO:-}"
+CACHE_TO_TYPE="${CACHE_TO_TYPE:-}"
+if [[ -n "${CACHE_FROM_TYPE}" ]]; then
+    CACHE_FROM="--cache-from=type=${CACHE_FROM_TYPE}"
+    [[ -n "${CACHE_FROM}" ]] && CACHE_FROM+=",src=${CACHE_FROM}"
+fi
+if [[ -n "${CACHE_TO_TYPE}" ]]; then
+    CACHE_TO="--cache-to=type=${CACHE_TO_TYPE}"
+    [[ -n "${CACHE_TO}" ]] && CACHE_TO+=",dest=${CACHE_TO}"
+fi
+
+# check if docker buildx is available
+if ! docker buildx version >/dev/null 2>&1; then
+    echo "Docker buildx is not available. Please install it." >&2
+    exit 1
+fi
+
 # check if GNU sed is available
 gsed=sed
 if uname -a | grep -q Darwin; then
@@ -38,7 +58,21 @@ current_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 cmd="minica -ca-cert \"${CA_NAME}.pem\" -ca-key \"${CA_NAME}.key\" -domains \"${DOMAINS}\" -ip-addresses \"${IPADDRESSES}\""
 
 # generate the image
-docker build -f "${current_path}/Dockerfile" -t "${IMAGE_NAME}" "${current_path}"
+echo "Running command: docker buildx build \
+    ${CACHE_FROM} \
+    ${CACHE_TO} \
+    --load \
+    -f \"${current_path}/Dockerfile\" \
+    -t \"${IMAGE_NAME}\" \
+    \"${current_path}\"" >&2
+
+docker buildx build \
+    ${CACHE_FROM} \
+    ${CACHE_TO} \
+    --load \
+    -f "${current_path}/Dockerfile" \
+    -t "${IMAGE_NAME}" \
+    "${current_path}"
 
 # generate certs
 rm -rf "${current_path}/data"

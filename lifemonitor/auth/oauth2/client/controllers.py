@@ -101,7 +101,7 @@ def create_blueprint(merge_identity_view):
     def login(name, scope: str = None):
         # we allow dynamic reconfiguration of the oauth2registry
         # when app is configured in dev or testing mode
-        if current_app.config['ENV'] in ("testing", "testingSupport", "development"):
+        if current_app.config.get('LIFEMONITOR_ENV', "production") in ("testing", "testingSupport", "development"):
             config_oauth2_registry(current_app)
         remote = oauth2_registry.create_client(name)
         if remote is None:
@@ -200,12 +200,14 @@ class AuthorizatonHandler:
                     if session['sign_in']:
                         return redirect(url_for("auth.identity_not_found"))
                 except KeyError as e:
-                    logger.error(e)
+                    if logger.isEnabledFor(logging.DEBUG):
+                        logger.exception(e)
 
             try:
                 session.pop('sign_in', False)
             except KeyError as e:
-                logger.debug(e)
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.exception(e)
 
             # Now, figure out what to do with this token. There are 2x2 options:
             # user login state and token link state.

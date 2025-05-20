@@ -132,6 +132,10 @@ class BaseConfig:
     SESSION_COOKIE_NAME = 'lifemonitor_session'
     # Disable Maintenance Mode by default
     MAINTENANCE_MODE = False
+    # LOG_FILE_PATH
+    LOG_FILE_PATH = os.environ.get('LOG_FILE_PATH', '/var/log/lm')
+    # LOG_FILE_NAME
+    LOG_FILE_NAME = os.environ.get('LOG_FILE_NAME', 'lifemonitor.log')
 
 
 class DevelopmentConfig(BaseConfig):
@@ -162,7 +166,7 @@ class TestingConfig(BaseConfig):
     CONFIG_NAME = "testing"
     SETTINGS_FILE = "tests/settings.conf"
     SECRET_KEY = os.getenv("TEST_SECRET_KEY", BaseConfig.SECRET_KEY)
-    DEBUG = True
+    DEBUG = False
     TESTING = True
     LOG_LEVEL = "DEBUG"
     # SQLALCHEMY_DATABASE_URI = "sqlite:///{0}/app-test.db".format(basedir)
@@ -175,7 +179,7 @@ class TestingConfig(BaseConfig):
 
 class TestingSupportConfig(TestingConfig):
     CONFIG_NAME = "testingSupport"
-    DEBUG = True
+    DEBUG = False
     TESTING = False
     LOG_LEVEL = "DEBUG"
     DATA_WORKFLOWS = f"{BaseConfig.BASE_TEMP_FOLDER}/lm_tests_data"
@@ -195,7 +199,7 @@ _config_by_name = {cfg.CONFIG_NAME: cfg for cfg in _EXPORT_CONFIGS}
 
 def get_config(settings=None):
     # set app env
-    app_env = os.environ.get("FLASK_ENV", "production")
+    app_env = os.environ.get("LIFEMONITOR_ENV", "production")
     if app_env != 'production':
         # Set the DEBUG_METRICS env var to also enable the
         # prometheus metrics exporter when running in development mode
@@ -301,13 +305,15 @@ def configure_logging(app):
 
     log_format = f'[{COLOR_SEQ % (90)}%(asctime)s{RESET_SEQ}] %(levelname)s in %(module)s: {COLOR_SEQ % (90)}%(message)s{RESET_SEQ}'
     if level_value == logging.DEBUG:
-        log_format = f'[{COLOR_SEQ % (90)}%(asctime)s{RESET_SEQ}] %(levelname)s in %(module)s::%(funcName)s @ line: %(lineno)s: {COLOR_SEQ % (90)}%(message)s{RESET_SEQ}'
+        log_format = f'[{COLOR_SEQ % (90)}%(asctime)s{RESET_SEQ}] %(name)s %(levelname)s in %(module)s::%(funcName)s @ line: %(lineno)s: {COLOR_SEQ % (90)}%(message)s{RESET_SEQ}'
 
     # configure and initialize log_path
     log_file_path = app.config.get('LOG_FILE_PATH', '/var/log/lm')
     if not os.path.exists(log_file_path):
         os.makedirs(log_file_path, exist_ok=True)
-
+    log_file_name = app.config.get('LOG_FILE_NAME', 'lifemonitor.log')
+    log_file = os.path.join(log_file_path, log_file_name)
+    logger.debug("Log file: %s", log_file)
     # configure logging
     dictConfig({
         'version': 1,
@@ -332,7 +338,7 @@ def configure_logging(app):
                 'level': logging.INFO,
                 'class': "logging.handlers.RotatingFileHandler",
                 'formatter': 'default',
-                "filename": os.path.join(log_file_path, 'lifemonitor.log'),
+                "filename": log_file,
                 "maxBytes": 10485760,
                 "backupCount": 10,
             },
@@ -361,7 +367,10 @@ def configure_logging(app):
         from werkzeug._internal import _log as werkzeug_log
         werkzeug_log("info", "Raising werkzeug logging level to ERROR")
         from werkzeug._internal import _logger as werkzeug_logger
-        werkzeug_logger.setLevel(logging.ERROR)
+        if level_value == logging.DEBUG:
+            werkzeug_logger.setLevel(level_value)
+        else:
+            werkzeug_logger.setLevel(logging.ERROR)
     except ImportError:
         app.logger.warning("Unable to access werkzeug logger to raise its logging level")
 

@@ -3,6 +3,14 @@
 url="https://seek:3000/oauth/authorize"
 timeout_seconds=${1:-30}
 DEBUG=${DEBUG:-0}
+SEEK_FINAL_WAIT_TIME=${SEEK_FINAL_WAIT_TIME:-0}
+
+# Log the environment variables
+if [ "$DEBUG" == "1" ]; then
+    echo -e "\nDEBUG: URL: $url"
+    echo -e "DEBUG: Timeout seconds: $timeout_seconds"
+    echo -e "DEBUG: SEEK_FINAL_WAIT_TIME: $SEEK_FINAL_WAIT_TIME"
+fi
 
 # Function to check if the server is available
 check_server() {
@@ -10,6 +18,12 @@ check_server() {
     status_code=$(echo "$response" | awk '{print $2}')
     
     if [ "$status_code" == "302" ]; then
+        if [[ $SEEK_FINAL_WAIT_TIME -gt 0 ]]; then
+            if [ "$DEBUG" == "1" ]; then
+                echo -e "\nDEBUG: Seek is available, but waiting for $SEEK_FINAL_WAIT_TIME seconds..."
+            fi
+            sleep $SEEK_FINAL_WAIT_TIME
+        fi
         echo -en "\e[1mOK\e[0m: Seek is now available!\n"
         exit 0
     fi

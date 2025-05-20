@@ -54,10 +54,11 @@ services:
     user: "${USER_UID}:${USER_GID}"
     env_file: *env_file
     environment:
-      - "FLASK_ENV=production"
+      - "LIFEMONITOR_ENV=production"
       - "POSTGRESQL_HOST=db"
       - "POSTGRESQL_PORT=5432"
       - "WEBSOCKET_SERVER=false"
+      - "LOG_FILE_NAME=lifemonitor-backend.log"
     volumes:
       - "./certs:/certs:ro"
       - "./instance:/lm/instance:ro"
@@ -79,15 +80,18 @@ services:
     depends_on:
       - "db"
     env_file: *env_file
+    user: "${USER_UID}:${USER_GID}"
     environment:
-      - "FLASK_ENV=production"
+      - "LIFEMONITOR_ENV=production"
       - "POSTGRESQL_HOST=db"
       - "POSTGRESQL_PORT=5432"
+      - "LOG_FILE_NAME=lifemonitor-init.log"
     volumes:
       - "./certs:/certs:ro"
       - "./instance:/lm/instance:ro"
       - "./settings.conf:/lm/settings.conf:ro" # default settings
       - "data_workflows:/var/data/lm"
+      - "/tmp/lifemonitor-logs:/var/log/lm"
       - type: volume
         source: data_static_files
         target: /lm/lifemonitor/static
@@ -108,15 +112,18 @@ services:
     user: "${USER_UID}:${USER_GID}"
     env_file: *env_file
     environment:
-      - "FLASK_ENV=production"
+      - "LIFEMONITOR_ENV=production"
       - "POSTGRESQL_HOST=db"
       - "POSTGRESQL_PORT=5432"
       - "WEBSOCKET_SERVER=false"
+      - "LOG_FILE_PATH=/var/log/lm"
+      - "LOG_FILE_NAME=lifemonitor-worker.log"
     volumes:
       - "./certs:/certs:ro"
       - "./instance:/lm/instance:ro"
       - "./settings.conf:/lm/settings.conf:ro" # default settings
       - "data_workflows:/var/data/lm"
+      - "/tmp/lifemonitor-logs:/var/log/lm"
     networks:
       - life_monitor
 
@@ -131,17 +138,20 @@ services:
     user: "${USER_UID}:${USER_GID}"
     env_file: *env_file
     environment:
-      - "FLASK_ENV=production"
+      - "LIFEMONITOR_ENV=production"
       - "WEBSOCKET_SERVER=true"
       - "POSTGRESQL_HOST=db"
       - "POSTGRESQL_PORT=5432"
       - "LIFEMONITOR_TLS_KEY=/certs/lm.key"
       - "LIFEMONITOR_TLS_CERT=/certs/lm.crt"
+      - "LOG_FILE_PATH=/var/log/lm"
+      - "LOG_FILE_NAME=lifemonitor-ws.log"
     volumes:
       - "./certs:/certs:ro"
       - "./instance:/lm/instance:ro"
       - "./settings.conf:/lm/settings.conf:ro" # default settings
       - "data_workflows:/var/data/lm"
+      - "/tmp/lifemonitor-logs:/var/log/lm"
     ports:
       - "8001:8000"
     networks:
@@ -165,6 +175,7 @@ volumes:
   data_specs:
   data_redis:
   data_workflows:
+  logs:
 
 
 networks:

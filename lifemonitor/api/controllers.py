@@ -430,7 +430,7 @@ def workflows_post(*args, **kwargs):
 
 def process_workflows_post(body, _registry=None, _submitter_id=None,
                            async_processing: Optional[bool] = None, job: Job = None):
-    logger.warning("The current body: %r", body)
+    logger.debug("The current body: %r", body)
     # check if there exists a submitter and/or a registry in the current request
     registry, submitter = __check_submitter_and_registry__(body, _registry, _submitter_id)
     # extract roc_link or rocrate from the request
@@ -629,6 +629,8 @@ def workflows_delete_version(wf_uuid, wf_version):
 def workflows_delete(wf_uuid):
     try:
         w = lm.get_workflow(wf_uuid)
+        if not w:
+            raise lm_exceptions.EntityNotFoundException(models.Workflow, entity_id=wf_uuid)
         versions = [{'uuid': wf_uuid, 'version': w.version} for w in w.versions.values()]
         if current_user and not current_user.is_anonymous:
             lm.deregister_user_workflow(wf_uuid, current_user)

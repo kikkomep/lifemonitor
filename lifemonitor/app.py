@@ -57,14 +57,18 @@ def create_app(
     **kwargs,
 ):
     """
-    App factory method
-    :param env:
-    :param settings:
-    :param init_app:
-    :return:
+    App factory method to create and configure the Flask application instance.
+    :param env: The environment to run the app in (e.g., 'production', 'development').
+    :param settings: Additional settings to configure the app.
+    :param init_app: Flag to initialize the app.
+    :param init_integrations: Flag to initialize integrations.
+    :param worker: Flag to indicate if the app is running as a worker.
+    :param load_jobs: Flag to load background jobs.
+    :param kwargs: Additional keyword arguments for Flask app.
+    :return: Configured Flask app instance.
     """
     # set app env
-    app_env = env or os.environ.get("FLASK_ENV", "production")
+    app_env = env or os.environ.get("LIFEMONITOR_ENV", "production")
     if app_env != "production":
         # Set the DEBUG_METRICS env var to also enable the
         # prometheus metrics exporter when running in development mode
@@ -176,7 +180,19 @@ def initialize_app(
     # check if the app is running in maintenance mode
     if app.config.get("MAINTENANCE_MODE", False):
         logger.warning("Application is running in maintenance mode")
+        # init Redis connection
+        redis.init(app)
+        # configure app DB
+        db.init_app(app)
+        # initialize Migration engine
+        Migrate(app, db)
+        # initialize cache
+        init_cache(app)
+        # register commands
+        commands.register_commands(app)
     else:
+        # log initialization start
+        logger.info("Initializing the application...")
         # register error handlers
         errors_controller.register_api(app)
         # init Redis connection
@@ -204,3 +220,5 @@ def initialize_app(
         commands.register_commands(app)
         # register the domain filter with Jinja
         app.jinja_env.filters["domain"] = get_domain
+        # log initialization end
+        logger.info("LifeMonitor App initialized!")
