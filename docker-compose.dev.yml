@@ -50,7 +50,7 @@ services:
       - "/lm/lifemonitor/static/dist"
 
   dev_proxy:
-    image: bitnami/nginx:1.19-debian-10
+    image: bitnami/nginx:1.28.0
     depends_on:
       - "db"
       - "redis"
