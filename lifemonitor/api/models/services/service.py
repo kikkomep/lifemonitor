@@ -106,7 +106,8 @@ class TestingService(db.Model, ModelMixin):
     token_type = "Bearer"
 
     # configure the class manager
-    service_type_registry = ClassManager('lifemonitor.api.models.services', class_suffix='TestingService', skip=['__init__', 'service'])
+    service_type_registry = ClassManager('lifemonitor.api.models.services', class_suffix='TestingService',
+                                         skip=['__init__', 'service'], load_sub_packages=True)
 
     __mapper_args__ = {
         'polymorphic_on': _type,
