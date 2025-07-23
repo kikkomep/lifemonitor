@@ -346,7 +346,11 @@ class GithubTestingService(TestingService):
     def get_test_build(self, test_instance: models.TestInstance, build_number: int) -> GithubTestBuild:
         try:
             # parse build identifier
-            run_id, run_attempt = build_number.split('_')
+            run_attempt = None
+            if isinstance(build_number, str) and re.match(r".*_\d+$", build_number):
+                run_id, run_attempt = build_number.split('_')
+            else:
+                run_id = build_number
             logger.debug("Searching build: %r %r", run_id, run_attempt)
             # get a reference to the test instance repository
             repo: Repository = self._get_repo(test_instance)
@@ -362,7 +366,10 @@ class GithubTestingService(TestingService):
     def _get_test_build(self, run_id, run_attempt, repo: Repository) -> GithubTestBuild:
         try:
             # build url
-            url = f"/repos/{repo.full_name}/actions/runs/{run_id}/attempts/{run_attempt}"
+            if run_attempt:
+                url = f"/repos/{repo.full_name}/actions/runs/{run_id}/attempts/{run_attempt}"
+            else:
+                url = f"/repos/{repo.full_name}/actions/runs/{run_id}"
             logger.debug("Build URL: %s", url)
             headers, data = repo._requester.requestJsonAndCheck("GET", url)
             return headers, data
