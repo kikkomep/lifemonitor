@@ -18,11 +18,34 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from .service import GithubTestingService
-from .test_build import GithubTestBuild
+from __future__ import annotations
+
+import logging
+
+# set module level logger
+logger = logging.getLogger(__name__)
 
 
-__all__ = [
-    'GithubTestBuild',
-    'GithubTestingService'
-]
+# TODO: make these configurable
+_configuration_ = {
+    'retry': 2,
+    'timeout': 11,
+    'per_page': 100
+}
+
+
+class GithubStatus:
+    COMPLETED = 'completed'
+    QUEUED = 'queued'
+    IN_PROGRESS = 'in_progress'
+
+
+class GithubConclusion:
+    ACTION_REQUIRED = 'action_required'
+    CANCELLED = 'cancelled'
+    FAILURE = 'failure'
+    NEUTRAL = 'neutral'
+    SUCCESS = 'success'
+    SKIPPED = 'skipped'
+    STALE = 'stale'
+    TIMED_OUT = 'timed_out'
