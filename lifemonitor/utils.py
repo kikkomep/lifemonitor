@@ -29,6 +29,7 @@ import inspect
 import json
 import logging
 import os
+import pkgutil
 import random
 import re
 import shutil
@@ -1146,10 +1147,11 @@ class NextRouteRegistry(object):
 
 class ClassManager:
 
-    def __init__(self, package, class_prefix="", class_suffix="", skip=None, lazy=True):
+    def __init__(self, package, class_prefix="", class_suffix="", skip=None, lazy=True, load_sub_packages=False):
         self._package = package
         self._prefix = class_prefix
         self._suffix = class_suffix
+        self._load_sub_packages = load_sub_packages
         self._skip = ['__init__']
         if skip:
             if isinstance(skip, list):
@@ -1164,19 +1166,38 @@ class ClassManager:
         if not self.__concrete_types__:
             self.__concrete_types__ = {}
             module_obj = import_module(self._package)
-            modules_files = glob.glob(join(dirname(module_obj.__file__), "*.py"))
-            modules = ['{}'.format(basename(f)[:-3]) for f in modules_files if isfile(f)]
-            for m in modules:
-                if m not in self._skip:
-                    object_class = f"{self._prefix}{m.capitalize()}{self._suffix}"
-                    try:
-                        mod = import_module(f"{self._package}.{m}")
-                        self.__concrete_types__[m] = (
-                            getattr(mod, object_class),
-                        )
-                    except (ModuleNotFoundError, AttributeError) as e:
-                        logger.warning(f"Unable to load object module {m}")
+
+            # Helper function to load a module and get its class
+            def _load_module_class(module_name, package_prefix=""):
+                if module_name in self._skip:
+                    return
+
+                full_package_name = f"{self._package}{package_prefix}.{module_name}"
+                object_class = f"{self._prefix}{module_name.capitalize()}{self._suffix}"
+                logger.debug(f"Loading module: {full_package_name}, object class: {object_class}")
+
+                try:
+                    mod = import_module(full_package_name)
+                    self.__concrete_types__[module_name] = (
+                        getattr(mod, object_class),
+                    )
+                except (ModuleNotFoundError, AttributeError) as e:
+                    logger.warning(f"Unable to load object module {module_name}")
+                    if logger.isEnabledFor(logging.DEBUG):
                         logger.exception(e)
+
+            # Load modules from Python files
+            modules_files = glob.glob(join(dirname(module_obj.__file__), "*.py"))
+            modules = [basename(f)[:-3] for f in modules_files if isfile(f)]
+            for m in modules:
+                _load_module_class(m)
+
+            # Load modules from subpackages if enabled
+            if self._load_sub_packages:
+                for loader, module_name, is_pkg in pkgutil.iter_modules(module_obj.__path__):
+                    if is_pkg:
+                        _load_module_class(module_name)
+
         return self.__concrete_types__
 
     @property
