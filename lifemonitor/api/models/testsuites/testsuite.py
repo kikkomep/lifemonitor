@@ -28,10 +28,27 @@ from typing import List
 import lifemonitor.api.models as models
 from lifemonitor.api.models import db
 from lifemonitor.auth.models import User
+from lifemonitor.cache import Timeout, cached
 from lifemonitor.models import JSON, UUID, ModelMixin
 
 # set module level logger
 logger = logging.getLogger(__name__)
+
+
+def skip_cached_status(suite: models.TestSuite, status: models.Status) -> bool:
+    """
+    Check if the status updated at is less recent than the latest build's updated at.
+    """
+    assert status and isinstance(status, models.Status), \
+        f"Invalid status object: {status} (type: {type(status)})"
+
+    if not status.latest_builds or not status.updated_at:
+        return False
+    latest_build = max(suite.latest_test_builds, key=lambda x: x.updated_at)
+    result = status.updated_at < latest_build.updated_at
+    logger.info(f"Test validity check: {result} (status updated at: {status.updated_at}, "
+                f"latest build updated at: {latest_build.updated_at})")
+    return result
 
 
 class TestSuite(db.Model, ModelMixin):
@@ -63,6 +80,7 @@ class TestSuite(db.Model, ModelMixin):
             self.uuid, self.workflow_version.uuid, self.workflow_version.version)
 
     @property
+    @cached(timeout=Timeout.NONE, client_scope=False, skip=skip_cached_status)
     def status(self) -> models.SuiteStatus:
         return models.SuiteStatus(self)
 
