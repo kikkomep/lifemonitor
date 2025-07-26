@@ -166,6 +166,10 @@ class TestInstance(db.Model, ModelMixin):
     def find_by_resource(cls, resource: str) -> List[TestInstance]:
         return cls.query.filter(cls.resource == resource).all()
 
+    @classmethod
+    def find_by_testing_service(cls, testing_service) -> List[TestInstance]:
+        return cls.query.filter(cls.testing_service == testing_service).all()
+
 
 class ManagedTestInstance(TestInstance):
 
