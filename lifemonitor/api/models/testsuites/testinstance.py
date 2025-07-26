@@ -47,8 +47,8 @@ class TestInstance(db.Model, ModelMixin):
     parameters = db.Column(JSON, nullable=True)
     submitter_id = db.Column(db.Integer,
                              db.ForeignKey(models.User.id), nullable=True)
-    last_builds_update = db.Column(db.DateTime, default=datetime.datetime.utcnow,
-                                   onupdate=datetime.datetime.utcnow)
+    _builds_refreshed_at = db.Column("builds_refreshed_at", db.DateTime, default=datetime.datetime.utcnow,
+                                     onupdate=datetime.datetime.utcnow)
     # configure relationships
     submitter = db.relationship("User", uselist=False)
     test_suite = db.relationship("TestSuite",
@@ -107,6 +107,16 @@ class TestInstance(db.Model, ModelMixin):
     @property
     def last_test_build(self):
         return self.get_last_test_build()
+
+    @property
+    def builds_refreshed_at(self):
+        return self._builds_refreshed_at
+
+    @builds_refreshed_at.setter
+    def builds_refreshed_at(self, value: datetime.datetime = datetime.now(datetime.timezone.utc)):
+        assert isinstance(value, datetime.datetime), \
+            "builds_refreshed_at must be a datetime object"
+        self._builds_refreshed_at = value
 
     def start_test_build(self):
         return self.testing_service.start_test_build(self)
