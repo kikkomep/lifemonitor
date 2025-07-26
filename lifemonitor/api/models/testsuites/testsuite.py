@@ -91,6 +91,16 @@ class TestSuite(db.Model, ModelMixin):
         logger.debug("Created TestInstance: %r", test_instance)
         return test_instance
 
+    @property
+    def latest_test_builds(self) -> list[models.TestBuild]:
+        """
+        Get the latest test builds across all test instances in this suite.
+        """
+        latest_builds = []
+        for test_instance in self.test_instances:
+            latest_builds.append(test_instance.last_test_build)
+        return latest_builds
+
     @classmethod
     def all(cls) -> List[TestSuite]:
         return cls.query.all()
