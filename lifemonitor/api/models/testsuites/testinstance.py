@@ -121,24 +121,27 @@ class TestInstance(db.Model, ModelMixin):
     def start_test_build(self):
         return self.testing_service.start_test_build(self)
 
-    @cached(timeout=Timeout.NONE, client_scope=False, transactional_update=True)
+    # Uncomment if you want to cache the last test build
+    # @cached(timeout=Timeout.NONE, client_scope=False, transactional_update=True)
     def get_last_test_build(self):
         builds = self.get_test_builds(limit=10)
         return builds[0] if builds and len(builds) > 0 else None
 
-    @cached(timeout=Timeout.NONE, client_scope=False, transactional_update=True)
+    # Uncomment if you want to cache the test builds
+    # @cached(timeout=Timeout.NONE, client_scope=False, transactional_update=True)
     def get_test_builds(self, limit=10):
+        builds = None
         try:
-            return self.testing_service.get_test_builds(self, limit=limit)
+            builds = self.testing_service.get_test_builds(self, limit=limit)
         finally:
-            self.last_builds_updated()
+            # self.update_builds_refresh_timestamp(builds)
+            pass
+        return builds
 
-    @cached(timeout=Timeout.BUILD, client_scope=False, transactional_update=True)
+    # Uncomment if you want to cache the test build
+    # @cached(timeout=Timeout.BUILD, client_scope=False, transactional_update=True)
     def get_test_build(self, build_number):
         return self.testing_service.get_test_build(self, build_number)
-
-    def last_builds_updated(self, when=datetime.datetime.utcnow()):
-        self.last_builds_update = when
 
     def to_dict(self, test_build=False, test_output=False):
         data = {
