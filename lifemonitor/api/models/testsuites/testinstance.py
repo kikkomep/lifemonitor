@@ -113,7 +113,7 @@ class TestInstance(db.Model, ModelMixin):
         return self._builds_refreshed_at
 
     @builds_refreshed_at.setter
-    def builds_refreshed_at(self, value: datetime.datetime = datetime.now(datetime.timezone.utc)):
+    def builds_refreshed_at(self, value: datetime.datetime = datetime.datetime.now(datetime.timezone.utc)):
         assert isinstance(value, datetime.datetime), \
             "builds_refreshed_at must be a datetime object"
         self._builds_refreshed_at = value
