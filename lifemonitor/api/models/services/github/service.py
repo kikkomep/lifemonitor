@@ -42,6 +42,7 @@ from lifemonitor.cache import Timeout, cache, cached
 from ..service import TestingService
 from .models import GithubStatus
 from .test_build import GithubTestBuild
+from .utils import parse_workflow_url
 
 # set module level logger
 logger = logging.getLogger(__name__)
@@ -212,30 +213,7 @@ class GithubTestingService(TestingService):
                 return workflow.create_dispatch(test_instance.test_suite.workflow_version.version)
         except Exception as e:
             if logger.isEnabledFor(logging.DEBUG):
-                logger.exception(e)
-        return False
-
-    @classmethod
-    def _parse_workflow_url(cls, resource: str) -> Tuple[str, str, str]:
-        """
-        Utility method to parse github workflow URIs.  Given a URL to the testing
-        Github Workflow, returns a tuple (server, repository, workflow_id).
-
-        The `resource` can be a full url to a Github workflow; e.g.,
-
-             https://api.github.com/repos/crs4/life_monitor/actions/workflows/4094661
-
-        Alternatively, `resource` can forego the server part (e.g., `https://api.github.com`)
-        and even the leading root slash of the path part.  For instance, `resource` can be:
-
-             repos/crs4/life_monitor/actions/workflows/4094661
-
-        In the latter case, the return value for server will be an empty string.
-        """
-        try:
-            result = urlparse(resource)
-            if result.scheme and result.netloc:
-                server = f"{result.scheme}://{result.netloc}"
+            # If no branch is specified, we check the created date
             else:
                 server = ""
             m = cls._RESOURCE_PATTERN.match(result.path)
