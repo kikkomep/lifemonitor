@@ -88,7 +88,7 @@ def build_workflows_info_query(workflow_urls: list[str]) -> str:
     subqueries = []
     for i, url in enumerate(workflow_urls):
         alias = f"q{i + 1}"
-        subquery = f"{alias}: resource(url: \"{url}\") {{ ...WorkflowInfo }}\n{' '*3}"
+        subquery = f"{alias}: resource(url: \"{url}\") {{ ...WorkflowInfo }}\n{' ' * 3}"
         subqueries.append(subquery)
 
     graphql_query = workflow_info_fragment + f"""
