@@ -21,6 +21,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Optional
 
 import github
 
@@ -41,15 +42,21 @@ class GithubTestBuild(models.TestBuild):
 
     @property
     def id(self) -> str:
-        return f"{self._metadata.id}_{self.attempt_number}"
+        if self.attempt_number is not None:
+            return f"{self._metadata.id}_{self.attempt_number}"
+        return str(self._metadata.id)
 
     @property
     def build_number(self) -> int:
         return self._metadata.id
 
     @property
-    def attempt_number(self) -> int:
-        return self._metadata.raw_data['run_attempt']
+    def attempt_number(self) -> Optional[int]:
+        try:
+            return self._metadata.raw_data.get('run_attempt', None)
+        except AttributeError:
+            # If the metadata does not have 'run_attempt', it means this is the first attempt
+            return None
 
     @property
     def duration(self) -> int:
@@ -107,4 +114,11 @@ class GithubTestBuild(models.TestBuild):
 
     @property
     def url(self) -> str:
-        return f"{self._metadata.url}/attempts/{self.attempt_number}"
+        if self.attempt_number:
+            return f"{self._metadata.url}/runs/{self.attempt_number}"
+        # If no attempt number, return the URL for the workflow run
+        # It should point to the latest attempt
+        return self._metadata.url
+
+    def get_external_link(self):
+        return self.url
