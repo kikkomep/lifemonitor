@@ -22,6 +22,7 @@
 from __future__ import annotations
 
 import base64
+import datetime
 import logging
 import os
 import re
@@ -277,6 +278,66 @@ class Base64WorkflowRepository(TemporaryLocalWorkflowRepository):
         return self._base64
 
 
+class GitRepositoryReference():
+
+    def __init__(self, repository, raw_data: dict) -> None:
+        assert isinstance(raw_data, dict), raw_data
+        self._repository = repository
+        self._raw_data = raw_data
+
+    @property
+    def repository(self):
+        return self._repository
+
+    @property
+    def shorthand(self) -> str:
+        return self._raw_data.get('shorthand', None)
+
+    @property
+    def type(self) -> str:
+        return self._raw_data.get('type', None)
+
+    @property
+    def ref(self) -> str:
+        return self._raw_data.get('ref', None)
+
+
+class GitRepositoryRevision():
+
+    def __init__(self, repository, raw_data: dict):
+        assert isinstance(raw_data, dict), raw_data
+        self._repository = repository
+        self._raw_data = raw_data
+
+    @property
+    def repository(self):
+        return self._repository
+
+    @property
+    def sha(self) -> str:
+        return self._raw_data.get('sha', None)
+
+    @property
+    def created(self) -> datetime.datetime:
+        return self._raw_data.get('created', None)
+
+    @property
+    def main_ref(self) -> GitRepositoryReference:
+        return GitRepositoryReference(self._repository, self._raw_data.get("main_ref", None))
+
+    @property
+    def refs(self):
+        return map(lambda x: GitRepositoryReference(self._repository, x), self._raw_data.get('refs'))
+
+    def is_branch(self) -> bool:
+        # Return True if the revision is a branch
+        return self.main_ref.type == "branch"
+
+    def is_tag(self) -> bool:
+        # Return True if the revision is a tag
+        return self.main_ref.type == "tag"
+
+
 class LocalGitWorkflowRepository(LocalWorkflowRepository):
     """
     A LocalWorkflowRepository that is also a Git repository.
@@ -309,6 +370,65 @@ class LocalGitWorkflowRepository(LocalWorkflowRepository):
     @property
     def main_branch(self) -> str:
         return self._git_repo.active_branch.name
+
+    @property
+    def ref(self) -> str:
+        if self._git_repo.head.is_valid():
+            if self._git_repo.head.is_detached:
+                # Check if this commit has a tag pointing to it
+                for tag in self._git_repo.tags:
+                    if tag.commit == self._git_repo.head.commit:
+                        return tag.name
+                return "HEAD"
+            return self._git_repo.head.ref.name
+        return "HEAD" @ property
+
+    @property
+    def revision(self) -> GitRepositoryRevision:
+        return self.get_revision()
+
+    def get_revision(self) -> GitRepositoryRevision:
+        ref_type = "branch"
+        shorthand = None
+
+        try:
+            # Check if HEAD is detached
+            if self._git_repo.head.is_detached:
+                # Find tags that point to the current commit
+                for tag in self._git_repo.tags:
+                    if tag.commit == self._git_repo.head.commit:
+                        ref_type = "tag"
+                        shorthand = tag.name
+                        break
+                if not shorthand:
+                    # Detached HEAD not pointing to a tag
+                    shorthand = "HEAD"
+            else:
+                # HEAD points to a branch
+                shorthand = self.main_branch
+        except Exception as e:
+            logger.warning(f"Error determining revision type: {str(e)}")
+            shorthand = "HEAD"
+
+        return GitRepositoryRevision(
+            self,
+            {
+                "sha": self._git_repo.head.commit.hexsha,
+                "created": self._git_repo.head.commit.committed_datetime,
+                "main_ref": {
+                    "shorthand": shorthand,
+                    "type": ref_type,
+                    "ref": self.ref
+                },
+                "refs": [
+                    {
+                        "shorthand": r.name if hasattr(r, 'name') else str(r).split('/')[-1],
+                        "type": "branch" if r.path.startswith("refs/heads") else "tag" if r.path.startswith("refs/tags") else "other",
+                        "ref": r.path if hasattr(r, 'path') else str(r)
+                    } for r in self._git_repo.refs
+                ]
+            }
+        )
 
     @property
     def remotes(self) -> List[str]:
