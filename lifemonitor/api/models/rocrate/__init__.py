@@ -138,8 +138,15 @@ class ROCrate(Resource):
                             tmp_dir,
                             WorkflowRepositoryMetadata.DEFAULT_METADATA_FILENAME), 'w') as out:
                         json.dump(self._metadata, out)
+                    # Instantiate the proper local repository object
+                    local_repository = None
+                    if LocalWorkflowRepository.is_git_repo(tmp_dir):
+                        local_repository = LocalGitWorkflowRepository.from_path(tmp_dir, self.uri)
+                    else:
+                        local_repository = LocalWorkflowRepository.from_path(tmp_dir, self.uri)
+                    # Instantiate the ROCrate reader
                     self.__crate_reader__ = WorkflowRepositoryMetadata(
-                        LocalWorkflowRepository(tmp_dir), init=False)
+                        local_repository, init=False)
             else:
                 self.__crate_reader__ = self.repository.metadata
         return self.__crate_reader__
@@ -171,6 +178,11 @@ class ROCrate(Resource):
                         self._storage.get_file(self._get_storage_path(self.local_path), self.local_path)
                         logger.warning(f"Getting path {self.storage_path} from remote storage.... DONE!!!")
 
+            # A stricter check to ensure that the local path points to the root of the RO-Crate
+            if not os.path.exists(self.local_path):
+                raise lm_exceptions.NotValidROCrateException(
+                    detail=f"RO-Crate archive not found: {self.local_path}")
+
             # instantiate a local ROCrate repository
             if self._get_normalized_github_url_(self.uri):
                 authorizations = self.authorizations + [None]
@@ -189,7 +201,18 @@ class ROCrate(Resource):
                         if self._repository is not None:
                             break
             else:
-                self._repository = repositories.ZippedWorkflowRepository(self.local_path)
+                logger.debug("RO-Crate URI is a Zipped repository: %s %s", self.uri, self.local_path)
+                # Instantiate a ZippedWorkflowRepository to handle the ROCrate
+                repository = repositories.ZippedWorkflowRepository(self.local_path)
+                # Check if the repository is a local git repository
+                if repository.is_git_repo(repository.local_path):
+                    logger.debug("RO-Crate is a local git repository: %s", self.local_path)
+                    # Instantiate a LocalGitWorkflowRepository to handle the ROCrate
+                    self._repository = repositories.ZippedLocalGitWorkflowRepository(self.local_path)
+                else:
+                    logger.debug("RO-Crate is a local repository: %s", repository.local_path)
+                    # Instantiate a LocalWorkflowRepository to handle the ROCrate
+                    self._repository = repository
 
             # set metadata
             try:
