@@ -522,8 +522,28 @@ class ROCrateLinkContext(object):
             if os.path.isdir(self.rocrate_or_link) or os.path.isfile(self.rocrate_or_link):
                 return self.rocrate_or_link
             try:
-                rocrate = base64.b64decode(self.rocrate_or_link)
+                # reference to the config
                 from . import config
+                # If the input is a zipped ROCrate
+                if self.rocrate_or_link.endswith('.zip'):
+                    logger.debug("RO-Crate param is a local zip file: %r", self.rocrate_or_link)
+
+                    zip_file = self.rocrate_or_link[7:] if self.rocrate_or_link.startswith('file://') else self.rocrate_or_link
+                    temp_rocrate_file = tempfile.NamedTemporaryFile(delete=False,
+                                                                    dir=config.BaseConfig.BASE_TEMP_FOLDER,
+                                                                    prefix="zipped-rocrate-",
+                                                                    suffix=".zip")
+                    # Copy the zip file to the temporary file
+                    shutil.copyfile(zip_file, temp_rocrate_file.name)
+                    # Set the file name to the temporary file
+                    local_roc_link = f"tmp://{temp_rocrate_file.name}"
+                    logger.debug("Local roc_link: %r", local_roc_link)
+                    self._local_path = temp_rocrate_file
+                    return local_roc_link
+
+                # If the input is a base64 encoded RO-Crate, decode it
+                rocrate = base64.b64decode(self.rocrate_or_link)
+
                 temp_rocrate_file = tempfile.NamedTemporaryFile(delete=False,
                                                                 dir=config.BaseConfig.BASE_TEMP_FOLDER,
                                                                 prefix="base64-rocrate")
