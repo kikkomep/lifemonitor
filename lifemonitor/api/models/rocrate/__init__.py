@@ -40,7 +40,7 @@ from lifemonitor.api.models.repositories.base import (
     WorkflowRepository, WorkflowRepositoryMetadata)
 from lifemonitor.api.models.repositories.github import (
     GithubRepositoryRevision, GithubWorkflowRepository)
-from lifemonitor.api.models.repositories.local import LocalWorkflowRepository
+from lifemonitor.api.models.repositories.local import LocalGitWorkflowRepository, LocalWorkflowRepository
 from lifemonitor.auth.models import (ExternalServiceAuthorizationHeader,
                                      HostingService, Resource)
 from lifemonitor.config import BaseConfig
