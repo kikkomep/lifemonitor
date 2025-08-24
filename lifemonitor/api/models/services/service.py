@@ -222,9 +222,18 @@ class TestingService(db.Model, ModelMixin):
     def all(cls) -> List[TestingService]:
         return cls.query.all()
 
+    __cache__ = {}
+
     @classmethod
     def find_by_uuid(cls, uuid) -> TestingService:
-        return cls.query.get(uuid)
+        if uuid in cls.__cache__:
+            return cls.__cache__[uuid]
+        if isinstance(uuid, str):
+            uuid = _uuid.UUID(uuid)
+        instance = cls.query.filter(cls.uuid == uuid).first()
+        if instance:
+            cls.__cache__[uuid] = instance
+        return instance
 
     @classmethod
     def find_by_url(cls, url) -> TestingService:
