@@ -46,8 +46,8 @@ def skip_cached_status(suite: models.TestSuite, status: models.Status) -> bool:
         return False
     latest_build = max(suite.latest_test_builds, key=lambda x: x.updated_at)
     result = status.updated_at < latest_build.updated_at
-    logger.info(f"Test validity check: {result} (status updated at: {status.updated_at}, "
-                f"latest build updated at: {latest_build.updated_at})")
+    logger.debug(f"Test validity check: {result} (status updated at: {status.updated_at}, "
+                 f"latest build updated at: {latest_build.updated_at})")
     return result
 
 
