@@ -79,6 +79,12 @@ class TestSuite(db.Model, ModelMixin):
         return '<TestSuite {} of workflow {} (version {})>'.format(
             self.uuid, self.workflow_version.uuid, self.workflow_version.version)
 
+    def __eq__(self, o: object) -> bool:
+        return isinstance(o, TestSuite) and o.uuid == self.uuid
+
+    def __hash__(self):
+        return hash(self.uuid)
+
     @property
     @cached(timeout=Timeout.NONE, client_scope=False, skip=skip_cached_status)
     def status(self) -> models.SuiteStatus:

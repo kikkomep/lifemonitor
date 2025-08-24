@@ -58,6 +58,9 @@ class TestBuild(ABC, CacheMixin):
         return isinstance(other, TestBuild) \
             and self.id == other.id and self.test_instance == other.test_instance
 
+    def __hash__(self):
+        return hash((self.id, self.test_instance.uuid))
+
     def is_successful(self):
         return self.result == TestBuild.Result.SUCCESS
 

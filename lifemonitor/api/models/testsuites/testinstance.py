@@ -81,6 +81,9 @@ class TestInstance(db.Model, ModelMixin):
     def __eq__(self, o: object) -> bool:
         return isinstance(o, TestInstance) and o.uuid == self.uuid
 
+    def __hash__(self):
+        return hash(self.uuid)
+
     @property
     def _cache_key_prefix(self):
         return str(self)
