@@ -461,3 +461,69 @@ class LocalGitWorkflowRepository(LocalWorkflowRepository):
     @property
     def remote_info(self) -> RemoteGitRepoInfo | None:
         return self._remote_repo_info
+
+
+class ZippedLocalGitWorkflowRepository(LocalGitWorkflowRepository, ZippedWorkflowRepository):
+    """
+    Combines ZIP extraction with Git repository functionality using multiple inheritance.
+    This class avoids double initialization of the shared base by explicitly
+    initializing TemporaryLocalWorkflowRepository and then applying both ZIP and Git steps.
+    """
+
+    def __init__(self,
+                 archive_path: str | Path,
+                 local_path: Optional[str] = None,
+                 remote_url: Optional[str] = None,
+                 owner: Optional[str] = None,
+                 name: Optional[str] = None,
+                 license: Optional[str] = None,
+                 exclude: Optional[List[str]] = None,
+                 auto_cleanup: bool = True) -> None:
+
+        # Initialize TemporaryLocalWorkflowRepository directly to avoid double init
+        local_path = local_path or tempfile.mkdtemp(dir=BaseConfig.BASE_TEMP_FOLDER)
+        TemporaryLocalWorkflowRepository.__init__(  # type: ignore[misc]
+            self,
+            local_path=local_path,
+            remote_url=remote_url,
+            owner=owner,
+            name=name,
+            license=license,
+            exclude=exclude,
+            auto_cleanup=auto_cleanup
+        )
+
+        # Extract the ZIP archive to the local path
+        try:
+            extract_zip(archive_path, self.local_path)
+            self.archive_path = archive_path
+            logger.debug("Local path: %r", self.local_path)
+        except FileNotFoundError as e:
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.exception(e)
+            raise LifeMonitorException('Unable to process the Workflow ROCrate locally',
+                                       detail=str(e), status=404)
+
+        # Initialize Git repository reference
+        self._git_repo = None
+        self._remote_repo_info: RemoteGitRepoInfo | None = None
+
+        try:
+            # Try opening an existing Git repository
+            self._git_repo = git.Repo(self.local_path)
+        except (git.exc.NoSuchPathError, git.exc.InvalidGitRepositoryError) as e:
+            # Raise an exception if no valid Git repository exists
+            error_msg = f"No valid Git repository found at {self.local_path}"
+            logger.error(error_msg)
+            raise IllegalStateException(error_msg, original_error=str(e), instance=self)
+
+        # Parse remote repository information
+        try:
+            origin = next((r for r in self._git_repo.remotes if r.name == "origin"), None)
+            selected_remote = origin or (self._git_repo.remotes[0] if self._git_repo.remotes else None)
+            if selected_remote is not None and getattr(selected_remote, "url", None):
+                self._remote_repo_info = RemoteGitRepoInfo.parse(selected_remote.url)
+        except (git.exc.GitCommandError, AttributeError, IndexError) as e:
+            logger.warning("Unable to parse remote repository info: %s", e)
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.exception(e)
