@@ -121,6 +121,14 @@ class TestingService(db.Model, ModelMixin):
     def __repr__(self):
         return f'<TestingService {self.url}, ({self.uuid})>'
 
+    def __eq__(self, other):
+        if not isinstance(other, TestingService):
+            return False
+        return self.uuid == other.uuid and self.url == other.url and self._type == other._type
+
+    def __hash__(self):
+        return hash((self.uuid, self.url, self._type))
+
     @property
     def base_url(self):
         return self.url
