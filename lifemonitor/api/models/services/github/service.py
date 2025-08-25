@@ -37,7 +37,8 @@ from lifemonitor.api.models.services.github.graphql.models import GhWorkflow
 from lifemonitor.api.models.services.github.graphql.service import \
     GithubGraphQLService
 from lifemonitor.api.models.services.github.rest import GithubRestService
-from lifemonitor.cache import Timeout, cache, cached
+from lifemonitor.api.models.services.github.testinstance_cache import \
+    TestInstanceCache
 
 from ..service import TestingService
 from .test_build import GithubTestBuild
@@ -51,6 +52,7 @@ class GithubTestingService(TestingService):
 
     _gh_obj = None
     _gh_graphql = None
+    _test_instance_cache = None
     __mapper_args__ = {
         'polymorphic_identity': 'github_testing_service'
     }
@@ -119,6 +121,12 @@ class GithubTestingService(TestingService):
 
     def check_connection(self):
         return self._gh_rest_service.check_connection()
+
+    @property
+    def test_instance_cache(self) -> TestInstanceCache:
+        if self._test_instance_cache is None:
+            self._test_instance_cache = TestInstanceCache()
+        return self._test_instance_cache
 
     @staticmethod
     def _convert_github_exception_to_lm(github_exc: GithubException) -> lm_exceptions.LifeMonitorException:
