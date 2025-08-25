@@ -125,13 +125,13 @@ class TestInstance(db.Model, ModelMixin):
         return self.testing_service.start_test_build(self)
 
     # Uncomment if you want to cache the last test build
-    # @cached(timeout=Timeout.NONE, client_scope=False, transactional_update=True)
+    @cached(timeout=Timeout.BUILD, client_scope=False, transactional_update=True)
     def get_last_test_build(self):
         builds = self.get_test_builds(limit=10)
         return builds[0] if builds and len(builds) > 0 else None
 
     # Uncomment if you want to cache the test builds
-    # @cached(timeout=Timeout.NONE, client_scope=False, transactional_update=True)
+    @cached(timeout=Timeout.BUILD, client_scope=False, transactional_update=True)
     def get_test_builds(self, limit=10):
         builds = None
         try:
@@ -142,7 +142,7 @@ class TestInstance(db.Model, ModelMixin):
         return builds
 
     # Uncomment if you want to cache the test build
-    # @cached(timeout=Timeout.BUILD, client_scope=False, transactional_update=True)
+    @cached(timeout=Timeout.BUILD, client_scope=False, transactional_update=True)
     def get_test_build(self, build_number):
         return self.testing_service.get_test_build(self, build_number)
 
