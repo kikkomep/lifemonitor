@@ -118,6 +118,9 @@ class GithubTestingService(TestingService):
     def _get_fine_grained_workflow_info(self, resource):
         return parse_workflow_url(resource)
 
+    def check_connection(self):
+        return self._gh_rest_service.check_connection()
+
     @staticmethod
     def _convert_github_exception_to_lm(github_exc: GithubException) -> lm_exceptions.LifeMonitorException:
         return lm_exceptions.LifeMonitorException(
