@@ -9,7 +9,7 @@ from lifemonitor.api.models.services.github.testinstance_cache import (
 
 
 @pytest.fixture
-def mock_redis_client(mocker):
+def mock_redis_client(redis_cache, mocker):
     pipeline_mock = mocker.Mock()
     pipeline_mock.execute.return_value = True
     pipeline_mock.hset.return_value = True

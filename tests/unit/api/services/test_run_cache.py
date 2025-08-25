@@ -11,7 +11,7 @@ from lifemonitor.api.models.services.github.run_cache import (RunCache,
 
 
 @pytest.fixture
-def mock_redis_client(mocker):
+def mock_redis_client(redis_cache, mocker):
     pipeline_mock = mocker.Mock()
     pipeline_mock.execute.return_value = True
     pipeline_mock.set.return_value = True

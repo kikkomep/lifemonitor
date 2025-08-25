@@ -127,7 +127,7 @@ def github_token() -> Optional[models.TestingServiceToken]:
 
 
 @pytest.fixture
-def github_service(api_url: str, github_token: models.TestingServiceToken) -> models.GithubTestingService:
+def github_service(redis_cache, api_url: str, github_token: models.TestingServiceToken) -> models.GithubTestingService:
     return models.GithubTestingService(url=api_url, token=github_token)
 
 
