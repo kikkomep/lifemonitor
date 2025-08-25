@@ -42,9 +42,9 @@ class GithubTestBuild(models.TestBuild):
 
     @property
     def id(self) -> str:
-        if self.attempt_number is not None:
-            return f"{self._metadata.id}_{self.attempt_number}"
-        return str(self._metadata.id)
+        # if self.attempt_number is not None:
+        #     return f"{self._metadata.id}_{self.attempt_number}"
+        return self._metadata.id
 
     @property
     def build_number(self) -> int:
