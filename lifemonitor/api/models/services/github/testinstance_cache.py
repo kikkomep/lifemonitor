@@ -1,3 +1,4 @@
+import json
 import redis
 import time
 import logging
@@ -173,10 +174,23 @@ class TestInstanceCache:
 
     # --- Query methods ---
 
+    @staticmethod
+    def __decode_result__(result: str) -> dict:
+        try:
+            if not result:
+                return None
+            if isinstance(result, list):
+                return [json.loads(item) for item in result]
+            return json.loads(result)
+        except json.JSONDecodeError as e:
+            logger.error(f"Error decoding JSON result: {e}")
+            return None
+
     def get_run_ids_by_ref(self, test_instance_id, ref):
         try:
             run_ids = self.redis_client.smembers(f"testinstance:{test_instance_id}:ref:{ref}:runs")
-            return list(run_ids)
+            # return list(run_ids)
+            return self.__decode_result__(list(run_ids))
         except redis.exceptions.RedisError as e:
             logger.error(f"Error retrieving runs by ref {ref} for test instance {test_instance_id}: {e}")
             return []
@@ -192,7 +206,7 @@ class TestInstanceCache:
                 start=0,
                 num=limit
             )
-            return run_ids
+            return self.__decode_result__(run_ids)
         except redis.exceptions.RedisError as e:
             logger.error(f"Error retrieving runs by date range for test instance {test_instance_id}: {e}")
             return []
@@ -217,7 +231,7 @@ class TestInstanceCache:
                 run_ids = self.redis_client.zrangebyscore(zset_key, min_score, max_score, start=0, num=limit)
             else:
                 run_ids = self.redis_client.zrevrangebyscore(zset_key, max_score, min_score, start=0, num=limit)
-            return run_ids
+            return self.__decode_result__(run_ids)
         except redis.exceptions.RedisError as e:
             logger.error(f"Error retrieving runs ordered by date for test instance {test_instance_id}: {e}")
             return []

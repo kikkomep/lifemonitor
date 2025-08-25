@@ -208,7 +208,9 @@ class RunCache:
         for run_id in run_ids:
             key = f"workflow:{workflow_id}:run:{run_id}"
             pipe.get(key)
-        return self.__decode_result__(pipe.execute())
+        data = pipe.execute()
+        logger.debug(f"Retrieved {len(data)} runs for workflow {workflow_id}.")
+        return self.__decode_result__(data)
 
     def get_latest_runs(self, workflow_id, ref=None, n=10):
         """
