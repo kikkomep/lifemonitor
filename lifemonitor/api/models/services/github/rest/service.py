@@ -42,7 +42,7 @@ from lifemonitor.integrations.github.utils import (CachedPaginatedList,
 
 from ..models import GithubStatus
 from ..test_build import GithubTestBuild
-from ..utils import parse_workflow_url
+from ..utils import get_workflow_params, parse_workflow_url
 
 # set module level logger
 logger = logging.getLogger(__name__)
@@ -166,6 +166,98 @@ class GithubRestService():
         except GithubException as e:
             logger.info("Caught exception from Github GET /rate_limit: %s.  Connection not working?", e)
             return False
+
+    def fetch_workflow_runs_by_test_instance(self, i: TestInstance,
+                                             branch=None,
+                                             tag=None,
+                                             created=None,
+                                             limit: int = None) -> list[WorkflowRun]:
+        """
+        Returns the GitHub workflow object for the service.
+        This method is a placeholder and should be implemented in subclasses.
+        """
+        from requests import Session
+        session = Session()
+        session.headers.update({
+            'Accept': 'application/vnd.github.v3+json',
+            'User-Agent': 'requests',
+            'Authorization': f'token {self.token.value}' if self.token else ''
+        })
+
+        # if none of branch, tag, created are set, try to ex
+        if branch is None and tag is None and created is None:
+            logger.debug("No filter provided, trying to extract from test instance...")
+            # Compute workflow parameters
+            branch, tag, created = get_workflow_params(i)
+            logger.debug("Fetching workflow runs for test instance %s - branch: %r, tag: %r, created: %r",
+                         i.uuid, branch, tag, created)
+            # Skip created filter if branch or tag is set
+            if branch is not github.GithubObject.NotSet or tag is not github.GithubObject.NotSet:
+                created = github.GithubObject.NotSet
+
+        # Construct the API URL for workflow runs
+        api_url = (f"{self.api_base_url}/{i.resource}/runs")
+        logger.debug("API URL: %s", api_url)
+        # Start building the query string
+        params = []
+        if branch and branch is not github.GithubObject.NotSet:
+            params.append(f"branch={branch}")
+        elif tag is not github.GithubObject.NotSet:
+            params.append(f"head_sha={i.test_suite.workflow_version.repository.revision.sha}")
+
+        if created and created is not github.GithubObject.NotSet:
+            params.append(f"created={created}")
+
+        # Add query parameters to the URL
+        if params:
+            api_url += "?" + "&".join(params)
+        logger.debug("Final API URL with params: %s", api_url)
+        response = session.get(api_url)
+        if response.status_code == 200:
+            logger.debug("Successfully fetched workflow runs from GitHub API.")
+            # Parse the response JSON to get the workflow runs
+            workflow_runs = response.json().get('workflow_runs', [])
+            if workflow_runs:
+                # Assuming we want the first workflow run for simplicity
+                workflow_runs = workflow_runs[:limit] if limit else workflow_runs
+                return [WorkflowRun(
+                    requester=None,  # self._gh_service.__requester,
+                    headers=response.headers,
+                    attributes=run,
+                    completed=True
+                ) for run in workflow_runs]
+            # Return an empty list if no workflow runs were found
+            return []
+        else:
+            logger.error("Failed to fetch workflow runs from GitHub API. Status code: %s", response.status_code)
+            raise lm_exceptions.GithubApiException(
+                title="GitHub API Error",
+                status=response.status_code,
+                detail=response.text
+            )
+
+    def get_test_instance_builds(self, test_instance: TestInstance) -> dict[str, TestBuild]:
+        """
+        Returns the test instance builds for the given test instance.
+        """
+        workflow_runs = self.fetch_workflow_runs_by_test_instance(test_instance)
+        builds = {}
+        if not workflow_runs:
+            logger.debug("No workflow runs found for test instance %s", test_instance.uuid)
+            return builds
+        for run in workflow_runs:
+            logger.debug("Processing workflow run: %s", run.id)
+            # Create a GithubTestBuild instance for each workflow run
+            build = GithubTestBuild(
+                testing_service=test_instance.testing_service,
+                test_instance=test_instance,
+                metadata=run
+            )
+            builds[build.id] = build
+        logger.debug("Found %d builds for test instance %s", len(builds), test_instance.uuid)
+        if not builds:
+            logger.debug("No builds found for test instance %s", test_instance.uuid)
+        return builds
 
     @cached(timeout=Timeout.NONE, client_scope=False, transactional_update=True)
     def _get_gh_workflow(self, repository, workflow_id) -> Workflow:
