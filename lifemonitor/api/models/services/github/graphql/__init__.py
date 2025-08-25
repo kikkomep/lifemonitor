@@ -18,14 +18,9 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from .requester import GraphQLRequester
 from .service import GithubGraphQLService
-from .models import GhWorkflow, GhWorkflowRun
 
 # This module provides a service for interacting with GitHub's GraphQL API.
 __all__ = [
-    'GraphQLRequester',
     'GithubGraphQLService',
-    'GhWorkflow',
-    'GhWorkflowRun'
 ]
