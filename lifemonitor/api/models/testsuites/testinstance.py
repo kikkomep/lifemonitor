@@ -47,8 +47,8 @@ class TestInstance(db.Model, ModelMixin):
     parameters = db.Column(JSON, nullable=True)
     submitter_id = db.Column(db.Integer,
                              db.ForeignKey(models.User.id), nullable=True)
-    _builds_refreshed_at = db.Column("builds_refreshed_at", db.DateTime, default=datetime.datetime.utcnow,
-                                     onupdate=datetime.datetime.utcnow)
+    _builds_refreshed_at = db.Column("builds_refreshed_at",
+                                     db.DateTime, default=datetime.datetime.now(datetime.timezone.utc))
     # configure relationships
     submitter = db.relationship("User", uselist=False)
     test_suite = db.relationship("TestSuite",
