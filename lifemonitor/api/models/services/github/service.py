@@ -40,7 +40,6 @@ from lifemonitor.api.models.services.github.rest import GithubRestService
 from lifemonitor.cache import Timeout, cache, cached
 
 from ..service import TestingService
-from .models import GithubStatus
 from .test_build import GithubTestBuild
 from .utils import parse_workflow_url
 
@@ -144,7 +143,7 @@ class GithubTestingService(TestingService):
             logger.debug("Getting last passed build...")
             builds = self.get_test_builds(test_instance, limit=100)
             for build in builds:
-                if build.conclusion == GithubStatus.SUCCESS:
+                if build.status == models.BuildStatus.PASSED:
                     logger.debug("Last passed build found: %s", build)
                     return build
             logger.debug("No passed builds found for test instance %s", test_instance.uuid)
@@ -157,7 +156,7 @@ class GithubTestingService(TestingService):
             logger.debug("Getting last failed build...")
             builds = self.get_test_builds(test_instance, limit=100)
             for build in builds:
-                if build.conclusion == GithubStatus.FAILURE:
+                if build.status == models.BuildStatus.FAILED:
                     logger.debug("Last failed build found: %s", build)
                     return build
             logger.debug("No failed builds found for test instance %s", test_instance.uuid)
