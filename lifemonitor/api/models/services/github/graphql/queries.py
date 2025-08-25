@@ -18,8 +18,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-# Query to get the rate limit status of the GitHub API.
-# This query retrieves the limit, cost, remaining requests, and reset time.
+from typing import List
 
 
 get_rate_limit = """
@@ -33,77 +32,91 @@ query GetRateLimit {
 }
 """
 
-
-workflow_info_fragment = """
-fragment WorkflowInfo on Workflow {
-    id
+FRAGMENTS = """
+fragment RestLikeWorkflow on Workflow {
+    databaseId
     name
     resourcePath
+}
+
+fragment RestLikeCheckSuite on CheckSuite {
+    id
+    databaseId
+    status
+    conclusion
+    app {
+        name
+        slug
+    }
+    commit {
+        oid
+        message
+        committedDate
+        author {
+            name
+            email
+        }
+    }
+    branch {
+        name
+        prefix
+    }
+}
+
+fragment RestLikeWorkflowRun on WorkflowRun {
+    databaseId
+    id
     url
+    resourcePath
+    runNumber
     createdAt
     updatedAt
-    runs(first: 10, orderBy: {field: CREATED_AT, direction: DESC}) {
-        nodes {
-            id
-            url
-            resourcePath
-            runNumber
-            createdAt
-            updatedAt
-            checkSuite {
-                id
-                createdAt
-                updatedAt
-                status
-                conclusion
-                app {
-                    name
-                    slug
-                }
-                commit {
-                    id
-                    oid
-                    message
-                    committedDate
-                    author {
-                        name
-                        email
-                    }
-                }
-                branch {
-                    name
-                    prefix
-                }
-            }
-        }
+    workflow {
+        ...RestLikeWorkflow
+    }
+    checkSuite {
+        ...RestLikeCheckSuite
     }
 }
 """
 
 
-def build_workflows_info_query(workflow_urls: list[str]) -> str:
+def build_multi_resources_query(n: int) -> str:
+    """Generate a single GraphQL query with n `resource(url: ...)` selections.
+    Why: one round-trip can fetch many workflows.
     """
-    Build a GraphQL query to retrieve workflow information for a list of workflow URLs.
-    """
-    subqueries = []
-    for i, url in enumerate(workflow_urls):
-        alias = f"q{i + 1}"
-        subquery = f"{alias}: resource(url: \"{url}\") {{ ...WorkflowInfo }}\n{' ' * 3}"
-        subqueries.append(subquery)
+    defs: List[str] = ["$first: Int!"]
+    fields: List[str] = []
+    for i in range(n):
+        defs.append(f"$u{i}: URI!")
+        defs.append(f"$a{i}: String")  # cursor
+        # Use placeholder replacement to avoid f-string brace escaping issues
+        snippet = f"""  r{i}: resource(url: $u{i}) {{
+    __typename
+    ... on Workflow {{
+            id
+            databaseId
+            name
+            resourcePath
+            url
+            createdAt
+            updatedAt
+            runs(first: $first, orderBy: {{field: CREATED_AT, direction: DESC}}, after: $a{i}) {{
+                nodes {{...RestLikeWorkflowRun}}
+                pageInfo {{hasNextPage endCursor}}
+            }}
+        }}
+    }}"""
+        fields.append(snippet)
+    defs_s = ", ".join(defs)
+    fields_s = "\n".join(fields)
 
-    graphql_query = workflow_info_fragment + f"""
-query {{
-    rateLimit {{
-        cost
-        resetAt
-        remaining
-        used
-        nodeCount
-    }}
-    viewer {{
-        login
-    }}
-    {' '.join(subqueries)}
+    return (
+        FRAGMENTS + f"""
+query MultiWorkflowRuns({defs_s}) {{
+    rateLimit {{cost resetAt remaining used nodeCount}}
+    viewer {{login}}
+{fields_s}
 }}
 """
-    return graphql_query
+    )
