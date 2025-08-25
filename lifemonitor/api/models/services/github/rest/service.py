@@ -29,13 +29,15 @@ from github import GithubException
 from github import \
     RateLimitExceededException as GithubRateLimitExceededException
 from github.GithubException import UnknownObjectException
+from github.RateLimit import RateLimit
 from github.Repository import Repository
 from github.Workflow import Workflow
 from github.WorkflowRun import WorkflowRun
-from github.RateLimit import RateLimit
 
 import lifemonitor.api.models as models
 import lifemonitor.exceptions as lm_exceptions
+from lifemonitor.api.models.testsuites.testbuild import TestBuild
+from lifemonitor.api.models.testsuites.testinstance import TestInstance
 from lifemonitor.cache import Timeout, cached
 from lifemonitor.integrations.github.utils import (CachedPaginatedList,
                                                    GithubApiWrapper)
@@ -303,6 +305,9 @@ class GithubRestService():
         logger.debug("Getting runs of workflow %r - created: %r", workflow, created)
         logger.debug("Getting runs of workflow %r - params: %r", workflow, url_parameters)
         # return github.PaginatedList.PaginatedList( # Default pagination class
+        logger.debug("Getting runs of workflow %r - limit: %r %r", workflow, limit, url_parameters)
+        # return self.__get_gh_workflow_runs_iterator(workflow, url_parameters, limit=limit)
+
         return CachedPaginatedList(
             github.WorkflowRun.WorkflowRun,
             workflow._requester,
@@ -311,7 +316,7 @@ class GithubRestService():
             None,
             transactional_update=True,
             list_item="workflow_runs",
-            limit=limit
+            limit=limit,
             # disable force_use_cache: a run might be updated with new attempts even when its status is completed
             # force_use_cache=lambda r: r.status == GithubStatus.COMPLETED and r.raw_data['run']
         )
@@ -366,7 +371,14 @@ class GithubRestService():
         logger.debug("Fetching runs : %r - %r", branch, created)
         # return list(self.__get_gh_workflow_runs__(workflow, branch=branch, created=created))
         # return list(itertools.islice(self.__get_gh_workflow_runs__(workflow, branch=branch, created=created), limit))
-        return self.__get_gh_workflow_runs__(workflow, branch=branch, created=created, limit=limit)
+
+        # return self.__get_gh_workflow_runs__(workflow, branch=branch, created=created, limit=limit)
+        return workflow.get_runs(
+            branch=branch,
+            status=github.GithubObject.NotSet,
+            created=created,
+            limit=limit
+        )
 
     @cached(timeout=Timeout.NONE, client_scope=False, transactional_update=True)
     def _list_workflow_runs(self, test_instance: models.TestInstance,
@@ -377,7 +389,7 @@ class GithubRestService():
         logger.debug("Workflow Runs Limit: %r", limit)
         logger.debug("Workflow Runs Status: %r", status)
 
-        return list(self.__get_workflow_runs_iterator(workflow, test_instance, limit=limit))
+        return [_ for _ in self.__get_workflow_runs_iterator(workflow, test_instance, limit=limit)][:limit]
 
     @cached(timeout=Timeout.NONE, client_scope=False, transactional_update=True)
     def _list_workflow_run_attempts(self, test_instance: models.TestInstance,
