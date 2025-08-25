@@ -109,12 +109,12 @@ class GithubTestingService(TestingService):
             self.initialize()
         return self._gh_graphql
 
-    @cached(timeout=Timeout.NONE, client_scope=False, transactional_update=True)
+    # @cached(timeout=Timeout.NONE, client_scope=False, transactional_update=True)
     def _get_workflow_info(self, resource):
         server, owner, repo, workflow_id = parse_workflow_url(resource)
         return server, f"{owner}/{repo}", workflow_id
 
-    @cached(timeout=Timeout.NONE, client_scope=False, transactional_update=True)
+    # @cached(timeout=Timeout.NONE, client_scope=False, transactional_update=True)
     def _get_fine_grained_workflow_info(self, resource):
         return parse_workflow_url(resource)
 
