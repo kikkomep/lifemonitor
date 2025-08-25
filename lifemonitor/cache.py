@@ -597,11 +597,11 @@ def cache_function(function: Callable, timeout=Timeout.REQUEST,
             logger.debug("Skipping transaction for %r: %r", key, skip_transaction)
             if not skip_transaction:  # transaction or transactional_update:  # skip_transaction:
                 with hc.transaction(name=key) as transaction:
-                    read_from_cache = transaction.name != key and not transaction.force_update
-                    logger.debug("Getting value using transaction: new=%r", read_from_cache)
+                    # read_from_cache = transaction.name != key and not transaction.force_update
+                    # logger.debug("Getting value using transaction: new=%r", read_from_cache)
                     result = _process_cache_data(cache, transaction,
                                                  key, unless, skip, timeout,
-                                                 read_from_cache, False,
+                                                 False, False,
                                                  function, args, kwargs)
             else:
                 logger.debug("Getting value from cache")
