@@ -37,6 +37,7 @@ from lifemonitor.api.models.services.github.graphql.service import \
 from lifemonitor.api.models.services.github.rest import GithubRestService
 from lifemonitor.api.models.services.github.testinstance_cache import \
     TestInstanceCache
+# from lifemonitor.cache import Timeout
 
 from ..service import TestingService
 from .test_build import GithubTestBuild
@@ -331,143 +332,148 @@ class GithubTestingService(TestingService):
     def get_test_build_output(self, test_instance: models.TestInstance, build_number, offset_bytes=0, limit_bytes=131072):
         raise lm_exceptions.NotImplementedException(detail="not supported for GitHub test builds")
 
-    def update_test_instance(self, test_instance: models.TestInstance) -> list[GithubTestBuild]:
-        """
-        Update the test instance with the latest data from the remote service.
-        This method is used to refresh the test instance data from the remote service.
-        """
-        logger.debug("Updating test instance %s", test_instance)
-        # This method can be used to update the test instance with the latest data
-        # from the remote service. Currently, it does nothing as we are not storing
-        # any additional data in the test instance.
-        return self.update_test_instances([test_instance])
+    # def update_test_instance(self, test_instance: models.TestInstance) -> list[GithubTestBuild]:
+    #     """
+    #     Update the test instance with the latest data from the remote service.
+    #     This method is used to refresh the test instance data from the remote service.
+    #     """
+    #     logger.debug("Updating test instance %s", test_instance)
+    #     # This method can be used to update the test instance with the latest data
+    #     # from the remote service. Currently, it does nothing as we are not storing
+    #     # any additional data in the test instance.
+    #     return self.update_test_instances([test_instance])
 
-    def update_test_instances(self, instances: list[models.TestInstance]) -> list[GithubTestBuild]:
-        """
-        Update the given test instances with the latest data from the remote service.
-        This method is used to refresh the test instances data from the remote service.
-        """
-        logger.info("Starting update of test %d instances ...", len(instances))
-        # extract the set of workflow urls from test instances
-        urls_map = {}
-        for instance in instances:
-            url = instance.external_link
-            if instance.resource not in urls_map:
-                urls_map[url] = []
-            urls_map[url].append(instance)
-        logger.info("Collected %d URLs of workflows to update...", len(urls_map))
+    # def update_test_instances(self, instances: list[models.TestInstance]) -> list[GithubTestBuild]:
+    #     """
+    #     Update the given test instances with the latest data from the remote service.
+    #     This method is used to refresh the test instances data from the remote service.
+    #     """
+    #     logger.info("Starting update of test %d instances ...", len(instances))
+    #     # extract the set of workflow urls from test instances
+    #     urls_map = {}
+    #     for instance in instances:
+    #         url = instance.external_link
+    #         if instance.resource not in urls_map:
+    #             urls_map[url] = []
+    #         urls_map[url].append(instance)
+    #     logger.info("Collected %d URLs of workflows to update...", len(urls_map))
 
-        # Fetch the workflows from the remote service
-        logger.info("Fetching workflows from Github...")
-        start_time = time.time()
-        workflows = self._gh_graphql_service.get_workflows_by_url(urls_map.keys())
-        elapsed_time = time.time() - start_time
-        logger.info("Fetched %d workflows in %.2f seconds", len(workflows), elapsed_time)
+    #     # Fetch the workflows from the remote service
+    #     logger.info("Fetching workflows from Github in batches of 20...")
+    #     workflows = []
+    #     start_time = time.time()
+    #     url_keys = list(urls_map.keys())
+    #     for i in range(0, len(url_keys), 20):
+    #         batch = url_keys[i:i + 20]
+    #         logger.debug("Fetching batch %d-%d of workflows...", i + 1, min(i + 20, len(url_keys)))
+    #         workflows.extend(self._gh_graphql_service.get_workflows_by_url(batch))
+    #     elapsed_time = time.time() - start_time
+    #     logger.info("Fetched %d workflows in %.2f seconds", len(workflows), elapsed_time)
 
-        # Update the test instances with the fetched workflows
-        # and extract the test builds from the workflows
-        logger.info("- Updating test instances with the fetched workflows...")
-        builds = []
-        with cache.transaction(name=self.url, force_update=True) as t:
-            start_time = time.time()
-            for workflow in workflows:
-                logger.debug("* Processing workflow %s...", workflow.url)
-                logger.debug("- Processing test instances related to the workflow %s", workflow.url)
-                t.set(workflow.url, workflow, timeout=Timeout.NONE)
+    #     # Update the test instances with the fetched workflows
+    #     # and extract the test builds from the workflows
+    #     logger.info("- Updating test instances with the fetched workflows...")
+    #     builds = []
+    #     with cache.transaction(name=self.url, force_update=True) as t:
+    #         start_time = time.time()
+    #         for workflow in workflows:
+    #             logger.debug("* Processing workflow %s...", workflow.url)
+    #             logger.debug("- Processing test instances related to the workflow %s", workflow.url)
+    #             t.set(workflow.url, workflow, timeout=Timeout.NONE)
 
-                for instance in urls_map[workflow.url]:
-                    logger.debug("-- Updating test instance %s for workflow %s", instance.uuid, workflow.url)
-                    cache_manager = TestInstanceCacheManager(instance)
-                    instance_builds = self.__extract_test_builds_from_workflow__(instance, workflow)
-                    builds.extend(list(instance_builds.values()))
-                    logger.debug("-- Found %d builds for test instance %s", len(instance_builds), instance.uuid)
-                    # Update the test instance with the new builds
-                    cache_manager.update(workflow, instance_builds)
-                    instance._updated_at = cache_manager.updated_at
-                    instance.save()
-                    logger.debug("-- Updated test instance %s with %d builds", instance.uuid, len(instance_builds))
-            # End timing
-            elapsed_time = time.time() - start_time
-            logger.info("- Extracted and updated test builds in %.2f seconds", elapsed_time)
+    #             for instance in urls_map[workflow.url]:
+    #                 logger.debug("-- Updating test instance %s for workflow %s", instance.uuid, workflow.url)
+    #                 cache_manager = TestInstanceCacheManager(instance)
+    #                 instance_builds = self.__extract_test_builds_from_workflow__(instance, workflow)
+    #                 builds.extend(list(instance_builds.values()))
+    #                 logger.debug("-- Found %d builds for test instance %s", len(instance_builds), instance.uuid)
+    #                 # Update the test instance with the new builds
+    #                 cache_manager.update(instance_builds)
+    #                 instance._updated_at = cache_manager.updated_at
+    #                 instance.save()
+    #                 logger.debug("-- Updated test instance %s with %d builds", instance.uuid, len(instance_builds))
+    #         # End timing
+    #         elapsed_time = time.time() - start_time
+    #         logger.info("- Extracted and updated test builds in %.2f seconds", elapsed_time)
 
-        logger.info("- Updated %d test instances with %d builds", len(instances), len(builds))
-        logger.info("Rate limit status after update: %s",
-                    self._gh_graphql_service.get_rate_limit())
-        logger.info("Update of test instances completed.")
-        return builds
+    #     logger.info("- Updated %d test instances with %d builds", len(instances), len(builds))
+    #     logger.info("Rate limit status after update: %s",
+    #                 self._gh_graphql_service.get_rate_limit())
+    #     logger.info("Update of test instances completed.")
+    #     return builds
 
-    def update_all_test_instances(self) -> list[GithubTestBuild]:
-        """
-        Update all test instances with the latest data from the remote service.
-        This method is used to refresh the test instances data from the remote service.
-        """
-        logger.debug("Updating all test instances")
-        # This method can be used to update all test instances with the latest data
-        # from the remote service. Currently, it does nothing as we are not storing
-        # any additional data in the test instance.
-        instances = models.TestInstance.find_by_testing_service(self)
-        logger.debug("Found %d test instances", len(instances))
-        return self.update_test_instances(instances)
+    # def update_all_test_instances(self) -> list[GithubTestBuild]:
+    #     """
+    #     Update all test instances with the latest data from the remote service.
+    #     This method is used to refresh the test instances data from the remote service.
+    #     """
+    #     logger.debug("Updating all test instances")
+    #     # This method can be used to update all test instances with the latest data
+    #     # from the remote service. Currently, it does nothing as we are not storing
+    #     # any additional data in the test instance.
+    #     instances = models.TestInstance.find_by_testing_service(self)
+    #     logger.debug("Found %d test instances", len(instances))
+    #     return self.update_test_instances(instances)
 
-    def __extract_test_builds_from_workflow__(self, test_instance: models.TestInstance, gh_workflow: GhWorkflow) -> dict[str, GithubTestBuild]:
-        """
-        Extract test builds from the given workflow.
-        This method is used to convert the workflow runs into GithubTestBuild objects.
-        """
+    # def __extract_test_builds_from_workflow__(self, test_instance: models.TestInstance, gh_workflow: GhWorkflow) -> dict[str, GithubTestBuild]:
+    #     """
+    #     Extract test builds from the given workflow.
+    #     This method is used to convert the workflow runs into GithubTestBuild objects.
+    #     """
 
-        assert isinstance(gh_workflow, GhWorkflow), \
-            "gh_workflow must be an instance of GhWorkflow"
-        assert gh_workflow.url == test_instance.external_link, \
-            "gh_workflow URL must match the test instance external link"
+    #     assert isinstance(gh_workflow, GhWorkflow), \
+    #         "gh_workflow must be an instance of GhWorkflow"
+    #     assert gh_workflow.url == test_instance.external_link, \
+    #         "gh_workflow URL must match the test instance external link"
 
-        # Ensure the test instance has a workflow version associated
-        workflow_version = test_instance.test_suite.workflow_version
-        assert workflow_version, "Workflow version must be associated with the test instance"
+    #     # Ensure the test instance has a workflow version associated
+    #     workflow_version = test_instance.test_suite.workflow_version
+    #     assert workflow_version, "Workflow version must be associated with the test instance"
 
-        # Initialize the data structure to hold the builds
-        builds = {}
+    #     # Initialize the data structure to hold the builds
+    #     builds = {}
 
-        branch = None
-        try:
-            branch = workflow_version.revision.main_ref.shorthand
-        except Exception as e:
-            if logger.isEnabledFor(logging.DEBUG):
-                logger.debug("No revision associated with workflow version %r: %s", workflow_version, e)
-            branch = None
+    #     branch = None
+    #     try:
+    #         branch = workflow_version.revision.main_ref.shorthand
+    #     except Exception as e:
+    #         if logger.isEnabledFor(logging.DEBUG):
+    #             logger.debug("No revision associated with workflow version %r: %s", workflow_version, e)
+    #         branch = None
 
-        for run in gh_workflow.runs:
-            if branch:
-                if branch != run.ref_name:
-                    logger.debug("Skipping run %s with branch %s != %s", run.id, run.ref_name, branch)
-                    continue
-                else:
-                    logger.debug("Adding run %s with branch %s", run.id, branch)
-                    builds[run.id] = GithubTestBuild(
-                        testing_service=test_instance.testing_service,
-                        test_instance=test_instance,
-                        metadata=run
-                    )
+    #     for run in gh_workflow.runs:
+    #         if branch:
+    #             if branch != run.ref_name:
+    #                 logger.debug("Skipping run %s with branch %s != %s", run.id, run.ref_name, branch)
+    #                 continue
+    #             else:
+    #                 logger.debug("Adding run %s with branch %s", run.id, branch)
+    #                 builds[run.id] = GithubTestBuild(
+    #                     testing_service=test_instance.testing_service,
+    #                     test_instance=test_instance,
+    #                     metadata=run
+    #                 )
 
-            # If no branch is specified, we check the created date
-            else:
-                # If the run was created before the workflow version, skip it
-                if run.created_at.isoformat() < workflow_version.created.isoformat():
-                    logger.debug("Skipping run %s created at %s before workflow version created at %s",
-                                 run.id, run.created_at, workflow_version.created)
-                    continue
-                # If the run was created after the next version, skip it
-                elif workflow_version.next_version and \
-                        run.created_at.isoformat() >= workflow_version.next_version.created.isoformat():
-                    logger.debug("Skipping run %s created at %s after workflow version next version created at %s",
-                                 run.id, run.created_at, workflow_version.next_version.created)
-                    continue
-                # Otherwise, we add the run to the builds
-                else:
-                    logger.debug("Adding run %s created at %s", run.id, run.created_at)
-                    builds[run.id] = GithubTestBuild(
-                        testing_service=test_instance.testing_service,
-                        test_instance=test_instance,
-                        metadata=run
-                    )
-        logger.debug("Extracted %d test builds from workflow %s", len(builds), gh_workflow.url)
-        return builds
+    #         # If no branch is specified, we check the created date
+    #         else:
+    #             # If the run was created before the workflow version, skip it
+    #             if run.created_at.isoformat() < workflow_version.created.isoformat():
+    #                 logger.debug("Skipping run %s created at %s before workflow version created at %s",
+    #                              run.id, run.created_at, workflow_version.created)
+    #                 continue
+    #             # If the run was created after the next version, skip it
+    #             elif workflow_version.next_version and \
+    #                     run.created_at.isoformat() >= workflow_version.next_version.created.isoformat():
+    #                 logger.debug("Skipping run %s created at %s after workflow version next version created at %s",
+    #                              run.id, run.created_at, workflow_version.next_version.created)
+    #                 continue
+    #             # Otherwise, we add the run to the builds
+    #             else:
+    #                 logger.debug("Adding run %s created at %s", run.id, run.created_at)
+    #                 builds[run.id] = GithubTestBuild(
+    #                     testing_service=test_instance.testing_service,
+    #                     test_instance=test_instance,
+    #                     metadata=run
+    #                 )
+    #     logger.debug("Extracted %d test builds from workflow %s", len(builds), gh_workflow.url)
+    #     return builds
