@@ -96,7 +96,6 @@ class GithubRestService():
             self._gh_obj = GithubApiWrapper(base_url=self.url,
                                             login_or_token=self.token.value if self.token else None,
                                             **self._configuration_)
-
             logger.debug("Github client created.")
         except Exception as e:
             raise lm_exceptions.TestingServiceException(e)
@@ -163,7 +162,6 @@ class GithubRestService():
             # simplest call with a small, constant-size result
             self._gh_service.get_rate_limit()
             logger.debug("GithubTestingService:  check_connection() -> seems ok")
-            self._gh_service.get_rate_limit()
             return True
         except GithubException as e:
             logger.info("Caught exception from Github GET /rate_limit: %s.  Connection not working?", e)
