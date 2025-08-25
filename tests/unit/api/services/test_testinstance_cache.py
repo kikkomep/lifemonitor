@@ -1,10 +1,11 @@
-import pytest
-from unittest.mock import MagicMock
 from datetime import datetime
+from unittest.mock import MagicMock
 
+import pytest
 import redis
 
-from lifemonitor.api.models.services.github.testinstance_cache import TestInstanceCache, iso_to_epoch
+from lifemonitor.api.models.services.github.testinstance_cache import (
+    TestInstanceCache, iso_to_epoch)
 
 
 @pytest.fixture

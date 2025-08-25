@@ -1,13 +1,13 @@
 import json
-import pytest
-from unittest.mock import MagicMock, call
 from datetime import datetime
+from unittest.mock import MagicMock, call
 
-
+import pytest
 import redis
 import redis_lock
 
-from lifemonitor.api.models.services.github.run_cache import RunCache, iso_to_epoch  # importa la classe dal tuo modulo
+from lifemonitor.api.models.services.github.run_cache import (RunCache,
+                                                              iso_to_epoch)
 
 
 @pytest.fixture
