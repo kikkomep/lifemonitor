@@ -181,15 +181,17 @@ class TestInstanceCache:
                 return None
             if isinstance(result, list):
                 return [json.loads(item) for item in result]
+            elif isinstance(result, set):
+                return {json.loads(item) for item in result}
             return json.loads(result)
         except json.JSONDecodeError as e:
             logger.error(f"Error decoding JSON result: {e}")
-            return None
+            return result
 
     def get_run_ids_by_ref(self, test_instance_id, ref):
         try:
             run_ids = self.redis_client.smembers(f"testinstance:{test_instance_id}:ref:{ref}:runs")
-            # return list(run_ids)
+            logger.debug(f"Retrieved {len(run_ids)} runs for test instance {test_instance_id} and ref {ref}.")
             return self.__decode_result__(list(run_ids))
         except redis.exceptions.RedisError as e:
             logger.error(f"Error retrieving runs by ref {ref} for test instance {test_instance_id}: {e}")
