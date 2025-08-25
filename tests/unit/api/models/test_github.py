@@ -18,18 +18,20 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import itertools
 import logging
+import uuid
 from datetime import datetime
 from typing import List, Optional
 from unittest.mock import MagicMock
 
+import github
 import pytest
 from github.WorkflowRun import WorkflowRun
 
 import lifemonitor.api.models as models
 from lifemonitor.api.models.repositories.github import GithubWorkflowRepository
-from lifemonitor.cache import cache
+from lifemonitor.api.models.services.github.utils import get_workflow_params
+from lifemonitor.api.models.workflows import Workflow
 from tests.conftest_helpers import get_github_token
 from tests.utils import SerializableMock
 
@@ -38,7 +40,9 @@ logger = logging.getLogger(__name__)
 build_query_limit = 20
 
 # reference to the main workflow installed on lifemonitor/workflow-tests repository
-workflow_tests_resource = '/repos/lifemonitor/workflow-tests/actions/workflows/28339110'
+# workflow_tests_resource = '/repos/lifemonitor/workflow-tests/actions/workflows/28339110'
+workflow_tests_resource = '/repos/kikkomep/workflow-tests/actions/workflows/182903117'
+workflow_tests_resource_name = '/repos/kikkomep/workflow-tests/actions/workflows/main.yml'
 
 # set token from env
 token = get_github_token()
@@ -55,12 +59,17 @@ def api_url() -> str:
 
 @pytest.fixture
 def repo_full_name() -> str:
-    return "lifemonitor/workflow-tests"
+    return "kikkomep/workflow-tests"
 
 
 @pytest.fixture
 def test_workflow_resource() -> str:
     return workflow_tests_resource
+
+
+@pytest.fixture
+def test_workflow_resource_name() -> str:
+    return workflow_tests_resource_name
 
 
 @pytest.fixture
@@ -122,6 +131,110 @@ def github_service(api_url: str, github_token: models.TestingServiceToken) -> mo
     return models.GithubTestingService(url=api_url, token=github_token)
 
 
+@pytest.fixture
+def versioned_workflow_versions() -> List[str]:
+    """
+    Returns a list of workflow versions for testing purposes.
+    """
+    return ["main", "develop", "0.1.0", "0.2.0", "0.3.0"]
+
+
+@pytest.mark.skipif(not token, reason="Github token not set")
+@pytest.fixture
+def versioned_github_workflow(request, user1,
+                              git_ref, repo_full_name,
+                              test_workflow_resource, test_workflow_resource_name,
+                              versioned_workflow_versions: list[str]) -> Workflow:
+    logger.debug("Test request: %r", request)
+    ref_type, ref_value, ref = git_ref
+    logger.debug("Git ref: %r", git_ref)
+    logger.debug("Repo full name: %s", repo_full_name)
+    logger.debug("Test workflow resource: %s", test_workflow_resource)
+    logger.debug("Workflow resource name: %s", test_workflow_resource_name)
+    # check if the test workflow resource is the same as the repo full name
+    if test_workflow_resource == f'/repos/{repo_full_name}/actions/workflows/28339110':
+        logger.debug("Test workflow resource matches the repo full name")
+    from tests.utils import register_workflow
+
+    versions = list(versioned_workflow_versions)
+    # versions = ["0.1.0"]
+
+    # set workflow data
+    wf_data = {
+        "name": "Github Versioned Test Workflow",
+        # "version": v,
+        "uuid": "12345678-1234-5678-1234-567812345678",
+        # "roc_link": f"file:///lm/tests/crates/workflow-tests/lifemonitor-workflow-tests-{v}.zip",
+    }
+
+    from lifemonitor.db import db
+    with db.session().no_autoflush:
+        # register the workflow
+        logger.debug("Registering workflow with data: %r", wf_data)
+
+        # Refer to the workflow as a Workflow object
+        w: Workflow = None
+
+        # register versions
+        for i, v in enumerate(versions):
+            wf_data['version'] = v
+            wf_data['roc_link'] = f"file:///lm/tests/crates/versioned-workflow-tests/workflow-tests-{v}.zip"
+            logger.debug("Adding version %s to workflow %s", v, w)
+            wf_data, wf_version = register_workflow(
+                user1, wf_data,
+            )
+            w: Workflow = wf_version.workflow
+    return w
+
+
+@pytest.mark.skipif(not token, reason="Github token not set")
+def test_registration_versioned_github_workflow(request, user1,
+                                                git_ref, repo_full_name,
+                                                test_workflow_resource, test_workflow_resource_name,
+                                                versioned_workflow_versions: list[str]) -> Workflow:
+    logger.debug("Test request: %r", request)
+    ref_type, ref_value, ref = git_ref
+    logger.debug("Git ref: %r", git_ref)
+    logger.debug("Repo full name: %s", repo_full_name)
+    logger.debug("Test workflow resource: %s", test_workflow_resource)
+    logger.debug("Workflow resource name: %s", test_workflow_resource_name)
+    # check if the test workflow resource is the same as the repo full name
+    if test_workflow_resource == f'/repos/{repo_full_name}/actions/workflows/28339110':
+        logger.debug("Test workflow resource matches the repo full name")
+    from tests.utils import register_workflow
+
+    versions = list(versioned_workflow_versions)
+
+    # set workflow data
+    wf_data = {
+        "name": "Github Versioned Test Workflow",
+        "version": versions.pop(0),
+        "uuid": "12345678-1234-5678-1234-567812345670",
+        "roc_link": "https://github.com/kikkomep/workflow-tests",
+    }
+
+    from lifemonitor.db import db
+    with db.session().no_autoflush:
+        # register the workflow
+        logger.debug("Registering workflow with data: %r", wf_data)
+
+        wf_data, wf = register_workflow(
+            user1, wf_data,
+        )
+        logger.debug("Workflow registered: %r", wf)
+        assert wf.uuid, "Workflow UUID not set"
+
+        w: Workflow = wf.workflow
+        # register versions
+        for i, v in enumerate(versions):
+            wf_data['version'] = v
+            logger.debug("Adding version %s to workflow %s", v, w)
+            wf_data, wf_version = register_workflow(
+                user1, wf_data,
+            )
+    return w
+
+
 @pytest.mark.skipif(not token, reason="Github token not set")
 def test_connection_no_api_url(github_token):
     # Test that the GithubTestingService works without specifying a URL for the API.
@@ -137,23 +250,51 @@ def test_connection(github_service):
     assert github_service.check_connection()
 
 
+def test_workflow_configuration(versioned_github_workflow: Workflow, versioned_workflow_versions: List[str]):
+    assert list(versioned_github_workflow.versions.keys()) == list(reversed(versioned_workflow_versions)), \
+        "Workflow versions do not match expected values"
+
+
+def test_github_params(versioned_github_workflow: Workflow,
+                       versioned_workflow_versions: List[str],
+                       github_service: models.GithubTestingService):
+    logger.debug("Test workflow: %r", versioned_github_workflow)
+    assert versioned_github_workflow.name == "Github Versioned Test Workflow"
+
+    versioned_workflow_versions = ["0.1.0"]
+    # Check that the workflow has the expected number of versions
+    for version in versioned_workflow_versions:
+        logger.info("Testing version: %s", version)
+        test_instance = versioned_github_workflow.versions[version].test_suites[0].test_instances[0]
+        branch, tag, created = get_workflow_params(test_instance)
+        logger.warning("Branch: %s, Tag: %s, Created: %s", branch, tag, created)
+        assert branch == version or tag == version, f"Version {version} should map to a branch or tag"
+        assert created, f"Created date for version {version} is not set"
+        if version == "main":
+            assert branch == "main", "Main version should map to the main branch"
+        elif version == "develop":
+            assert branch == "develop", "Develop version should map to the develop branch"
+        elif version.startswith("0."):
+            assert tag == version, f"Version {version} should map to a tag"
+
+
 @pytest.mark.skipif(not token, reason="Github token not set")
 @pytest.mark.parametrize("git_ref", [("tag", "0.1.0")], indirect=True)
 def test_get_builds(github_service, git_ref, test_instance_one_version):
     builds = github_service.get_test_builds(test_instance_one_version)
-    assert len(builds) == 1
+    assert len(builds) == 2
     assert all(isinstance(b, models.GithubTestBuild) for b in builds)
     # verify order by decreasing timestamp
     for i in range(len(builds) - 1):
-        assert builds[i].timestamp > builds[i + 1].timestamp
+        assert builds[i].timestamp >= builds[i + 1].timestamp
 
 
 @pytest.mark.skipif(not token, reason="Github token not set")
 @pytest.mark.parametrize("git_ref", [(None, None)], indirect=True)
 def test_get_builds_limit(github_service, git_ref, test_instance_one_version):
-    number_of_builds = 5
-    builds = github_service.get_test_builds(test_instance_one_version, limit=number_of_builds)
-    assert len(builds) == number_of_builds, "Returned number of builds != specified limit"
+    for number_of_builds in range(1, 5):
+        builds = github_service.get_test_builds(test_instance_one_version, limit=number_of_builds)
+        assert len(builds) == number_of_builds, "Returned number of builds != specified limit"
 
 
 @pytest.mark.skipif(not token, reason="Github token not set")
@@ -191,23 +332,77 @@ def test_get_last_builds(github_service: models.GithubTestingService, git_ref, t
         (build is not None and latest_failed_build is not None and build.id == latest_failed_build.id)
 
 
+# @pytest.mark.skipif(not token, reason="Github token not set")
+# @pytest.mark.parametrize("git_ref", [("branch", "main")], indirect=True)
+# @pytest.mark.parametrize("test_instance", [workflow_tests_resource], indirect=True)
+# def test_instance_builds_filtered_by_branch(github_service: models.GithubTestingService, git_ref, test_instance):
+#     # retrieve repo and ref info
+#     ref_type, ref_value, ref = git_ref
+#     _, repository, workflow_id = github_service._get_workflow_info(test_instance.resource)
+#     # get github workflow
+#     gh_workflow = github_service._get_gh_workflow(repository, workflow_id)
+#     logger.debug("Gh Workflow: %r", gh_workflow)
+#     # get runs filtered by branch
+#     runs: List[WorkflowRun] = list(run for run in itertools.islice(
+#         github_service.__get_gh_workflow_runs__(gh_workflow, branch=ref_value), build_query_limit))
+#     logger.debug("Runs: %r", runs)
+#     # check if runs refer to the expected branch
+#     for run in runs:
+#         assert run.head_branch == ref_value, f"Unexpected branch for workflow run {run}"
+
 @pytest.mark.skipif(not token, reason="Github token not set")
 @pytest.mark.parametrize("git_ref", [("branch", "main")], indirect=True)
 @pytest.mark.parametrize("test_instance", [workflow_tests_resource], indirect=True)
 def test_instance_builds_filtered_by_branch(github_service: models.GithubTestingService, git_ref, test_instance):
-    # retrieve repo and ref info
+    # extract git_ref details
     ref_type, ref_value, ref = git_ref
-    _, repository, workflow_id = github_service._get_workflow_info(test_instance.resource)
-    # get github workflow
-    gh_workflow = github_service._get_gh_workflow(repository, workflow_id)
-    logger.debug("Gh Workflow: %r", gh_workflow)
+    logger.debug("Test instance %r git_ref: %s %s %s", test_instance, ref_type, ref_value, ref)
     # get runs filtered by branch
-    runs: List[WorkflowRun] = list(run for run in itertools.islice(
-        github_service.__get_gh_workflow_runs__(gh_workflow, branch=ref_value), build_query_limit))
+    runs: List[WorkflowRun] = github_service._gh_rest_service\
+        .fetch_workflow_runs_by_test_instance(test_instance, branch=ref_value)
     logger.debug("Runs: %r", runs)
     # check if runs refer to the expected branch
     for run in runs:
         assert run.head_branch == ref_value, f"Unexpected branch for workflow run {run}"
+
+
+# @pytest.mark.skipif(not token, reason="Github token not set")
+# @pytest.mark.parametrize("git_ref", [(None, None)], indirect=True)
+# @pytest.mark.parametrize("test_instance", [workflow_tests_resource], indirect=True)
+# def test_get_runs_by_date(github_service: models.GithubTestingService, git_ref, test_instance):
+#     # retrieve repo and ref info
+#     ref_type, ref_value, ref = git_ref
+#     _, repository, workflow_id = github_service._get_workflow_info(test_instance.resource)
+#     # get github workflow
+#     gh_workflow = github_service._get_gh_workflow(repository, workflow_id)
+#     logger.debug("Gh Workflow: %r", gh_workflow)
+#     # get runs filtered by branch
+#     runs = list(run for run in itertools.islice(
+#         github_service.__get_gh_workflow_runs__(gh_workflow, branch=ref_value), build_query_limit))
+#     logger.debug("Runs: %r", runs)
+
+#     # get the latest n runs
+#     n = round(len(runs) / 2)
+#     nrun = runs[n]
+#     logger.debug("N=%d run: %r --> %r", n, nrun, nrun.created_at)
+#     for run in runs:
+#         logger.debug("Run: %r --> %r -- %r", run, run.created_at, run.created_at > nrun.created_at)
+#     logger.debug("Number of runs: %d", len(runs))
+
+#     # get all runs after nrun
+#     runs_after = [_ for _ in github_service.__get_gh_workflow_runs__(
+#         gh_workflow, branch=ref_value,
+#         created="{}..{}".format(nrun.created_at.isoformat(),
+#                                 runs[0].created_at.isoformat()))]
+#     logger.debug("Runs after: %r --- num: %r", runs_after, len(runs_after))
+#     # check number of runs
+#     assert len(runs_after) == (len(runs) - n), "Unexpected number of runs"
+#     # check run creation time
+#     for run in runs_after:
+#         logger.debug("Run: %r --> %r -- of array: %r", run, run.created_at, run in runs)
+#         assert run.created_at >= nrun.created_at, "Run should be created after %r" % nrun.created_at.isoformat()
+
+#     logger.debug("Runs after: %r --- num: %r", runs_after, len(runs_after))
 
 
 @pytest.mark.skipif(not token, reason="Github token not set")
@@ -216,13 +411,12 @@ def test_instance_builds_filtered_by_branch(github_service: models.GithubTesting
 def test_get_runs_by_date(github_service: models.GithubTestingService, git_ref, test_instance):
     # retrieve repo and ref info
     ref_type, ref_value, ref = git_ref
-    _, repository, workflow_id = github_service._get_workflow_info(test_instance.resource)
-    # get github workflow
-    gh_workflow = github_service._get_gh_workflow(repository, workflow_id)
-    logger.debug("Gh Workflow: %r", gh_workflow)
-    # get runs filtered by branch
-    runs = list(run for run in itertools.islice(
-        github_service.__get_gh_workflow_runs__(gh_workflow, branch=ref_value), build_query_limit))
+    # get all available runs (no branch or tag or creation date is used)
+    runs = github_service._gh_rest_service\
+        .fetch_workflow_runs_by_test_instance(test_instance,
+                                              branch=github.GithubObject.NotSet,
+                                              tag=github.GithubObject.NotSet,
+                                              created=github.GithubObject.NotSet)
     logger.debug("Runs: %r", runs)
 
     # get the latest n runs
@@ -234,13 +428,15 @@ def test_get_runs_by_date(github_service: models.GithubTestingService, git_ref, 
     logger.debug("Number of runs: %d", len(runs))
 
     # get all runs after nrun
-    runs_after = [_ for _ in github_service.__get_gh_workflow_runs__(
-        gh_workflow, branch=ref_value,
+    runs_after = [_ for _ in github_service._gh_rest_service.fetch_workflow_runs_by_test_instance(
+        test_instance,
+        branch=github.GithubObject.NotSet,
+        tag=github.GithubObject.NotSet,
         created="{}..{}".format(nrun.created_at.isoformat(),
                                 runs[0].created_at.isoformat()))]
     logger.debug("Runs after: %r --- num: %r", runs_after, len(runs_after))
     # check number of runs
-    assert len(runs_after) == (len(runs) - n), "Unexpected number of runs"
+    assert len(runs_after) == n + 1
     # check run creation time
     for run in runs_after:
         logger.debug("Run: %r --> %r -- of array: %r", run, run.created_at, run in runs)
@@ -249,90 +445,70 @@ def test_get_runs_by_date(github_service: models.GithubTestingService, git_ref, 
     logger.debug("Runs after: %r --- num: %r", runs_after, len(runs_after))
 
 
+# @pytest.mark.skipif(not token, reason="Github token not set")
+# @pytest.mark.parametrize("git_ref", [("branch", "main"), ("tag", "0.1.0"), ("tag", "0.3.0")], indirect=True)
+# @pytest.mark.parametrize("test_instance", [workflow_tests_resource], indirect=True)
+# def test_instance_builds_versioned_by_revision(
+#         github_service: models.GithubTestingService, git_ref, test_instance):
+
+#     ref_type, ref_value, ref = git_ref
+#     repo = test_instance.test_suite.workflow_version.repository
+#     assert repo
+#     assert repo.revision.main_ref.shorthand == ref_value or "main"
+
+#     _, repository, workflow_id = github_service._get_workflow_info(test_instance.resource)
+#     repo = GithubWorkflowRepository(repository)
+#     for w in repo.get_workflows():
+#         logger.debug("Workflow: %r", w)
+
+#     gh_workflow = github_service._get_gh_workflow(repository, workflow_id)
+#     logger.debug("Gh Workflow: %r", gh_workflow)
+
+#     branch_runs = list(run for run in itertools.islice(
+#         github_service.__get_gh_workflow_runs__(gh_workflow, branch=ref_value), build_query_limit))
+#     logger.debug("Runs: %r", branch_runs)
+
+#     instance_runs = github_service.get_test_builds(test_instance, limit=len(branch_runs))
+#     logger.debug("Instance runs: %r", instance_runs)
+
+#     assert len(instance_runs) == len(branch_runs), "Unexpected number of runs for the instance revision"
+
+#     branch_run_ids = [_.id for _ in branch_runs]
+#     instance_run_ids = [_.build_number for _ in instance_runs]
+#     found = []
+#     not_found = []
+#     for run in branch_run_ids:
+#         if run in instance_run_ids:
+#             found.append(run)
+#         else:
+#             not_found.append(run)
+#     logger.debug("Found: %r", found)
+#     logger.debug("Not found: %r", not_found)
+
 @pytest.mark.skipif(not token, reason="Github token not set")
-@pytest.mark.parametrize("git_ref", [("branch", "main"), ("tag", "0.1.0"), ("tag", "0.3.0")], indirect=True)
-@pytest.mark.parametrize("test_instance", [workflow_tests_resource], indirect=True)
-def test_instance_builds_versioned_by_revision(
-        github_service: models.GithubTestingService, git_ref, test_instance):
+# @pytest.mark.parametrize("git_ref", [("branch", "main"), ("tag", "0.1.0"), ("tag", "0.3.0")], indirect=True)
+# @pytest.mark.parametrize("test_instance", [workflow_tests_resource], indirect=True)
+def test_instance_builds_versioned_by_revision(github_service: models.GithubTestingService,
+                                               versioned_github_workflow: Workflow,
+                                               versioned_workflow_versions: list[str]):
 
-    ref_type, ref_value, ref = git_ref
-    repo = test_instance.test_suite.workflow_version.repository
-    assert repo
-    assert repo.revision.main_ref.shorthand == ref_value or "main"
+    # Check that the workflow has the expected number of versions
+    for version in versioned_workflow_versions:
+        logger.info("Testing version: %s", version)
+        test_instance = versioned_github_workflow.versions[version].test_suites[0].test_instances[0]
+        branch, tag, created = get_workflow_params(test_instance)
 
-    _, repository, workflow_id = github_service._get_workflow_info(test_instance.resource)
-    repo = GithubWorkflowRepository(repository)
-    for w in repo.get_workflows():
-        logger.debug("Workflow: %r", w)
+        branch_runs = github_service._gh_rest_service\
+            .fetch_workflow_runs_by_test_instance(test_instance, branch=branch, tag=tag, created=github.GithubObject.NotSet)
+        logger.debug("Runs: %r", branch_runs)
 
-    gh_workflow = github_service._get_gh_workflow(repository, workflow_id)
-    logger.debug("Gh Workflow: %r", gh_workflow)
+        instance_runs = github_service.get_test_builds(test_instance, limit=len(branch_runs))
+        logger.debug("Instance runs: %r", instance_runs)
 
-    branch_runs = list(run for run in itertools.islice(
-        github_service.__get_gh_workflow_runs__(gh_workflow, branch=ref_value), build_query_limit))
-    logger.debug("Runs: %r", branch_runs)
+        assert len(instance_runs) == len(branch_runs), "Unexpected number of runs for the instance revision"
 
-    instance_runs = github_service.get_test_builds(test_instance, limit=len(branch_runs))
-    logger.debug("Instance runs: %r", instance_runs)
-
-    assert len(instance_runs) == len(branch_runs), "Unexpected number of runs for the instance revision"
-
-    branch_run_ids = [_.id for _ in branch_runs]
-    instance_run_ids = [_.build_number for _ in instance_runs]
-    found = []
-    not_found = []
-    for run in branch_run_ids:
-        if run in instance_run_ids:
-            found.append(run)
-        else:
-            not_found.append(run)
-    logger.debug("Found: %r", found)
-    logger.debug("Not found: %r", not_found)
-
-
-@pytest.mark.skipif(not token, reason="Github token not set")
-@pytest.mark.parametrize("git_ref", [(None, None)], indirect=True)
-def test_instance_builds_versioned_by_date(
-        github_service: models.GithubTestingService, git_ref, test_instance_one_version):
-
-    assert not test_instance_one_version.test_suite.workflow_version.previous_version
-    assert not test_instance_one_version.test_suite.workflow_version.next_version
-
-    ref_type, ref_value, ref = git_ref
-
-    repo = test_instance_one_version.test_suite.workflow_version.repository
-    assert repo
-    assert repo.revision.main_ref.shorthand == ref_value or "main"
-
-    _, repository, workflow_id = github_service._get_workflow_info(test_instance_one_version.resource)
-
-    repo = GithubWorkflowRepository(repository)
-    for w in repo.get_workflows():
-        logger.debug("Workflow: %r", w)
-
-    gh_workflow = github_service._get_gh_workflow(repository, workflow_id)
-    logger.debug("Gh Workflow: %r", gh_workflow)
-
-    items_limit = 10
-
-    # github_service._get_gh_workflow_runs(
-    all_runs = github_service._list_workflow_runs(test_instance_one_version, limit=items_limit)
-    for run in all_runs:
-        logger.debug("Run: {} created at {} updated at {} attempts {}".format(run, run.created_at, run.updated_at, run.raw_data.get("run_attempt")))
-    assert len(all_runs) == 8, "Unexpected number of runs"
-
-    instance_all_builds = github_service.get_test_builds(test_instance_one_version, limit=items_limit)
-    for instance in instance_all_builds:
-        logger.debug("Instance run: %r", instance)
-
-    assert len(instance_all_builds) == 10, "Unexpected number of runs for the instance revision"
-
-    for run in all_runs:
-        logger.debug("Build %r created at %r updated at %r", run, run.created_at, run.updated_at)
-
-    with cache.transaction():
-        branch_run_ids = [_.id for _ in all_runs]
-        instance_run_ids = [_.build_number for _ in instance_all_builds]
+        branch_run_ids = [_.id for _ in branch_runs]
+        instance_run_ids = [_.build_number for _ in instance_runs]
         found = []
         not_found = []
         for run in branch_run_ids:
@@ -343,50 +519,141 @@ def test_instance_builds_versioned_by_date(
         logger.debug("Found: %r", found)
         logger.debug("Not found: %r", not_found)
 
-        assert len(instance_all_builds) >= 3, "Unexpected number of runs"
 
-    # simulate latest version with at least one previous version
-    with cache.transaction():
-        for b in instance_all_builds:
-            logger.debug("Instance: %r - %r", b, b.created_at)
-        logger.debug("Build split: %r", datetime.fromtimestamp(all_runs[2].created_at.timestamp()))
-        v1 = MagicMock()
-        v1.created = datetime.fromtimestamp(all_runs[2].created_at.timestamp())
-        test_instance_one_version.test_suite.workflow_version.previous_version = v1
-        test_instance_one_version.test_suite.workflow_version.created = datetime.fromtimestamp(all_runs[1].created_at.timestamp())
-        test_instance_one_version.test_suite.workflow_version.next_version = None
+@pytest.mark.skipif(not token, reason="Github token not set")
+def test_instance_builds_versioned_by_date(mocker,
+                                           github_service: models.GithubTestingService, test_instance_one_version):
 
-        assert test_instance_one_version.test_suite.workflow_version.previous_version
+    assert not test_instance_one_version.test_suite.workflow_version.previous_version
+    assert not test_instance_one_version.test_suite.workflow_version.next_version
 
-        instance_builds = github_service.get_test_builds(test_instance_one_version, limit=items_limit)
-        logger.debug("Instance runs: %r --> count: %d", instance_builds, len(instance_builds))
-        # raise RuntimeError("Runs: %r", instance_builds)
+    logger.debug("Test instance: %r", test_instance_one_version)
+    logger.debug("Workflow version: %s", test_instance_one_version.test_suite.workflow_version.version)
+    logger.debug("Repo revision main ref: %s", test_instance_one_version.test_suite.workflow_version.repository)
 
-        instance_run_ids = [_.build_number for _ in instance_builds]
-        found = []
-        not_found = []
-        for run in all_runs:
-            if run.id in instance_run_ids:
-                found.append(run)
-            else:
-                not_found.append(run)
-        logger.debug("Found: %r", [f"{x}: {x.created_at}" for x in found])
-        logger.debug("Not found: %r", [f"{x}: {x.created_at}" for x in not_found])
+    # Set the items limit
+    items_limit = 100
 
-        assert len(instance_builds) == (len(instance_all_builds) - 8), "Unexpected number of runs for the instance revision"
+    # First consider the "main" branch with all its builds
+    repo = test_instance_one_version.test_suite.workflow_version.repository
+    assert repo
+    # Save the original revision in any and remove it from the repo
+    original_revision = repo.revision
+    logger.debug("Original revision: %r", original_revision)
 
-    # simulate an intermediate workflow version
-    with cache.transaction():
-        # builds_split = all_runs[1]
-        v2 = MagicMock()
-        test_instance_one_version.test_suite.workflow_version.next_version = v2
-        test_instance_one_version.test_suite.workflow_version.created = datetime.fromtimestamp(all_runs[1].created_at.timestamp())
-        v2.created = datetime.fromtimestamp(all_runs[0].created_at.timestamp())
+    # Patch the repo method "get_revision" to return None
+    mocker.patch.object(repo, "get_revision", return_value=None)
 
-        instance_builds = github_service.get_test_builds(test_instance_one_version, limit=items_limit)
-        logger.debug("Instance runs: %r", instance_builds)
+    # Get all workflow runs (latest)
+    # NOTE: builds are ordered by creation date descending
+    all_runs = github_service._gh_rest_service.fetch_workflow_runs_by_test_instance(
+        test_instance_one_version, branch=github.GithubObject.NotSet,
+        tag=github.GithubObject.NotSet, created=github.GithubObject.NotSet)
 
-        assert len(instance_builds) == 1, "Unexpected number of runs for the instance revision"
+    # Uncomment just to check the runs
+    # assert len(all_runs) == 6, "Unexpected number of runs"
+    # for run in all_runs:
+    #     logger.debug("Run: {} created at {} updated at {} attempts {}".format(run, run.created_at, run.updated_at, run.raw_data.get("run_attempt")))
+
+    # Fetch instance builds
+    instance_all_builds = github_service.get_test_builds(test_instance_one_version)
+    for instance in instance_all_builds:
+        logger.debug("Instance run: %r", instance)
+
+    # By construction, the 'main' version contains all the workflow runs/builds
+    assert len(instance_all_builds) == len(all_runs), "Unexpected number of runs for the instance revision"
+    # Uncomment for debugging
+    for run in all_runs:
+        logger.debug("Build %r created at %r updated at %r", run, run.created_at, run.updated_at)
+
+    # cross-check runs and builds
+    branch_run_ids = [_.id for _ in all_runs]
+    instance_run_ids = [_.build_number for _ in instance_all_builds]
+    found = []
+    not_found = []
+    for run in branch_run_ids:
+        if run in instance_run_ids:
+            found.append(run)
+        else:
+            not_found.append(run)
+    logger.debug("Found: %r", found)
+    logger.debug("Not found: %r", not_found)
+
+    ##########################################################################################################
+    # CASE A: simulate latest version with at least one previous version
+    ##########################################################################################################
+
+    # FIXME: the previous version is using builds which comes after the target version of the test case
+    for b in instance_all_builds:
+        logger.debug("Instance: %r - %r", b, b.created_at)
+    logger.debug("Build split: %r", datetime.fromtimestamp(all_runs[2].created_at.timestamp()))
+    v1 = MagicMock()
+    v1.created = datetime.fromtimestamp(all_runs[3].created_at.timestamp())
+    test_instance_one_version.test_suite.workflow_version.previous_version = v1
+    test_instance_one_version.uuid = uuid.uuid4()
+    test_instance_one_version.test_suite.workflow_version.created = datetime.fromtimestamp(all_runs[2].created_at.timestamp())
+    test_instance_one_version.test_suite.workflow_version.next_version = None
+
+    assert test_instance_one_version.test_suite.workflow_version.previous_version
+
+    workflow_params = get_workflow_params(test_instance_one_version)
+    logger.debug("Workflow params: %r", workflow_params)
+
+    instance_builds = github_service.get_test_builds(test_instance_one_version, limit=items_limit)
+    logger.debug("Instance runs: %r --> count: %d", instance_builds, len(instance_builds))
+
+    instance_run_ids = [_.build_number for _ in instance_builds]
+    found = []
+    not_found = []
+    for run in all_runs:
+        if run.id in instance_run_ids:
+            found.append(run)
+        else:
+            not_found.append(run)
+    logger.debug("Found: %r", [f"{x}: {x.created_at}" for x in found])
+    logger.debug("Not found: %r", [f"{x}: {x.created_at}" for x in not_found])
+
+    assert len(instance_builds) == len(all_runs[0:3]), "Unexpected number of runs for the instance revision"
+
+    ##########################################################################################################
+    # CASE B: simulate a version with at least one next version
+    ##########################################################################################################
+    # Remove the previous version
+    test_instance_one_version.test_suite.workflow_version.previous_version = None
+    # Change the UUID to simulate a new version
+    test_instance_one_version.uuid = uuid.uuid4()
+    # Prepare the next version
+    target_version = test_instance_one_version.test_suite.workflow_version
+    v2 = MagicMock()
+    target_version.next_version = v2
+    target_version.created = datetime.fromtimestamp(all_runs[5].created_at.timestamp())
+    v2.created = datetime.fromtimestamp(all_runs[4].created_at.timestamp())
+
+    instance_builds = github_service.get_test_builds(test_instance_one_version, limit=items_limit)
+    logger.debug("Instance runs: %r", instance_builds)
+
+    assert len(instance_builds) == len([_ for _ in all_runs if _.created_at < target_version.created]), \
+        "Unexpected number of runs for the instance revision"
+
+    ##########################################################################################################
+    # CASE C: simulate a version with at least one previous and next version
+    ##########################################################################################################
+    # Remove the previous version
+    test_instance_one_version.test_suite.workflow_version.previous_version = None
+    # Change the UUID to simulate a new version
+    test_instance_one_version.uuid = uuid.uuid4()
+    # Set the reference to the target version
+    target_version = test_instance_one_version.test_suite.workflow_version
+    # Prepare the previous version
+    v1 = MagicMock()
+    target_version.previous_version = v1
+    v1.created = datetime.fromtimestamp(all_runs[8].created_at.timestamp())
+
+    instance_builds = github_service.get_test_builds(test_instance_one_version, limit=items_limit)
+    logger.debug("Instance runs: %r", instance_builds)
+    assert len(instance_builds) == \
+        len([run for run in all_runs[5:7]]), \
+        "Unexpected number of runs for the instance revision"
 
 
 @pytest.mark.skipif(not token, reason="Github token not set")
