@@ -22,7 +22,6 @@ import logging
 import threading
 from multiprocessing import Manager, Process
 from time import sleep
-from unittest.mock import MagicMock
 
 import pytest
 
