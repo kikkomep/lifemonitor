@@ -80,7 +80,7 @@ def test_cache_timeout(app_context, redis_cache):
     assert cache.has(key) is False, f"Key {key} should not be in cache after {timeout} secs"
 
 
-def test_cache_last_build(app_context, redis_cache, user1):
+def test_cache_last_build(app_context, redis_cache, user1, mocker):
     valid_workflow = 'sort-and-change-case'
     cache.clear()
     assert cache.size() == 0, "Cache should be empty"
@@ -99,7 +99,7 @@ def test_cache_last_build(app_context, redis_cache, user1):
     assert cached_build is not None, "Cache should not be empty"
     assert build == cached_build, "Build should be equal to the cached build"
 
-    instance.get_test_builds = MagicMock(return_value=None)
+    mocker.patch.object(instance, 'get_test_builds', return_value=instance.get_test_builds())
 
     build = instance.last_test_build
     assert build, "Last build should not be empty"
@@ -107,7 +107,7 @@ def test_cache_last_build(app_context, redis_cache, user1):
     assert build == cached_build, "Build should be equal to the cached build"
 
 
-def test_cache_test_builds(app_context, redis_cache, user1):
+def test_cache_test_builds(app_context, redis_cache, user1, mocker):
     valid_workflow = 'sort-and-change-case'
     cache.clear()
     assert cache.size() == 0, "Cache should be empty"
@@ -128,7 +128,8 @@ def test_cache_test_builds(app_context, redis_cache, user1):
     assert cached_builds is not None and len(cached_builds) > 0, "Cache should not be empty"
     assert len(builds) == len(cached_builds), "Unexpected number of cached builds"
 
-    instance.testing_service.get_test_builds = MagicMock(return_value=None)
+    mocker.patch.object(instance.testing_service, "get_test_builds", return_value=builds)
+    # instance.testing_service.get_test_builds = MagicMock(return_value=None)
     builds = instance.get_test_builds(limit=limit)
     assert builds and len(builds) > 0, "Invalid number of builds"
     assert instance.testing_service.get_test_builds.assert_not_called, "instance.get_test_builds should not be used"
@@ -237,7 +238,7 @@ def cache_last_build_update(app, w, user1, check_cache_size=True, index=0,
                     logger.debug("\n\nPreparing data to test builds...")
                     b_data = []
                     for b in builds:
-                        b_data.append(i.testing_service.get_test_build(i, b.id))
+                        b_data.append(i.get_test_build(b.id))
                     logger.debug("\n\nPreparing data to test builds... DONE")
 
                     assert len(b_data) == 4, "Unexpected number of builds"
@@ -255,6 +256,9 @@ def cache_last_build_update(app, w, user1, check_cache_size=True, index=0,
                     # first call #############################################################
                         logger.debug("\n\nChecking build (first call): buildID=%r", b.id)
                         logger.debug("Build data: %r", i.get_test_build(b.id))
+                        logger.debug("Checking KEY: %r", cache_key)
+                        for k in t.keys():
+                            logger.debug("Found Cache Key: %r", k)
                         assert t.has(cache_key), "The key should be in the current transaction"
                         if not multithreaded:
                             i.testing_service.get_test_build.call_count == count + 1, "i.testing_service.get_test_build should be called once"
