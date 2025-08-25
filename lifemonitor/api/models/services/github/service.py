@@ -37,7 +37,7 @@ from lifemonitor.api.models.services.github.graphql.service import \
 from lifemonitor.api.models.services.github.rest import GithubRestService
 from lifemonitor.api.models.services.github.testinstance_cache import \
     TestInstanceCache
-# from lifemonitor.cache import Timeout
+from lifemonitor.cache import Timeout
 
 from ..service import TestingService
 from .test_build import GithubTestBuild
@@ -171,7 +171,8 @@ class GithubTestingService(TestingService):
         except GithubRateLimitExceededException as e:
             raise lm_exceptions.RateLimitExceededException(detail=str(e), instance=test_instance)
 
-    def __update_test_builds_cache__(self, test_instance: models.TestInstance, update_interval: int = 60) -> bool:
+    def __update_test_builds_cache__(self, test_instance: models.TestInstance,
+                                     update_interval: int = Timeout.BUILD) -> bool:
         """
         Fetch the test builds for a given test instance from GitHub
         only if the test instance builds_refreshed_at is None or older than 10 minutes.
