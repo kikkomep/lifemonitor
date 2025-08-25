@@ -93,7 +93,7 @@ def strip_remote_prefix(shorthand: str) -> str:
     return shorthand
 
 
-def get_workflow_params(test_instance: TestInstance) -> tuple:
+def get_workflow_params(test_instance: TestInstance, interval_as_tuple: bool = False) -> tuple:
     """
     Returns the workflow parameters for the given test instance.
     This method is a placeholder and should be implemented in subclasses.
@@ -132,12 +132,21 @@ def get_workflow_params(test_instance: TestInstance) -> tuple:
             logger.debug("Checking Workflow version: %r (previous: %r, next: %r)",
                          workflow_version, workflow_version.previous_version, workflow_version.next_version)
             if workflow_version.previous_version and workflow_version.next_version:
-                created = "{}..{}".format(workflow_version.created.isoformat(),
-                                          workflow_version.next_version.created.isoformat())
+                if not interval_as_tuple:
+                    created = "{}..{}".format(workflow_version.created.isoformat(),
+                                              workflow_version.next_version.created.isoformat())
+                else:
+                    created = (workflow_version.created, workflow_version.next_version.created)
             elif workflow_version.previous_version:
-                created = ">={}".format(workflow_version.created.isoformat())
+                if not interval_as_tuple:
+                    created = ">={}".format(workflow_version.created.isoformat())
+                else:
+                    created = (workflow_version.created, None)
             elif workflow_version.next_version:
-                created = "<{}".format(workflow_version.next_version.created.isoformat())
+                if not interval_as_tuple:
+                    created = "<{}".format(workflow_version.next_version.created.isoformat())
+                else:
+                    created = (None, workflow_version.next_version.created)
             else:
                 logger.debug("No previous version found, then no filter applied... Loading all available builds")
     except Exception as e:
@@ -147,3 +156,49 @@ def get_workflow_params(test_instance: TestInstance) -> tuple:
             original_exception=str(e))
 
     return branch, tag, created
+
+
+def match_test_instance_params(test_instance: TestInstance, params: tuple) -> bool:
+    """
+    Match the workflow parameters for the given test instance with the provided parameters.
+    """
+    i_branch, i_tag, i_created = get_workflow_params(test_instance, interval_as_tuple=True)
+    branch, tag, created = params
+    logger.debug("Matching test instance %s with params: branch=%s, tag=%s, created=%s",
+                 test_instance.uuid, branch, tag, created)
+    # Check branch match
+    if i_branch and i_branch is not github.GithubObject.NotSet:
+        if i_branch == branch:
+            logger.debug("Branch match found: %s", branch)
+            return True
+        logger.debug("Branch mismatch: %s != %s", i_branch, branch)
+        return False
+
+    # Check tag match
+    if i_tag and i_tag is not github.GithubObject.NotSet:
+        if i_tag == tag:
+            logger.debug("Tag match found: %s", tag)
+            return True
+        logger.debug("Tag mismatch: %s != %s", i_tag, tag)
+        return False
+
+    # Check creation date constraints
+    if isinstance(i_created, tuple):
+        i_inf = i_created[0]
+        i_sup = i_created[1]
+
+        date_in_range = True
+        if i_inf and i_inf > created:
+            logger.debug("Created before lower bound: %s > %s", i_inf, created)
+            date_in_range = False
+        if i_sup and i_sup <= created:
+            logger.debug("Created after upper bound: %s <= %s", i_sup, created)
+            date_in_range = False
+
+        if date_in_range:
+            logger.debug("Creation date match found: %s", created)
+            return True
+        return False
+
+    # If no specific criteria were checked, it's a match
+    return True
