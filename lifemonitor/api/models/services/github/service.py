@@ -28,12 +28,10 @@ import github
 from github import GithubException
 from github import \
     RateLimitExceededException as GithubRateLimitExceededException
+from github.WorkflowRun import WorkflowRun
 
 import lifemonitor.api.models as models
 import lifemonitor.exceptions as lm_exceptions
-from lifemonitor.api.models.services.github.cache import \
-    TestInstanceCacheManager
-from lifemonitor.api.models.services.github.graphql.models import GhWorkflow
 from lifemonitor.api.models.services.github.graphql.service import \
     GithubGraphQLService
 from lifemonitor.api.models.services.github.rest import GithubRestService
@@ -172,29 +170,111 @@ class GithubTestingService(TestingService):
         except GithubRateLimitExceededException as e:
             raise lm_exceptions.RateLimitExceededException(detail=str(e), instance=test_instance)
 
-    def get_test_builds(self, test_instance: models.TestInstance, limit=10) -> list:
+    def __update_test_builds_cache__(self, test_instance: models.TestInstance, update_interval: int = 60) -> bool:
+        """
+        Fetch the test builds for a given test instance from GitHub
+        only if the test instance builds_refreshed_at is None or older than 10 minutes.
+
+        :param test_instance: The test instance to update.
+        :param update_interval: The minimum interval (in seconds) between updates.
+        :return: True if the test builds were updated, False otherwise.
+        """
+        # assert isinstance(test_instance, models.TestInstance), \
+        #     "test_instance must be an instance of TestInstance"
+        # assert test_instance.testing_service_id == self.uuid, \
+        #     "test_instance must be associated with this testing service"
+
+        # Retrieve the last refresh timestamp from the test_instance cache
+        # and check if it is recent (less than 10 minutes ago)
+        last_update = self.test_instance_cache.get_update_timestamp(test_instance.uuid)
+        if last_update:
+            delta = (time.time() - last_update)
+            logger.debug("Test instance %s last cache update was %.2f seconds ago",
+                         test_instance.uuid, delta)
+            logger.debug("Configured update interval is %d seconds", update_interval)
+            logger.debug("Elapsed time since last update is %.2f seconds", delta)
+            if delta < update_interval:
+                logger.debug("Test instance %s cache is recent (%.2f seconds ago), skipping fetch",
+                             test_instance.uuid, delta)
+                return False
+
+        logger.debug("Fetching workflow runs for test instance %s from GitHub", test_instance.uuid)
+        try:
+
+            workflow_runs = self._gh_rest_service.fetch_workflow_runs_by_test_instance(test_instance)
+            logger.debug("Fetched %d workflow runs for test instance %s", len(workflow_runs), test_instance.uuid)
+            # self.test_instance_cache.batch_update(test_instance.id, workflow_runs)
+            self.test_instance_cache.batch_associate_and_insert_runs(
+                test_instance.uuid,
+                self.get_instance_external_link(test_instance),
+                [{"run_id": _.id,
+                  "ref": _.head_branch,
+                  "metadata": _._rawData} for _ in workflow_runs],
+                use_lock=True,
+                max_retry=3
+            )
+            return True
+        except GithubRateLimitExceededException as e:
+            raise lm_exceptions.RateLimitExceededException(detail=str(e), instance=test_instance)
+        except GithubException as e:
+            raise self._convert_github_exception_to_lm(e)
+        except Exception as e:
+            raise lm_exceptions.TestingServiceException(e)
+
+    def get_test_builds(self, test_instance: models.TestInstance, limit=100) -> list:
         """
         Get the test builds for a given test instance.
         :param test_instance: The test instance to get the builds for.
         :param limit: The maximum number of builds to return.
         :return: A list of GithubTestBuild objects.
         """
-        cache = TestInstanceCacheManager(test_instance)
-        logger.debug("Getting test builds from cache for test instance %s", test_instance.uuid)
-        # Check if the cache is valid
-        if not cache.is_valid():
-            logger.debug("Cache is not valid, fetching test builds from remote service")
-            # Fetch the test builds from the remote service
-            test_builds = self.update_test_instance(test_instance)
-            return test_builds[:limit] if test_builds else []
 
-        if cache.is_valid():
-            logger.debug("Cache is valid, returning cached test builds")
-            return cache.get_test_builds(limit=limit)
+        # assert isinstance(test_instance, models.TestInstance), \
+        #     "test_instance must be an instance of TestInstance"
+        # assert test_instance.testing_service_id == self.uuid, \
+        #     "test_instance must be associated with this testing service"
 
-        logger.debug("Cache is not valid, but I'm not able to update it, returning empty list")
-        # If the cache is not valid, return an empty list
-        return []
+        # total time
+        total_start_time = time.time()
+
+        # Start timing for cache update
+        start_time = time.time()
+        # Update the test builds cache if needed
+        self.__update_test_builds_cache__(test_instance)
+        elapsed_time = time.time() - start_time
+        logger.debug("Cache update took %.2f seconds for test instance %s", elapsed_time, test_instance.uuid)
+
+        # Start timing for fetching runs from cache
+        start_time = time.time()
+        # Return the builds from the cache
+        runs = self.test_instance_cache.get_latest_runs(
+            test_instance.uuid, self.get_instance_external_link(test_instance), limit=limit
+        )
+        elapsed_time = time.time() - start_time
+        logger.debug("Fetching runs from cache took %.2f seconds for test instance %s", elapsed_time, test_instance.uuid)
+
+        logger.debug("Found %d cached runs for test instance %s", len(runs), test_instance.uuid)
+        builds = []
+        if runs:
+            # Start timing for building GithubTestBuild objects
+            start_time = time.time()
+            for run in runs:
+                builds.append(GithubTestBuild(
+                    testing_service=test_instance.testing_service,
+                    test_instance=test_instance,
+                    metadata=WorkflowRun(
+                        requester=None,
+                        headers=None,
+                        attributes=run,
+                        completed=True
+                    )
+                ))
+            elapsed_time = time.time() - start_time
+            logger.debug("Building GithubTestBuild objects took %.2f seconds for test instance %s", elapsed_time, test_instance.uuid)
+
+        total_elapsed_time = time.time() - total_start_time
+        logger.info("Total time for getting test builds for test instance %s is %.2f seconds", test_instance.uuid, total_elapsed_time)
+        return builds
 
     def get_test_build(self, test_instance: models.TestInstance, build_number: str) -> GithubTestBuild:
         """
@@ -203,32 +283,40 @@ class GithubTestingService(TestingService):
         :param build_number: The build number to get.
         :return: A GithubTestBuild object.
         """
-        result = None
         try:
-            cache = TestInstanceCacheManager(test_instance)
-            logger.debug("Getting test build %s from cache for test instance %s", build_number, test_instance.uuid)
-            # Check if the cache is valid
-            if cache.is_valid():
-                result = cache.get_test_build(build_number)
-            # FIXME: This cause the reload of the test builds from the remote service: do we need it?
-            # If the cache is not valid or the result is not found, fetch from remote service
-            if not cache.is_valid() or result is None:
-                logger.debug("Cache is not valid, fetching test builds from remote service")
-                # Fetch the test builds from the remote service
-                test_builds = self.update_test_instance(test_instance)
-                result = next((build for build in test_builds if build.id == build_number), None)
+
+            # total time
+            total_start_time = time.time()
+
+            # Start timing for cache update
+            start_time = time.time()
+            # Update the test builds cache if needed
+            self.__update_test_builds_cache__(test_instance)
+            elapsed_time = time.time() - start_time
+            logger.debug("Cache update took %.2f seconds for test instance %s", elapsed_time, test_instance.uuid)
+
+            # Retrieve the run from the cache
+            run = self.test_instance_cache.get_run_by_id(self.get_instance_external_link(test_instance), build_number)
+            logger.debug("Fetched run %s from cache for test instance %s", build_number, test_instance.uuid)
+            build = None
+            if run:
+                build = GithubTestBuild(
+                    testing_service=test_instance.testing_service,
+                    test_instance=test_instance,
+                    metadata=WorkflowRun(
+                        requester=None,
+                        headers=None,
+                        attributes=run,
+                        completed=True
+                    )
+                )
+
+            total_elapsed_time = time.time() - total_start_time
+            logger.info("Total time for getting test build for test instance %s is %.2f seconds", test_instance.uuid, total_elapsed_time)
+            return build
 
         except GithubRateLimitExceededException as e:
             raise lm_exceptions.RateLimitExceededException(detail=str(e), instance=test_instance)
-
-        # Uncomment the following lines
-        # if you want to raise an exception when the build is not found
-        # if result is None:
-        #     raise lm_exceptions.NotFoundException(
-        #         detail=f"Test build {build_number} not found for test instance {test_instance.uuid}",
-        #         instance=test_instance
-        #     )
-        return result
 
     def get_instance_external_link(self, test_instance: models.TestInstance) -> str:
         _, repo_full_name, workflow_id = self._get_workflow_info(test_instance.resource)
