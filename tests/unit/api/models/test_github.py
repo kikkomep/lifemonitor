@@ -73,6 +73,11 @@ def test_workflow_resource_name() -> str:
 
 
 @pytest.fixture
+def test_workflow_resource_external_link(repo_full_name) -> str:
+    return f"https://github.com/{repo_full_name}/actions/workflows/main.yml"
+
+
+@pytest.fixture
 def git_ref(request):
     ref_type = "branch"
     ref_value = "main"
@@ -90,7 +95,9 @@ def git_ref(request):
 
 @pytest.mark.skipif(not token, reason="Github token not set")
 @pytest.fixture
-def test_instance(request, git_ref, repo_full_name, test_workflow_resource):
+def test_instance(request, git_ref, repo_full_name,
+                  test_workflow_resource, test_workflow_resource_external_link,
+                  mocker):
     ref_type, ref_value, ref = git_ref
     test_resource = test_workflow_resource
     try:
@@ -111,6 +118,8 @@ def test_instance(request, git_ref, repo_full_name, test_workflow_resource):
     instance = SerializableMock()
     instance.resource = test_resource
     instance.test_suite = test_suite
+    # Mock the external_link property
+    instance.external_link = test_workflow_resource_external_link
     return instance
 
 
@@ -681,3 +690,37 @@ def test_instance_list_gh_workflows(github_service: models.GithubTestingService,
     repo = github_service._gh_rest_service._gh_service.get_repo(repo_full_name)
     for w in repo.get_workflows():
         logger.debug("Workflow: %r", w)
+
+
+@pytest.mark.skipif(not token, reason="Github token not set")
+@pytest.mark.parametrize("git_ref", [
+    ("branch", "main"),
+    ("tag", "0.1.0"),
+    ("tag", "0.2.0"),
+    ("tag", "0.3.0")], indirect=True)
+def test_batch_update_single_workflow(
+        github_service: models.GithubTestingService,
+        git_ref,
+        test_instance):
+    # gql = github_service._gh_graphql_service
+    # runs = gql.fetch_workflows_runs_by_urls([
+    #     "https://github.com/kikkomep/lifemonitor/actions/workflows/main.yaml"
+    # ])
+    # for run in runs:
+    #     logger.debug("Workflow run: %r", run)
+
+    logger.warning(test_instance.external_link)
+
+    # Create a list with both the original and cloned test instances
+    test_instances = [test_instance]
+    logger.debug("Test instances: %r", test_instances)
+
+    workflows = github_service.batch_update_workflows(test_instances)
+    # logger.debug("Batch update result: %r", workflows)
+
+    # check length of workflows
+    assert len(workflows) == 1, "Unexpected number of workflows returned"
+
+    # Extract the first workflow ID
+    workflow_id = list(workflows.keys())[0]
+    assert workflow_id == test_instances[0].external_link, "Unexpected workflow returned"
