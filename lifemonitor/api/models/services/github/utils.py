@@ -136,17 +136,18 @@ def get_workflow_params(test_instance: TestInstance, interval_as_tuple: bool = F
                     created = "{}..{}".format(workflow_version.created.isoformat(),
                                               workflow_version.next_version.created.isoformat())
                 else:
-                    created = (workflow_version.created, workflow_version.next_version.created)
+                    created = (workflow_version.created.isoformat(),
+                               workflow_version.next_version.created.isoformat())
             elif workflow_version.previous_version:
                 if not interval_as_tuple:
                     created = ">={}".format(workflow_version.created.isoformat())
                 else:
-                    created = (workflow_version.created, None)
+                    created = (workflow_version.created.isoformat(), None)
             elif workflow_version.next_version:
                 if not interval_as_tuple:
                     created = "<{}".format(workflow_version.next_version.created.isoformat())
                 else:
-                    created = (None, workflow_version.next_version.created)
+                    created = (None, workflow_version.next_version.created.isoformat())
             else:
                 logger.debug("No previous version found, then no filter applied... Loading all available builds")
     except Exception as e:
