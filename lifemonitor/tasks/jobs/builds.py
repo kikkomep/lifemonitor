@@ -96,7 +96,8 @@ def check_last_build():
         start_time = time.time()
         logger.info("Starting update of all test instances...")
         try:
-            gh_service.update_all_test_instances()
+            gh_service.batch_update_workflows(
+                TestInstance.find_by_testing_service(gh_service))
         finally:
             elapsed_time = time.time() - start_time
             logger.info(f"Update of all test instances completed in {elapsed_time:.2f} seconds.")
@@ -105,7 +106,6 @@ def check_last_build():
     start_time = time.time()
     try:
         with cache.transaction(name=f"check_last_builds@{datetime.datetime.now()}", force_update=True):
-            logger.info("Starting 'check_last build' task...")
             for w in Workflow.all():
                 try:
                     logger.debug(f"Starting builds refresh of workflow {w.id} ({w.name})")
