@@ -79,8 +79,12 @@ class TestInstanceCache:
             logger.error(f"Error associating run {run_id} to test instance {test_instance_id}: {e}")
             return False
         finally:
-            if lock:
+            try:
                 lock.release()
+            except redis_lock.NotAcquired as e:
+                logger.error(f"Error releasing lock for associating run {run_id} to test instance {test_instance_id}: {e}")
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.exception(e)
 
     def disassociate_run(self, test_instance_id, run_id, ref=None, use_lock=False):
         lock = None
@@ -103,8 +107,12 @@ class TestInstanceCache:
             logger.error(f"Error disassociating run {run_id} from test instance {test_instance_id}: {e}")
             return False
         finally:
-            if lock:
+            try:
                 lock.release()
+            except redis_lock.NotAcquired as e:
+                logger.error(f"Error releasing lock for disassociating run {run_id} from test instance {test_instance_id}: {e}")
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.exception(e)
 
     # --- Batch operations ---
 
@@ -138,8 +146,12 @@ class TestInstanceCache:
             logger.error(f"Batch associate failed after {max_retry} attempts.")
             return False
         finally:
-            if lock:
+            try:
                 lock.release()
+            except redis_lock.NotAcquired as e:
+                logger.error(f"Error releasing lock for batch associate: {e}")
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.exception(e)
 
     def batch_disassociate_runs(self, test_instance_id, runs, use_lock=False, max_retry=3):
         lock = None
@@ -169,8 +181,12 @@ class TestInstanceCache:
             logger.error(f"Batch disassociate failed after {max_retry} attempts.")
             return False
         finally:
-            if lock:
+            try:
                 lock.release()
+            except redis_lock.NotAcquired as e:
+                logger.error(f"Error releasing lock for batch disassociate: {e}")
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.exception(e)
 
     # --- Query methods ---
 

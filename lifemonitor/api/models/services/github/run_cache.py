@@ -61,8 +61,12 @@ class RunCache:
             logger.error(f"Redis error inserting/updating run {run_id}: {e}")
             return False
         finally:
-            if lock:
+            try:
                 lock.release()
+            except redis_lock.NotAcquired as e:
+                logger.error(f"Error releasing lock for run {run_id}: {e}")
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.exception(e)
 
     def delete_run(self, workflow_id, run_id, ref, use_lock=False, pipe=None):
         lock = None
@@ -92,8 +96,12 @@ class RunCache:
             logger.error(f"Redis error deleting run {run_id}: {e}")
             return False
         finally:
-            if lock:
+            try:
                 lock.release()
+            except redis_lock.NotAcquired as e:
+                logger.error(f"Error releasing lock for run {run_id}: {e}")
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.exception(e)
 
     def batch_insert_update_runs(self, workflow_id, runs, use_lock=False, pipe=None, max_retry=3):
         lock = None
@@ -133,8 +141,13 @@ class RunCache:
         except Exception as e:
             logger.exception(e)
         finally:
-            if lock:
-                lock.release()
+            if lock and lock.locked():
+                try:
+                    lock.release()
+                except redis_lock.NotAcquired as e:
+                    logger.error(f"Error releasing lock for run {run_id}: {e}")
+                    if logger.isEnabledFor(logging.DEBUG):
+                        logger.exception(e)
 
     def batch_delete_runs(self, workflow_id, runs, use_lock=False, pipe=None, max_retry=3):
         lock = None
@@ -168,8 +181,13 @@ class RunCache:
             logger.error(f"Batch delete failed after {max_retry} attempts.")
             return False
         finally:
-            if lock:
-                lock.release()
+            if lock and lock.locked():
+                try:
+                    lock.release()
+                except redis_lock.NotAcquired as e:
+                    logger.error(f"Error releasing lock for run {run_id}: {e}")
+                    if logger.isEnabledFor(logging.DEBUG):
+                        logger.exception(e)
 
     # --- Read Operations (no locking) ---
 
