@@ -370,7 +370,6 @@ class GithubTestingService(TestingService):
         # Process uninitialized instances
         if len(uninitialized_instances) == 0:
             logger.info("No uninitialized test instances found.")
-            return
         else:
             logger.info("Processing uninitialized test instances...")
             start_time = time.time()
