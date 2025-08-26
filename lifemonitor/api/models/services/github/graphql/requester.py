@@ -105,7 +105,8 @@ class GraphQLRequester:
         return self._session
 
     @cached(timeout=Timeout.BUILD, client_scope=False, transactional_update=True)
-    def execute_query(self, query: str, variables: Optional[dict] = None) -> dict:
+    def execute_query(self, query: str, variables: Optional[dict] = None,
+                      max_retries: int = 3, retry_delay: int = 1) -> dict:
         """
         Executes a GraphQL query against the GitHub API.
 
@@ -119,12 +120,42 @@ class GraphQLRequester:
         # Log the start of the query execution
         logger.info("Starting GraphQL query execution at %s", start_time)
         logger.debug("Executing Github GraphQL query: %s with variables: %s", query, variables)
-        # Execute the query using the session
-        response = self.session.post(
-            self.endpoint,
-            json={'query': query, 'variables': variables},
-            headers=self.headers
-        )
+        # Set up retry parameters
+        retry_count = 0
+
+        # Perform the request with retries
+        while True:
+            try:
+                # Execute the query using the session
+                response = self.session.post(
+                    self.endpoint,
+                    json={'query': query, 'variables': variables},
+                    headers=self.headers
+                )
+
+                # If we get a 429 (Too Many Requests) or 5xx server error, retry
+                if response.status_code == 429 or 500 <= response.status_code < 600:
+                    if retry_count < max_retries:
+                        retry_count += 1
+                        wait_time = retry_delay * (2 ** (retry_count - 1))  # Exponential backoff
+                        logger.warning(f"Request failed with status {response.status_code}. Retrying in {wait_time}s (attempt {retry_count}/{max_retries})")
+                        time.sleep(wait_time)
+                        continue
+
+                # Break the loop if no retry needed or retries exhausted
+                break
+
+            except (requests.ConnectionError, requests.Timeout) as e:
+                # Network-related errors
+                if retry_count < max_retries:
+                    retry_count += 1
+                    wait_time = retry_delay * (2 ** (retry_count - 1))
+                    logger.warning(f"Request failed with error: {str(e)}. Retrying in {wait_time}s (attempt {retry_count}/{max_retries})")
+                    time.sleep(wait_time)
+                else:
+                    logger.error(f"Request failed after {max_retries} retries: {str(e)}")
+                    raise
+
         # End timing
         execution_time = time.time() - start_time
         logger.info("GraphQL query execution completed in %.2f seconds", execution_time)
