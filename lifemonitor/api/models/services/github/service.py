@@ -344,6 +344,13 @@ class GithubTestingService(TestingService):
         This method is used to refresh the test instances data from the remote service.
         """
         logger.info("Starting update of test %d instances ...", len(test_instances))
+        # Set reference to the cache manager
+        cache_manager = self.test_instance_cache
+
+        # Set of instance not initialized yet
+        uninitialized_instances: set[models.TestInstance] = set()
+
+        # Keep total execution time
         # extract the set of workflow urls from test instances
         urls_map = {}
         for instance in test_instances:
@@ -351,12 +358,28 @@ class GithubTestingService(TestingService):
             if instance.resource not in urls_map:
                 urls_map[url] = []
             urls_map[url].append(instance)
+            # check if the instance is in cache
+            if not cache_manager.get_update_timestamp(instance.uuid):
+                uninitialized_instances.add(instance)
         logger.info("Collected %d URLs of workflows to update...", len(urls_map))
         for url, instances in urls_map.items():
             logger.debug("Updating workflow %s with instances: %r", url, instances)
 
+        # Process uninitialized instances
+        if len(uninitialized_instances) == 0:
+            logger.info("No uninitialized test instances found.")
+            return
+        else:
+            logger.info("Processing uninitialized test instances...")
+            start_time = time.time()
+            for instance in uninitialized_instances:
+                self.get_test_builds(instance)
+            elapsed_time = time.time() - start_time
+            logger.info("Processed %d uninitialized test instances in %.2f seconds",
+                        len(uninitialized_instances), elapsed_time)
+
         # Fetch the workflows from the remote service
-        logger.info("Fetching workflows from Github in batches of 20...")
+        logger.info("Fetching workflow (runs) updates from Github in batches of 20...")
         workflows = {}
         start_time = time.time()
         url_keys = list(urls_map.keys())
@@ -373,11 +396,9 @@ class GithubTestingService(TestingService):
         for w, wdata in workflows.items():
             logger.info("- Processing workflow %s...", w)
             logger.info("- Processing test instances related to the workflow %s", w)
-
             logger.info("Searching for matching test instances for workflow %s ...", w)
             for instance in urls_map[w]:
                 logger.info("Processing test instance %r ...", instance.uuid)
-                cache_manager = self.test_instance_cache
                 instance_runs = cache_manager.get_latest_run_ids(instance.uuid)
                 workflow_runs = wdata.get("workflow_runs", [])
                 logger.info("Found %d workflow runs for workflow %s", len(workflow_runs), w)
