@@ -248,7 +248,8 @@ class GithubTestingService(TestingService):
         # Update the test builds cache if needed
         self.__update_test_builds_cache__(test_instance)
         elapsed_time = time.time() - start_time
-        logger.debug("Cache update took %.2f seconds for test instance %s", elapsed_time, test_instance.uuid)
+        if elapsed_time > 0.100:
+            logger.info("Cache of test builds for test instance %s updated in %.2f seconds", test_instance.uuid, elapsed_time)
 
         # Start timing for fetching runs from cache
         start_time = time.time()
