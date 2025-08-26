@@ -62,7 +62,8 @@ class RunCache:
             return False
         finally:
             try:
-                lock.release()
+                if lock and lock.locked():
+                    lock.release()
             except redis_lock.NotAcquired as e:
                 logger.error(f"Error releasing lock for run {run_id}: {e}")
                 if logger.isEnabledFor(logging.DEBUG):
@@ -97,7 +98,8 @@ class RunCache:
             return False
         finally:
             try:
-                lock.release()
+                if lock and lock.locked():
+                    lock.release()
             except redis_lock.NotAcquired as e:
                 logger.error(f"Error releasing lock for run {run_id}: {e}")
                 if logger.isEnabledFor(logging.DEBUG):
@@ -141,13 +143,14 @@ class RunCache:
         except Exception as e:
             logger.exception(e)
         finally:
-            if lock and lock.locked():
-                try:
+            try:
+                if lock and lock.locked():
                     lock.release()
-                except redis_lock.NotAcquired as e:
-                    logger.error(f"Error releasing lock for run {run_id}: {e}")
-                    if logger.isEnabledFor(logging.DEBUG):
-                        logger.exception(e)
+                    logger.debug(f"Released lock: {lock.id}")
+            except redis_lock.NotAcquired as e:
+                logger.error(f"Error releasing lock for run {run_id}: {e}")
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.exception(e)
 
     def batch_delete_runs(self, workflow_id, runs, use_lock=False, pipe=None, max_retry=3):
         lock = None
@@ -181,13 +184,14 @@ class RunCache:
             logger.error(f"Batch delete failed after {max_retry} attempts.")
             return False
         finally:
-            if lock and lock.locked():
-                try:
+            try:
+                if lock and lock.locked():
                     lock.release()
-                except redis_lock.NotAcquired as e:
-                    logger.error(f"Error releasing lock for run {run_id}: {e}")
-                    if logger.isEnabledFor(logging.DEBUG):
-                        logger.exception(e)
+                    logger.debug(f"Released lock: {lock.id}")
+            except redis_lock.NotAcquired as e:
+                logger.error(f"Error releasing lock for run {run_id}: {e}")
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.exception(e)
 
     # --- Read Operations (no locking) ---
 

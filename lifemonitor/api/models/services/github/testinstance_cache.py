@@ -80,7 +80,8 @@ class TestInstanceCache:
             return False
         finally:
             try:
-                lock.release()
+                if lock and lock.locked():
+                    lock.release()
             except redis_lock.NotAcquired as e:
                 logger.error(f"Error releasing lock for associating run {run_id} to test instance {test_instance_id}: {e}")
                 if logger.isEnabledFor(logging.DEBUG):
@@ -108,7 +109,8 @@ class TestInstanceCache:
             return False
         finally:
             try:
-                lock.release()
+                if lock and lock.locked():
+                    lock.release()
             except redis_lock.NotAcquired as e:
                 logger.error(f"Error releasing lock for disassociating run {run_id} from test instance {test_instance_id}: {e}")
                 if logger.isEnabledFor(logging.DEBUG):
@@ -147,7 +149,8 @@ class TestInstanceCache:
             return False
         finally:
             try:
-                lock.release()
+                if lock and lock.locked():
+                    lock.release()
             except redis_lock.NotAcquired as e:
                 logger.error(f"Error releasing lock for batch associate: {e}")
                 if logger.isEnabledFor(logging.DEBUG):
@@ -182,7 +185,8 @@ class TestInstanceCache:
             return False
         finally:
             try:
-                lock.release()
+                if lock and lock.locked():
+                    lock.release()
             except redis_lock.NotAcquired as e:
                 logger.error(f"Error releasing lock for batch disassociate: {e}")
                 if logger.isEnabledFor(logging.DEBUG):
@@ -329,8 +333,14 @@ class TestInstanceCache:
             logger.error(f"Atomic associate and insert failed for run {run_id}: {e}")
             return False
         finally:
-            if lock:
-                lock.release()
+            try:
+                if lock and lock.locked():
+                    lock.release()
+                    logger.debug(f"Released lock: {lock.id}")
+            except Exception as e:
+                logger.error(f"Error releasing lock: {e}")
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.exception(e)
 
     def _batch_associate_and_insert_runs_internal(self, test_instance_id, workflow_id, runs, use_lock, max_retry):
         lock = None
@@ -370,8 +380,14 @@ class TestInstanceCache:
             logger.error(f"Batch associate and insert failed after {max_retry} attempts.")
             return False
         finally:
-            if lock:
-                lock.release()
+            try:
+                if lock and lock.locked():
+                    lock.release()
+                    logger.debug(f"Released lock: {lock.id}")
+            except Exception as e:
+                logger.error(f"Error releasing lock: {e}")
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.exception(e)
 
     def _disassociate_and_delete_run_internal(self, test_instance_id, workflow_id, run_id, ref, use_lock):
         lock = None
@@ -396,8 +412,14 @@ class TestInstanceCache:
             logger.error(f"Atomic disassociate and delete failed for run {run_id}: {e}")
             return False
         finally:
-            if lock:
-                lock.release()
+            try:
+                if lock and lock.locked():
+                    lock.release()
+                    logger.debug(f"Released lock: {lock.id}")
+            except Exception as e:
+                logger.error(f"Error releasing lock: {e}")
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.exception(e)
 
     def _batch_disassociate_and_delete_runs_internal(self, test_instance_id, workflow_id, runs, use_lock, max_retry):
         lock = None
@@ -429,5 +451,11 @@ class TestInstanceCache:
             logger.error(f"Batch disassociate and delete failed after {max_retry} attempts.")
             return False
         finally:
-            if lock:
-                lock.release()
+            try:
+                if lock and lock.locked():
+                    lock.release()
+                    logger.debug(f"Released lock: {lock.id}")
+            except Exception as e:
+                logger.error(f"Error releasing lock: {e}")
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.exception(e)
