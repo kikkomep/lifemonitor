@@ -172,7 +172,7 @@ class GithubTestingService(TestingService):
             raise lm_exceptions.RateLimitExceededException(detail=str(e), instance=test_instance)
 
     def __update_test_builds_cache__(self, test_instance: models.TestInstance,
-                                     update_interval: int = Timeout.BUILD) -> bool:
+                                     update_interval: int = None) -> bool:
         """
         Fetch the test builds for a given test instance from GitHub
         only if the test instance builds_refreshed_at is None or older than 10 minutes.
@@ -185,6 +185,10 @@ class GithubTestingService(TestingService):
         #     "test_instance must be an instance of TestInstance"
         # assert test_instance.testing_service_id == self.uuid, \
         #     "test_instance must be associated with this testing service"
+
+        # Check if the update interval is set
+        if update_interval is None:
+            update_interval = Timeout.BUILD
 
         # Retrieve the last refresh timestamp from the test_instance cache
         # and check if it is recent (less than 10 minutes ago)
