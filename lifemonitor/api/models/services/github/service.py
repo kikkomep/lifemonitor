@@ -378,7 +378,17 @@ class GithubTestingService(TestingService):
             for instance in urls_map[w]:
                 logger.info("Processing test instance %r ...", instance.uuid)
                 cache_manager = self.test_instance_cache
-                for run in wdata["workflow_runs"]:
+                instance_runs = cache_manager.get_latest_run_ids(instance.uuid)
+                workflow_runs = wdata.get("workflow_runs", [])
+                logger.info("Found %d workflow runs for workflow %s", len(workflow_runs), w)
+                for run in workflow_runs:
+                    if instance_runs and run["id"] in instance_runs:
+                        logger.info("Found matching run %d for test instance %r", run["id"], instance.uuid)
+                        cached_run = cache_manager.get_run_by_id(w, run["id"])
+                        if cached_run and cached_run["conclusion"]:
+                            logger.info("Found completed cached run for workflow %s: %r", w, cached_run["id"])
+                            continue
+                    # Try to match the test instance with the workflow run
                     params = (run["head_branch"], run["head_branch"], run["created_at"])
                     match = match_test_instance_params(instance, params)
                     if match:
