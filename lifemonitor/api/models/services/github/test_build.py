@@ -85,19 +85,25 @@ class GithubTestBuild(models.TestBuild):
 
     @property
     def status(self) -> str:
-        if self._metadata.status == GithubStatus.IN_PROGRESS:
-            return models.BuildStatus.RUNNING
-        if self._metadata.status == GithubStatus.QUEUED:
-            return models.BuildStatus.WAITING
-        if self._metadata.status != GithubStatus.COMPLETED:
-            logger.error("Unexpected run status value '%s'!!", self._metadata.status)
-            # Try to keep going notwithstanding the unexpected status
-        if self._metadata.conclusion == GithubConclusion.SUCCESS:
-            return models.BuildStatus.PASSED
-        if self._metadata.conclusion == GithubConclusion.CANCELLED:
-            return models.BuildStatus.ABORTED
-        if self._metadata.conclusion == GithubConclusion.FAILURE:
-            return models.BuildStatus.FAILED
+        logger.debug("Determining status for build with metadata: status=%s, conclusion=%s",
+                     self._metadata.status, self._metadata.conclusion)
+        if self._metadata.status:
+            status = self._metadata.status.lower()
+            if status == GithubStatus.IN_PROGRESS:
+                return models.BuildStatus.RUNNING
+            if status == GithubStatus.QUEUED:
+                return models.BuildStatus.WAITING
+            if not status or status != GithubStatus.COMPLETED:
+                logger.error("Unexpected run status value '%s'!!", status)
+                # Try to keep going notwithstanding the unexpected status
+        if self._metadata.conclusion:
+            conclusion = self._metadata.conclusion.lower()
+            if conclusion == GithubConclusion.SUCCESS:
+                return models.BuildStatus.PASSED
+            if conclusion == GithubConclusion.CANCELLED:
+                return models.BuildStatus.ABORTED
+            if conclusion == GithubConclusion.FAILURE:
+                return models.BuildStatus.FAILED
         return models.BuildStatus.ERROR
 
     @property
