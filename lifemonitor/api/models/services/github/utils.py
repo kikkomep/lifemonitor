@@ -156,6 +156,8 @@ def get_workflow_params(test_instance: TestInstance, interval_as_tuple: bool = F
             detail="Error retrieving workflow parameters",
             original_exception=str(e))
 
+    logger.debug("Workflow parameters for test instance %s: branch=%s, tag=%s, created=%s",
+                 test_instance.uuid, branch, tag, created)
     return branch, tag, created
 
 
