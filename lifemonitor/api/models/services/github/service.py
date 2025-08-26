@@ -351,6 +351,8 @@ class GithubTestingService(TestingService):
         uninitialized_instances: set[models.TestInstance] = set()
 
         # Keep total execution time
+        total_start_time = time.time()
+
         # extract the set of workflow urls from test instances
         urls_map = {}
         for instance in test_instances:
@@ -420,4 +422,8 @@ class GithubTestingService(TestingService):
                 cache_manager.set_update_timestamp(instance.uuid)
         elapsed_time = time.time() - start_time
         logger.info("Mapping fetched workflows to test instances completed in %.2f seconds", elapsed_time)
+
+        # Keep total execution time
+        total_elapsed_time = time.time() - total_start_time
+        logger.info("Total execution time for 'check_last_build' task: %.2f seconds", total_elapsed_time)
         return workflows
