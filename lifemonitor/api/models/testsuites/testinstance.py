@@ -146,6 +146,27 @@ class TestInstance(db.Model, ModelMixin):
     def get_test_build(self, build_number):
         return self.testing_service.get_test_build(self, build_number)
 
+    def has_changed_state(self) -> bool:
+        # Check if the test instance has changed its state
+        # only considering transitions between FAILED and PASSED statuses
+
+        # Get the last several builds to find relevant status changes
+        builds = self.get_test_builds(limit=10)
+
+        if not builds:
+            # No builds available
+            return False
+
+        # Filter to get only builds with relevant statuses (PASSED or FAILED)
+        relevant_builds = [b for b in builds if b.status in (BuildStatus.PASSED, BuildStatus.FAILED)]
+
+        if len(relevant_builds) < 2:
+            # Not enough relevant builds to detect a change
+            return False
+
+        # Check if the status has changed between the last two relevant builds
+        return relevant_builds[0].status != relevant_builds[1].status
+
     def to_dict(self, test_build=False, test_output=False):
         data = {
             'uuid': str(self.uuid),

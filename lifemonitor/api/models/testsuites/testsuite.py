@@ -90,6 +90,11 @@ class TestSuite(db.Model, ModelMixin):
     def status(self) -> models.SuiteStatus:
         return models.SuiteStatus(self)
 
+    def has_changed_state(self) -> bool:
+        # Check if the test suite has changed its state
+        # from failing to passing or vice versa, or from unknown to a defined state
+        return any(ti.has_changed_state() for ti in self.test_instances)
+
     def get_test_instance_by_name(self, name) -> list:
         result = []
         for ti in self.test_instances:
