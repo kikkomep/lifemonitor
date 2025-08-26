@@ -368,22 +368,25 @@ class GithubTestingService(TestingService):
         logger.info("Fetched %d workflows in %.2f seconds", len(workflows), elapsed_time)
 
         # Map runs to test instances and update test_instance cache
+        logger.info("Mapping fetched workflows to test instances...")
+        start_time = time.time()
         for w, wdata in workflows.items():
-            logger.debug("- Processing workflow %s...", w)
-            logger.debug("- Processing test instances related to the workflow %s", w)
+            logger.info("- Processing workflow %s...", w)
+            logger.info("- Processing test instances related to the workflow %s", w)
 
+            logger.info("Searching for matching test instances for workflow %s ...", w)
             for instance in urls_map[w]:
-                logger.debug("-- Updating test instance %s for workflow %s", instance.uuid, w)
+                logger.info("Processing test instance %r ...", instance.uuid)
                 cache_manager = self.test_instance_cache
-                logger.warning("Workflow DATA: %r", wdata)
                 for run in wdata["workflow_runs"]:
                     params = (run["head_branch"], run["head_branch"], run["created_at"])
                     match = match_test_instance_params(instance, params)
-                    logger.warning("Matching: %r", match)
                     if match:
+                        logger.info("Found matching test instance %r: %r", instance.uuid, params)
                         cache_manager\
                             .associate_and_insert_run(instance.uuid, w,
                                                       run["id"], run["head_branch"], run, True)
                 cache_manager.set_update_timestamp(instance.uuid)
-
+        elapsed_time = time.time() - start_time
+        logger.info("Mapping fetched workflows to test instances completed in %.2f seconds", elapsed_time)
         return workflows

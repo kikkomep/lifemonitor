@@ -120,14 +120,14 @@ def get_workflow_params(test_instance: TestInstance, interval_as_tuple: bool = F
             logger.debug("No revision found for workflow version %r", test_instance.test_suite.workflow_version)
 
     except Exception as e:
-        logger.warning("Unable to retrieve workflow parameters for test instance %s", test_instance.uuid)
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug("Exception details: %s", e)
 
     # Fallback to the workflow version creation date range if no branch or tag is found
     try:
         if not revision or revision is github.GithubObject.NotSet:
-            logger.debug("No branch or tag found for revision %r", revision)
+            logger.warning("Unable to extract branch/tag information from revision for test instance %s. "
+                           "Falling back to workflow version timestamps for parameter identification.", test_instance.uuid)
             workflow_version = test_instance.test_suite.workflow_version
             logger.debug("Checking Workflow version: %r (previous: %r, next: %r)",
                          workflow_version, workflow_version.previous_version, workflow_version.next_version)
