@@ -120,7 +120,7 @@ def get_workflow_params(test_instance: TestInstance, interval_as_tuple: bool = F
             logger.debug("No revision found for workflow version %r", test_instance.test_suite.workflow_version)
 
     except Exception as e:
-        logger.exception("Error retrieving workflow parameters for test instance %s", test_instance.uuid)
+        logger.warning("Unable to retrieve workflow parameters for test instance %s", test_instance.uuid)
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug("Exception details: %s", e)
 
