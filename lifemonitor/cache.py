@@ -71,7 +71,7 @@ class Timeout:
     REQUEST = _get_timeout(_get_timeout_key('REQUEST'), default=30)
     SESSION = _get_timeout(_get_timeout_key('SESSION'), default=3600)
     WORKFLOW = _get_timeout(_get_timeout_key('WORKFLOW'), default=1800)
-    BUILD = _get_timeout(_get_timeout_key('BUILD'), default=300)
+    BUILD = _get_timeout(_get_timeout_key('BUILD'), default=600)
 
     @classmethod
     def update(cls, config=None):
