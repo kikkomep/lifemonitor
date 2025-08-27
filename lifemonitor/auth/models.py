@@ -386,10 +386,10 @@ class EventType(Enum):
 class Resource(db.Model, ModelMixin):
 
     id = db.Column('id', db.Integer, primary_key=True)
-    uuid = db.Column(UUID, default=_uuid.uuid4)
+    uuid = db.Column(UUID, default=_uuid.uuid4, index=True)
     type = db.Column(db.String, nullable=False)
     name = db.Column(db.String, nullable=True)
-    uri = db.Column(db.String, nullable=False)
+    uri = db.Column(db.String, nullable=False, index=True)
     version = db.Column(db.String, nullable=True)
     created = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     modified = db.Column(db.DateTime, default=datetime.datetime.utcnow,
@@ -414,6 +414,14 @@ class Resource(db.Model, ModelMixin):
     def __repr__(self):
         return '<{} {}: {} -> uri={} (type={}))>'.format(
             self.__class__.__name__, self.id, self.uuid, self.uri, self.type)
+
+    def __hash__(self):
+        return hash((self.uuid, self.uri, self.type))
+
+    def __eq__(self, other):
+        if not isinstance(other, Resource):
+            return False
+        return self.uuid == other.uuid and self.uri == other.uri and self.type == other.type
 
     @hybrid_property
     def authorizations(self):
