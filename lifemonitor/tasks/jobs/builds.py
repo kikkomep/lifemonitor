@@ -25,10 +25,8 @@ import time
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
-from lifemonitor.api.models.notifications import WorkflowStatusNotification
-from lifemonitor.api.models.testsuites.testbuild import BuildStatus, TestBuild
-from lifemonitor.api.serializers import BuildSummarySchema
-from lifemonitor.auth.models import EventType, Notification
+from lifemonitor.api.models.testsuites.testbuild import TestBuild
+from lifemonitor.api.models.testsuites.testinstance import TestInstance
 from lifemonitor.cache import Timeout
 from lifemonitor.tasks.scheduler import TASK_EXPIRATION_TIME, schedule
 from lifemonitor.utils import notify_workflow_version_updates
@@ -133,24 +131,6 @@ def check_last_build():
                                 last_build = i.last_test_build
                                 logger.debug("Latest build: %r", last_build)
 
-                                # check state transition
-                                if last_build:
-                                    logger.debug("Latest build status: %r", last_build.status)
-                                    failed = last_build.status == BuildStatus.FAILED
-                                    if len(builds) == 1 or \
-                                            builds[0].status in (BuildStatus.FAILED, BuildStatus.PASSED) and \
-                                            builds[1].status in (BuildStatus.FAILED, BuildStatus.PASSED) and \
-                                            len(builds) > 1 and builds[1].status != last_build.status:
-                                        logger.debug("Updating latest build: %r", last_build)
-                                        notification_name = f"{last_build} {'FAILED' if failed else 'RECOVERED'}"
-                                        if len(Notification.find_by_name(notification_name)) == 0:
-                                            users = workflow_version.workflow.get_subscribers()
-                                            n = WorkflowStatusNotification(
-                                                EventType.BUILD_FAILED if failed else EventType.BUILD_RECOVERED,
-                                                notification_name,
-                                                {'build': BuildSummarySchema(exclude_nested=False).dump(last_build)},
-                                                users)
-                                            n.save()
                     # save workflow version and notify updates
                     workflow_version.save()
                     notify_workflow_version_updates([workflow_version], type='sync')
