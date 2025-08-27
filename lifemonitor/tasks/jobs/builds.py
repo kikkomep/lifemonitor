@@ -25,9 +25,10 @@ import time
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
+from lifemonitor.api.models import TestingService, Workflow
 from lifemonitor.api.models.testsuites.testbuild import TestBuild
 from lifemonitor.api.models.testsuites.testinstance import TestInstance
-from lifemonitor.cache import Timeout
+from lifemonitor.cache import Timeout, cache
 from lifemonitor.tasks.scheduler import TASK_EXPIRATION_TIME, schedule
 from lifemonitor.utils import notify_workflow_version_updates
 
@@ -82,8 +83,6 @@ def check_workflows():
 @schedule(trigger=IntervalTrigger(seconds=Timeout.BUILD * 3 / 4),
           queue_name='builds', options={'max_retries': 3, 'max_age': TASK_EXPIRATION_TIME})
 def check_last_build():
-    from lifemonitor.api.models import TestingService, Workflow
-    from lifemonitor.cache import cache
 
     all_start = time.time()
     logger.info("Starting 'check_last_build' task...")
