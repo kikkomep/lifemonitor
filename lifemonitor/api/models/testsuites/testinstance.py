@@ -27,6 +27,7 @@ from typing import List
 
 import lifemonitor.api.models as models
 from lifemonitor.api.models import db
+from lifemonitor.api.models.testsuites.testbuild import BuildStatus
 from lifemonitor.cache import Timeout, cached
 from lifemonitor.models import JSON, UUID, ModelMixin
 
