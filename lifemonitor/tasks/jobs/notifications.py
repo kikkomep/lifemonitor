@@ -41,7 +41,7 @@ logger.info("Importing task definitions")
 
 
 @schedule(trigger=IntervalTrigger(seconds=60),
-          queue_name="instance_status_notifications", options={'max_retries': 0, 'max_age': TASK_EXPIRATION_TIME})
+          queue_name="notifications", options={'max_retries': 0, 'max_age': TASK_EXPIRATION_TIME})
 def send_test_instance_status_changed_notification():
     # Handle notification for updated instances
     for instance in TestInstance.all():
