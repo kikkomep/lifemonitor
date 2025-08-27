@@ -52,6 +52,7 @@ def create_app(
     settings=None,
     init_app=True,
     init_integrations=True,
+    maintenance_mode=False,
     worker=False,
     load_jobs=True,
     **kwargs,
@@ -96,7 +97,8 @@ def create_app(
     if init_app:
         with app.app_context() as ctx:
             initialize_app(
-                app, ctx, load_jobs=load_jobs, load_integrations=init_integrations
+                app, ctx, load_jobs=load_jobs, load_integrations=init_integrations,
+                maintenance_mode=maintenance_mode
             )
 
     @app.route("/")
@@ -170,6 +172,7 @@ def initialize_app(
     prom_registry=None,
     load_jobs: bool = True,
     load_integrations: bool = True,
+    maintenance_mode: bool = False
 ):
     # init tmp folder
     os.makedirs(app.config.get("BASE_TEMP_FOLDER"), exist_ok=True)
@@ -178,7 +181,7 @@ def initialize_app(
     # configure logging
     config.configure_logging(app)
     # check if the app is running in maintenance mode
-    if app.config.get("MAINTENANCE_MODE", False):
+    if app.config.get("MAINTENANCE_MODE", maintenance_mode) or maintenance_mode:
         logger.warning("Application is running in maintenance mode")
         # init Redis connection
         redis.init(app)
