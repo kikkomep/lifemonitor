@@ -95,9 +95,11 @@ def check_last_build():
     if gh_service:
         start_time = time.time()
         logger.info("Starting update of all test instances...")
+        updated_instances = set()
         try:
-            gh_service.batch_update_workflows(
+            updated_instances = gh_service.batch_update_workflows(
                 TestInstance.find_by_testing_service(gh_service))
+            logger.warning(f"Updated {len(updated_instances)} test instances managed by the Github Service.")
         finally:
             elapsed_time = time.time() - start_time
             logger.info(f"Update of all test instances completed in {elapsed_time:.2f} seconds.")
