@@ -702,25 +702,19 @@ def test_batch_update_single_workflow(
         github_service: models.GithubTestingService,
         git_ref,
         test_instance):
-    # gql = github_service._gh_graphql_service
-    # runs = gql.fetch_workflows_runs_by_urls([
-    #     "https://github.com/kikkomep/lifemonitor/actions/workflows/main.yaml"
-    # ])
-    # for run in runs:
-    #     logger.debug("Workflow run: %r", run)
 
-    logger.warning(test_instance.external_link)
+    logger.debug(test_instance.external_link)
 
     # Create a list with both the original and cloned test instances
     test_instances = [test_instance]
     logger.debug("Test instances: %r", test_instances)
 
-    workflows = github_service.batch_update_workflows(test_instances)
-    # logger.debug("Batch update result: %r", workflows)
+    test_instances = github_service.batch_update_workflows(test_instances)
 
     # check length of workflows
-    assert len(workflows) == 1, "Unexpected number of workflows returned"
+    assert len(test_instances) == 1, "Unexpected number of test instances returned"
 
-    # Extract the first workflow ID
-    workflow_id = list(workflows.keys())[0]
-    assert workflow_id == test_instances[0].external_link, "Unexpected workflow returned"
+    # Check the updated test instance
+    updated_instance = test_instances.pop()
+    assert updated_instance.external_link == test_instance.external_link, "Unexpected external link"
+    assert updated_instance.test_suite.workflow_version == test_instance.test_suite.workflow_version, "Unexpected workflow version"
