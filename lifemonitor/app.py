@@ -223,5 +223,19 @@ def initialize_app(
         commands.register_commands(app)
         # register the domain filter with Jinja
         app.jinja_env.filters["domain"] = get_domain
+        # initialize the profiler
+        if app.config.get("ENABLE_PROFILER", False):
+            from werkzeug.middleware.profiler import ProfilerMiddleware
+            profiler_default_dir = f"{app.config.get('BASE_TEMP_FOLDER', '/tmp')}/profiler"
+            profiler_dir = app.config.get("PROFILER_PATH", profiler_default_dir)
+            os.makedirs(profiler_dir, exist_ok=True)
+            app.config["PROFILE"] = True
+            if app.wsgi_app is None or not isinstance(app.wsgi_app, ProfilerMiddleware):
+                app.wsgi_app = ProfilerMiddleware(
+                    app.wsgi_app,
+                    restrictions=[30],
+                    profile_dir=profiler_dir,
+                    filename_format="{method}-{path}-{time:.0f}-{elapsed:.0f}ms.prof",
+                )
         # log initialization end
         logger.info("LifeMonitor App initialized!")
