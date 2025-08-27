@@ -141,9 +141,11 @@ class ROCrate(Resource):
                     # Instantiate the proper local repository object
                     local_repository = None
                     if LocalWorkflowRepository.is_git_repo(tmp_dir):
-                        local_repository = LocalGitWorkflowRepository.from_path(tmp_dir, self.uri)
+                        local_repository = LocalGitWorkflowRepository(
+                            local_path=tmp_dir, remote_url=self.uri)
                     else:
-                        local_repository = LocalWorkflowRepository.from_path(tmp_dir, self.uri)
+                        local_repository = LocalWorkflowRepository(
+                            local_path=tmp_dir, remote_url=self.uri)
                     # Instantiate the ROCrate reader
                     self.__crate_reader__ = WorkflowRepositoryMetadata(
                         local_repository, init=False)
