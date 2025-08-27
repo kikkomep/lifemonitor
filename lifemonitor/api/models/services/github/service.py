@@ -280,7 +280,7 @@ class GithubTestingService(TestingService):
             logger.debug("Building GithubTestBuild objects took %.2f seconds for test instance %s", elapsed_time, test_instance.uuid)
 
         total_elapsed_time = time.time() - total_start_time
-        logger.info("Total time for getting test builds for test instance %s is %.2f seconds", test_instance.uuid, total_elapsed_time)
+        logger.debug("Total time for getting test builds for test instance %s is %.2f seconds", test_instance.uuid, total_elapsed_time)
         return builds
 
     def get_test_build(self, test_instance: models.TestInstance, build_number: str) -> GithubTestBuild:
@@ -319,7 +319,7 @@ class GithubTestingService(TestingService):
                 )
 
             total_elapsed_time = time.time() - total_start_time
-            logger.info("Total time for getting test build for test instance %s is %.2f seconds", test_instance.uuid, total_elapsed_time)
+            logger.debug("Total time for getting test build for test instance %s is %.2f seconds", test_instance.uuid, total_elapsed_time)
             return build
 
         except GithubRateLimitExceededException as e:
@@ -414,7 +414,8 @@ class GithubTestingService(TestingService):
                         logger.info("Found matching run %d for test instance %r", run["id"], instance.uuid)
                         cached_run = cache_manager.get_run_by_id(w, run["id"])
                         if cached_run and cached_run["conclusion"]:
-                            logger.info("Found completed cached run for workflow %s: %r", w, cached_run["id"])
+                            logger.info("The workflow run %d for test instance %r is in cache and completed",
+                                        run["id"], instance.uuid)
                             continue
                     # Try to match the test instance with the workflow run
                     params = (run["head_branch"], run["head_branch"], run["created_at"])
