@@ -28,7 +28,7 @@ from typing import List
 import lifemonitor.api.models as models
 from lifemonitor.api.models import db
 from lifemonitor.auth.models import User
-from lifemonitor.cache import Timeout, cached
+# from lifemonitor.cache import Timeout, cached
 from lifemonitor.models import JSON, UUID, ModelMixin
 
 # set module level logger
@@ -86,7 +86,7 @@ class TestSuite(db.Model, ModelMixin):
         return hash(self.uuid)
 
     @property
-    @cached(timeout=Timeout.NONE, client_scope=False, skip=skip_cached_status)
+    # @cached(timeout=Timeout.NONE, client_scope=False, skip=skip_cached_status)
     def status(self) -> models.SuiteStatus:
         return models.SuiteStatus(self)
 

@@ -79,6 +79,7 @@ def test_cache_timeout(app_context, redis_cache):
     assert cache.has(key) is False, f"Key {key} should not be in cache after {timeout} secs"
 
 
+@pytest.mark.skip(reason="Old-style cache is disabled by default")
 def test_cache_last_build(app_context, redis_cache, user1, mocker):
     valid_workflow = 'sort-and-change-case'
     cache.clear()
@@ -106,6 +107,7 @@ def test_cache_last_build(app_context, redis_cache, user1, mocker):
     assert build == cached_build, "Build should be equal to the cached build"
 
 
+@pytest.mark.skip(reason="Old-style cache is disabled by default")
 def test_cache_test_builds(app_context, redis_cache, user1, mocker):
     valid_workflow = 'sort-and-change-case'
     cache.clear()
@@ -149,6 +151,7 @@ def setup_test_cache_last_build_update(app_context, redis_cache, user1):
     return w
 
 
+@pytest.mark.skip(reason="Old-style cache is disabled by default")
 def test_cache_last_build_update(app_context, redis_cache, user1):
     w = setup_test_cache_last_build_update(app_context, redis_cache, user1)
     cache.reset_locks()
@@ -335,6 +338,7 @@ def cache_last_build_update(app, w, user1, check_cache_size=True, index=0,
         return return_value
 
 
+@pytest.mark.skip(reason="Old-style cache is disabled by default")
 def test_cache_task_last_build(app_context, redis_cache, user1):
     valid_workflow = 'sort-and-change-case'
     logger.debug("Cache content: %r", cache.keys)
