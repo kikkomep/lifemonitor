@@ -6,7 +6,7 @@ click-option-group~=0.5.5
 connexion[swagger-ui]~=2.14.2
 cryptography>=44.0.1
 dnspython==2.7.0
-dramatiq[redis,watch]==1.17.1
+dramatiq[redis,watch]==1.18.0
 email-validator~=2.2.0
 eventlet==0.39.0
 flask-cors==6.0.0
@@ -46,7 +46,7 @@ python-jenkins==1.7.0
 python-redis-lock~=4.0.0
 PyGithub==1.55
 PyYAML~=6.0.1
-redis~=4.5.5
+redis~=6.4.0
 repo2rocrate~=0.1.2
 requests~=2.32.3
 rich~=13.9.4
