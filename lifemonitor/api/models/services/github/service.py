@@ -338,7 +338,7 @@ class GithubTestingService(TestingService):
     def get_test_build_output(self, test_instance: models.TestInstance, build_number, offset_bytes=0, limit_bytes=131072):
         raise lm_exceptions.NotImplementedException(detail="not supported for GitHub test builds")
 
-    def batch_update_workflows(self, test_instances: list[models.TestInstance]) -> list[GithubTestBuild]:
+    def batch_update_workflows(self, test_instances: list[models.TestInstance]) -> list[models.TestInstance]:
         """
         Batch update the given test instances with the latest data from the remote service.
         This method is used to refresh the test instances data from the remote service.
@@ -346,6 +346,9 @@ class GithubTestingService(TestingService):
         logger.info("Starting update of test %d instances ...", len(test_instances))
         # Set reference to the cache manager
         cache_manager = self.test_instance_cache
+
+        # Keep track of updated instances
+        updated_instances: set[models.TestInstance] = set()
 
         # Set of instance not initialized yet
         uninitialized_instances: set[models.TestInstance] = set()
@@ -366,6 +369,9 @@ class GithubTestingService(TestingService):
         logger.info("Collected %d URLs of workflows to update...", len(urls_map))
         for url, instances in urls_map.items():
             logger.debug("Updating workflow %s with instances: %r", url, instances)
+
+        # Add uninitialized instances to updated instances
+        updated_instances.update(uninitialized_instances)
 
         # Process uninitialized instances
         if len(uninitialized_instances) == 0:
@@ -419,10 +425,14 @@ class GithubTestingService(TestingService):
                             .associate_and_insert_run(instance.uuid, w,
                                                       run["id"], run["head_branch"], run, True)
                 cache_manager.set_update_timestamp(instance.uuid)
+                # Add instance to updated instances
+                updated_instances.add(instance)
+
+        # Compute elapsed time
         elapsed_time = time.time() - start_time
         logger.info("Mapping fetched workflows to test instances completed in %.2f seconds", elapsed_time)
 
         # Keep total execution time
         total_elapsed_time = time.time() - total_start_time
         logger.info("Total execution time for 'check_last_build' task: %.2f seconds", total_elapsed_time)
-        return workflows
+        return updated_instances
