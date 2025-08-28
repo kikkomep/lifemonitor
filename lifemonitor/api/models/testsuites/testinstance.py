@@ -128,8 +128,7 @@ class TestInstance(db.Model, ModelMixin):
     # Uncomment if you want to cache the last test build
     # @cached(timeout=Timeout.BUILD, client_scope=False, transactional_update=True)
     def get_last_test_build(self):
-        builds = self.get_test_builds(limit=10)
-        return builds[0] if builds and len(builds) > 0 else None
+        return self.testing_service.get_last_test_build(self)
 
     # Uncomment if you want to cache the test builds
     # @cached(timeout=Timeout.BUILD, client_scope=False, transactional_update=True)

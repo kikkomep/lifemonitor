@@ -140,8 +140,9 @@ class GithubTestingService(TestingService):
         try:
             logger.debug("Getting latest build...")
             builds = self.get_test_builds(test_instance, limit=1)
-            logger.debug("Latest build found: %s", builds[0])
-            return builds[0] if builds else None
+            last_test_build = builds[0] if builds else None
+            logger.debug("Latest build found: %s", last_test_build)
+            return last_test_build
         except GithubRateLimitExceededException as e:
             raise lm_exceptions.RateLimitExceededException(detail=str(e), instance=test_instance)
 
