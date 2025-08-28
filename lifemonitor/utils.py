@@ -1661,3 +1661,42 @@ def decrypt_folder(input_folder: str, output_folder: str,
         if raise_error:
             raise lm_exceptions.LifeMonitorException(detail=str(e))
     return count
+
+
+class Settings:
+    # Prefix for settings
+    prefix = None
+    # Suffix for settings
+    suffix = None
+
+    @classmethod
+    def update_class_settings(cls, config=None):
+        config = config or getattr(cls, 'config', None)
+
+        for attr, default in cls._get_settings_class_attrs():
+            key = cls._get_key(attr)
+            value = None
+            try:
+                if config is not None:
+                    value = config.get(key)
+            except Exception as e:
+                logger.debug(e)
+            if value is None:
+                value = os.environ.get(key, default)
+            setattr(cls, attr, value)
+
+    @classmethod
+    def _get_settings_class_attrs(cls):
+        for attr in dir(cls):
+            if attr.isupper() and not attr.startswith('__'):
+                yield attr, getattr(cls, attr)
+
+    @classmethod
+    def _get_key(cls, name: str) -> str:
+        parts = []
+        if cls.prefix:
+            parts.append(cls.prefix)
+        parts.append(name)
+        if cls.suffix:
+            parts.append(cls.suffix)
+        return "_".join(parts)
