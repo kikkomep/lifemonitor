@@ -95,7 +95,12 @@ def check_workflows():
 
 
 @schedule(trigger=IntervalTrigger(seconds=Timeout.BUILD_REFRESH),
-          queue_name='builds', options={'max_retries': 3, 'max_age': TASK_EXPIRATION_TIME})
+          queue_name='builds', options={
+              'max_retries': 3, 'max_age': TASK_EXPIRATION_TIME,
+              'misfire_grace_time': Timeout.BUILD_REFRESH - 10,
+              'max_instances': 1,
+              'coalesce': True
+})
 def check_last_build():
 
     all_start = time.time()
