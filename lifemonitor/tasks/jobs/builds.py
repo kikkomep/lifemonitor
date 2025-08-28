@@ -142,12 +142,12 @@ def check_last_build():
         logger.info(f"Update of all non Github test instances completed in {elapsed_time:.2f} seconds.")
 
     all_elapsed_time = time.time() - all_start
-    logger.info(f"Task 'check_last_build' completed in {all_elapsed_time:.2f} seconds.")
     logger.info("Github GraphQL Rate limit status after check_last_build: %s",
                 gh_service._gh_graphql_service.get_rate_limit() if gh_service else "N/A")
     logger.info("Github REST Rate limit status after check_last_build: %s",
                 gh_service._gh_rest_service.get_rate_limit() if gh_service else "N/A")
     logger.info("Task 'check_last_build' completed!")
+    logger.info(f"Task 'check_last_build' completed in {all_elapsed_time:.2f} seconds.")
 
 
 @schedule(trigger=CronTrigger(minute=0, hour=2),
