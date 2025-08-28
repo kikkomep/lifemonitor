@@ -173,11 +173,13 @@ class GithubTestingService(TestingService):
             raise lm_exceptions.RateLimitExceededException(detail=str(e), instance=test_instance)
 
     def refresh_timeout_expired(self, test_instance: models.TestInstance,
-                                timeout: int = Timeout.BUILD) -> bool:
+                                timeout: int = None) -> bool:
 
         # Check if the update interval is set
         if timeout is None:
             timeout = Timeout.BUILD
+
+        logger.debug("Refresh timeout is set to %d seconds", timeout)
 
         # Retrieve the last refresh timestamp from the test_instance cache
         # and check if it is recent (less than 10 minutes ago)
