@@ -41,7 +41,9 @@ logger.info("Importing task definitions")
 
 
 @schedule(trigger=IntervalTrigger(seconds=60),
-          queue_name="notifications", options={'max_retries': 0, 'max_age': TASK_EXPIRATION_TIME})
+          queue_name="notifications", options={'max_retries': 0, 'max_age': TASK_EXPIRATION_TIME},
+          job_options={'misfire_grace_time': 60,
+                       'max_instances': 1, 'coalesce': True})
 def send_test_instance_status_changed_notification():
     # Handle notification for updated instances
     for instance in TestInstance.all():
@@ -67,7 +69,9 @@ def send_test_instance_status_changed_notification():
 
 
 @schedule(trigger=IntervalTrigger(seconds=30),
-          queue_name="notifications", options={'max_retries': 0, 'max_age': TASK_EXPIRATION_TIME})
+          queue_name="notifications", options={'max_retries': 0, 'max_age': TASK_EXPIRATION_TIME},
+          job_options={'misfire_grace_time': 60,
+                       'max_instances': 1, 'coalesce': True})
 def send_email_notifications():
     notifications = [n for n in Notification.not_emailed()
                      if not isinstance(n, UnconfiguredEmailNotification)]
@@ -94,7 +98,9 @@ def send_email_notifications():
 
 
 @schedule(trigger=CronTrigger(minute=0, hour=1),
-          queue_name="notifications", options={'max_retries': 0, 'max_age': TASK_EXPIRATION_TIME})
+          queue_name="notifications", options={'max_retries': 0, 'max_age': TASK_EXPIRATION_TIME},
+          job_options={'misfire_grace_time': 60,
+                       'max_instances': 1, 'coalesce': True})
 def cleanup_notifications():
     logger.info("Starting notification cleanup")
     count = 0
@@ -112,7 +118,9 @@ def cleanup_notifications():
 
 
 @schedule(trigger=IntervalTrigger(seconds=60),
-          queue_name="notifications", options={'max_retries': 0, 'max_age': TASK_EXPIRATION_TIME})
+          queue_name="notifications", options={'max_retries': 0, 'max_age': TASK_EXPIRATION_TIME},
+          job_options={'misfire_grace_time': 60,
+                       'max_instances': 1, 'coalesce': True})
 def check_email_configuration():
     logger.info("Check for users without notification email")
     users = []
