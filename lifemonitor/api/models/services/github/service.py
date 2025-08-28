@@ -171,6 +171,29 @@ class GithubTestingService(TestingService):
         except GithubRateLimitExceededException as e:
             raise lm_exceptions.RateLimitExceededException(detail=str(e), instance=test_instance)
 
+    def refresh_timeout_expired(self, test_instance: models.TestInstance,
+                                timeout: int = Timeout.BUILD) -> bool:
+
+        # Check if the update interval is set
+        if timeout is None:
+            timeout = Timeout.BUILD
+
+        # Retrieve the last refresh timestamp from the test_instance cache
+        # and check if it is recent (less than 10 minutes ago)
+        last_update = self.test_instance_cache.get_update_timestamp(test_instance.uuid)
+        if last_update:
+            delta = (time.time() - last_update)
+            logger.debug("Test instance %s last cache update was %.2f seconds ago",
+                         test_instance.uuid, delta)
+            logger.debug("Configured update interval is %d seconds", timeout)
+            logger.debug("Elapsed time since last update is %.2f seconds", delta)
+            if delta < timeout:
+                logger.debug("Test instance %s cache is recent (%.2f seconds ago), skipping fetch",
+                             test_instance.uuid, delta)
+                return False
+
+        return True
+
     def __update_test_builds_cache__(self, test_instance: models.TestInstance,
                                      update_interval: int = None) -> bool:
         """
@@ -186,23 +209,11 @@ class GithubTestingService(TestingService):
         # assert test_instance.testing_service_id == self.uuid, \
         #     "test_instance must be associated with this testing service"
 
-        # Check if the update interval is set
-        if update_interval is None:
-            update_interval = Timeout.BUILD
-
-        # Retrieve the last refresh timestamp from the test_instance cache
-        # and check if it is recent (less than 10 minutes ago)
-        last_update = self.test_instance_cache.get_update_timestamp(test_instance.uuid)
-        if last_update:
-            delta = (time.time() - last_update)
-            logger.debug("Test instance %s last cache update was %.2f seconds ago",
-                         test_instance.uuid, delta)
-            logger.debug("Configured update interval is %d seconds", update_interval)
-            logger.debug("Elapsed time since last update is %.2f seconds", delta)
-            if delta < update_interval:
-                logger.debug("Test instance %s cache is recent (%.2f seconds ago), skipping fetch",
-                             test_instance.uuid, delta)
-                return False
+        # Check if the refresh timeout is expired
+        if not self.refresh_timeout_expired(test_instance, update_interval):
+            logger.debug("Refresh timeout has not expired for test instance %s, skipping fetch",
+                         test_instance.uuid)
+            return False
 
         logger.debug("Fetching workflow runs for test instance %s from GitHub", test_instance.uuid)
         try:
