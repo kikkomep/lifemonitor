@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 logger.info("Importing task definitions")
 
 
-@schedule(trigger=IntervalTrigger(seconds=Timeout.WORKFLOW * 3 / 4),
+@schedule(trigger=IntervalTrigger(seconds=Timeout.WORKFLOW),
           queue_name='builds', options={'max_retries': 3, 'max_age': TASK_EXPIRATION_TIME})
 def check_workflows():
     """
@@ -51,11 +51,15 @@ def check_workflows():
     from lifemonitor.auth.services import login_user, logout_user
     from lifemonitor.cache import cache
 
-    logger.info("Starting 'check_workflows' task....")
+    # Set start time
+    start_time = time.time()
+
+    logger.info(f"Starting 'check_workflows' task at {start_time}.....")
     with cache.transaction(name=f"check_workflows@{datetime.datetime.now()}", force_update=True):
         for w in Workflow.all():
             try:
                 for v in w.versions.values():
+                    # Check if the Workflow ROCrate is downloadable
                     u = v.submitter
                     with current_app.test_request_context():
                         try:
@@ -73,11 +77,21 @@ def check_workflows():
                                 logout_user()
                             except Exception as e:
                                 logger.debug(e)
+
+                    # Check is the workflow has an available workflow repository
+                    repo = v.get_repository(reload=True)
+                    if not repo:
+                        logger.warning(f"Workflow version {v} does not have an available repository.")
+                        assert not v.has_repository()
+                    # Update the repository availability status
+                    v.save()
             except Exception as e:
                 logger.error("Error when executing task 'check_workflows' against the workflow %s: %s", str(w), str(e))
                 if logger.isEnabledFor(logging.DEBUG):
                     logger.exception(e)
-    logger.info("Starting 'check_workflows' task.... DONE!")
+    # compute the elapsed time
+    elapsed_time = time.time() - start_time
+    logger.info(f"Starting 'check_workflows' task.... DONE! Elapsed time: {elapsed_time:.2f} seconds")
 
 
 @schedule(trigger=IntervalTrigger(seconds=Timeout.BUILD * 3 / 4),
