@@ -200,3 +200,51 @@ def test_remote_git_info_detection(protocol, remote_git_url):
 
     for p, u in __git_remote_urls__().items():
         assert u == remote_info.urls[p], "Invalid remote url for the %s protocol" % p
+
+
+def test_settings_class_os_env():
+    class MySettings(utils.Settings):
+        prefix = "MYAPP"
+        suffix = "_SETTING"
+
+        SETTING1 = 1
+        SETTING2 = "default"
+        SETTING3 = None
+
+    # Update settings from environment variables
+    os.environ["MYAPP_SETTING1"] = "10"
+    os.environ["MYAPP_SETTING2"] = "env_value"
+    os.environ["MYAPP_SETTING3"] = "env_value3"
+
+    MySettings.update_class_settings()
+
+    assert MySettings.SETTING1 == 10
+    assert MySettings.SETTING2 == "env_value"
+    assert MySettings.SETTING3 == "env_value3"
+
+    # Clean up environment variables
+    del os.environ["MYAPP_SETTING1"]
+    del os.environ["MYAPP_SETTING2"]
+    del os.environ["MYAPP_SETTING3"]
+
+
+def test_settings_class_config():
+    class MySettings(utils.Settings):
+        prefix = "MYAPP"
+        suffix = "_SETTING"
+
+        SETTING1 = 1
+        SETTING2 = "default"
+        SETTING3 = None
+
+    # Update settings from config
+    config = {
+        "MYAPP_SETTING1": 20,
+        "MYAPP_SETTING2": "config_value",
+        "MYAPP_SETTING3": "config_value3"
+    }
+    MySettings.update_class_settings(config)
+
+    assert MySettings.SETTING1 == 20
+    assert MySettings.SETTING2 == "config_value"
+    assert MySettings.SETTING3 == "config_value3"
