@@ -78,7 +78,8 @@ class Scheduler(APScheduler):
                      trigger=trigger or DateTrigger(run_date=datetime.datetime.now()), replace_existing=True)
 
 
-def schedule(trigger=None, name=None, priority=0, queue_name: str = "default", options: Dict = None):
+def schedule(trigger=None, name=None, priority=0, queue_name: str = "default",
+             options: Dict = None, job_options: dict = None):
     """
     Decorator to add a scheduled job calling the wrapped function.
     :param  trigger:  an instance of any of the trigger types provided in apscheduler.triggers.
@@ -104,12 +105,14 @@ def schedule(trigger=None, name=None, priority=0, queue_name: str = "default", o
             scheduler: Scheduler = app.scheduler
 
             # Register scheduled or deferred jobs
+            ajob_options = job_options or {}
             if trigger:
                 logger.debug("Scheduling function %s with trigger %r", fn_name, trigger)
-                scheduler.add_job(id=fn_name, name=job_name, func=actor.send, trigger=trigger, replace_existing=True)
+                scheduler.add_job(id=fn_name, name=job_name, func=actor.send,
+                                  trigger=trigger, replace_existing=True, **ajob_options)
             else:
                 logger.debug("Registering deferred job for function %s", fn_name)
-                scheduler.add_deferred_job(job_name, actor)
+                scheduler.add_deferred_job(job_name, actor, **ajob_options)
         else:
             logger.debug("Schedule %s no-op - scheduler not initialized", fn_name)
         return fn
