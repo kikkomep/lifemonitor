@@ -1670,7 +1670,7 @@ class Settings:
     suffix = None
 
     @classmethod
-    def update_class_settings(cls, config=None):
+    def load(cls, config=None):
         config = config or getattr(cls, 'config', None)
 
         for attr, default in cls._get_settings_class_attrs():

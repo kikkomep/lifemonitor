@@ -29,7 +29,8 @@ from lifemonitor.api.models import TestingService, Workflow
 from lifemonitor.api.models.testsuites.testbuild import TestBuild
 from lifemonitor.api.models.testsuites.testinstance import TestInstance
 from lifemonitor.cache import Timeout, cache
-from lifemonitor.tasks.scheduler import TASK_EXPIRATION_TIME, schedule
+from lifemonitor.tasks.models import JobSettings
+from lifemonitor.tasks.scheduler import schedule
 from lifemonitor.utils import notify_workflow_version_updates
 
 # set module level logger
@@ -40,9 +41,12 @@ logger.info("Importing task definitions")
 
 
 @schedule(trigger=IntervalTrigger(seconds=Timeout.WORKFLOW),
-          queue_name='builds', options={'max_retries': 3, 'max_age': TASK_EXPIRATION_TIME},
-          job_options={'misfire_grace_time': Timeout.WORKFLOW - 10,
-                       'max_instances': 1, 'coalesce': True})
+          queue_name='builds', options={
+              'max_retries': JobSettings.MAX_RETRIES,
+              'max_age': JobSettings.MAX_AGE},
+          job_options={'misfire_grace_time': JobSettings.MISFIRE_GRACE_TIME,
+                       'max_instances': JobSettings.MAX_INSTANCES,
+                       'coalesce': JobSettings.COALESCE})
 def check_workflows():
     """
     """
@@ -97,9 +101,11 @@ def check_workflows():
 
 
 @schedule(trigger=IntervalTrigger(seconds=Timeout.BUILD_REFRESH),
-          queue_name='builds', options={'max_retries': 3, 'max_age': TASK_EXPIRATION_TIME},
-          job_options={'misfire_grace_time': Timeout.BUILD_REFRESH - 10,
-                       'max_instances': 1, 'coalesce': True})
+          queue_name='builds', options={
+              'max_retries': JobSettings.MAX_RETRIES, 'max_age': JobSettings.MAX_AGE},
+          job_options={'misfire_grace_time': JobSettings.MISFIRE_GRACE_TIME,
+                       'max_instances': JobSettings.MAX_INSTANCES,
+                       'coalesce': JobSettings.COALESCE})
 def check_last_build():
 
     all_start = time.time()
@@ -169,9 +175,12 @@ def check_last_build():
 
 
 @schedule(trigger=CronTrigger(minute=0, hour=2),
-          queue_name='builds', options={'max_retries': 3, 'max_age': TASK_EXPIRATION_TIME},
-          job_options={'misfire_grace_time': Timeout.BUILD,
-                       'max_instances': 1, 'coalesce': True})
+          queue_name='builds', options={
+              'max_retries': JobSettings.MAX_RETRIES,
+              'max_age': JobSettings.MAX_AGE},
+          job_options={'misfire_grace_time': JobSettings.MISFIRE_GRACE_TIME,
+                       'max_instances': JobSettings.MAX_INSTANCES,
+                       'coalesce': JobSettings.COALESCE})
 def periodic_builds():
     from lifemonitor.api.models import Workflow
 

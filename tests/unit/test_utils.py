@@ -216,7 +216,7 @@ def test_settings_class_os_env():
     os.environ["MYAPP_SETTING2"] = "env_value"
     os.environ["MYAPP_SETTING3"] = "env_value3"
 
-    MySettings.update_class_settings()
+    MySettings.load()
 
     assert MySettings.SETTING1 == 10
     assert MySettings.SETTING2 == "env_value"
@@ -243,7 +243,8 @@ def test_settings_class_config():
         "MYAPP_SETTING2": "config_value",
         "MYAPP_SETTING3": "config_value3"
     }
-    MySettings.update_class_settings(config)
+
+    MySettings.load(config)
 
     assert MySettings.SETTING1 == 20
     assert MySettings.SETTING2 == "config_value"

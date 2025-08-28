@@ -26,14 +26,15 @@ from flask import Response
 from lifemonitor.api.controllers import process_workflows_post
 from lifemonitor.exceptions import report_problem_from_exception
 
-from ..models import Job
-from ..scheduler import TASK_EXPIRATION_TIME, schedule
+from ..models import Job, JobSettings
+from ..scheduler import schedule
 
 # set module level logger
 logger = logging.getLogger(__name__)
 
 
-@schedule(name='register_workflow', queue_name="workflows", options={'max_retries': 0, 'max_age': TASK_EXPIRATION_TIME})
+@schedule(name='register_workflow', queue_name="workflows", options={
+    'max_retries': JobSettings.MAX_RETRIES, 'max_age': JobSettings.MAX_AGE})
 def register_workflow(job_id: str, registration_data: object):
     logger.debug("Event parameters: %r", registration_data)
     # get job
