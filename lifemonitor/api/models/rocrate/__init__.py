@@ -61,6 +61,7 @@ class ROCrate(Resource):
                                                       foreign_keys=[hosting_service_id])
     _metadata = db.Column("metadata", JSON, nullable=True)
     _local_path = db.Column("local_path", db.String, nullable=True)
+    _repo_exists = db.Column("repo_exists", db.Boolean, nullable=False, default=True)
     _metadata_loaded = False
     _repository: repositories.WorkflowRepository = None
     __crate_reader__: WorkflowRepositoryMetadata = None
@@ -83,6 +84,9 @@ class ROCrate(Resource):
         if not self.__storage:
             self.__storage = RemoteStorage()
         return self.__storage
+
+    def has_repository(self):
+        return self._repo_exists
 
     @property
     def local_path(self):
