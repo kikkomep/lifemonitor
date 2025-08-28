@@ -47,7 +47,7 @@ def send_test_instance_status_changed_notification():
     for instance in TestInstance.all():
         has_changed = instance.has_changed_state()
         logger.info("Test instance %s has changed state: %s", instance, has_changed)
-        if has_changed or True:
+        if has_changed:
             last_build = instance.last_test_build
             workflow_version = last_build.test_instance.test_suite.workflow_version
             failed = last_build.status == BuildStatus.FAILED
