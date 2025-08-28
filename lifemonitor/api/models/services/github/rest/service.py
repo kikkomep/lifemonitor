@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from typing import List, Optional
 
 import github
@@ -173,7 +174,9 @@ class GithubRestService():
                                              branch=None,
                                              tag=None,
                                              created=None,
-                                             limit: int = None) -> list[WorkflowRun]:
+                                             limit: int = None,
+                                             max_retries: int = 5,
+                                             retry_delay: int = 1) -> list[WorkflowRun]:
         """
         Returns the GitHub workflow object for the service.
         This method is a placeholder and should be implemented in subclasses.
@@ -214,29 +217,64 @@ class GithubRestService():
         if params:
             api_url += "?" + "&".join(params)
         logger.debug("Final API URL with params: %s", api_url)
-        response = session.get(api_url)
-        if response.status_code == 200:
-            logger.debug("Successfully fetched workflow runs from GitHub API.")
-            # Parse the response JSON to get the workflow runs
-            workflow_runs = response.json().get('workflow_runs', [])
-            if workflow_runs:
-                # Assuming we want the first workflow run for simplicity
-                workflow_runs = workflow_runs[:limit] if limit else workflow_runs
-                return [WorkflowRun(
-                    requester=None,  # self._gh_service.__requester,
-                    headers=response.headers,
-                    attributes=run,
-                    completed=True
-                ) for run in workflow_runs]
-            # Return an empty list if no workflow runs were found
-            return []
-        else:
-            logger.error("Failed to fetch workflow runs from GitHub API. Status code: %s", response.status_code)
-            raise lm_exceptions.GithubApiException(
-                title="GitHub API Error",
-                status=response.status_code,
-                detail=response.text
-            )
+
+        # Start timing
+        start_time = time.time()
+        # Log the start of the query execution
+        logger.info("Starting REST query execution at %s", start_time)
+        # Set up retry parameters
+        retry_count = 0
+        # Perform the request with retries
+        while True:
+            try:
+                # Execute the query using the session
+                response = session.get(api_url)
+
+                # If we get a 429 (Too Many Requests) or 5xx server error, retry
+                if response.status_code == 429 or 500 <= response.status_code < 600:
+                    if retry_count < max_retries:
+                        retry_count += 1
+                        wait_time = retry_delay * (2 ** (retry_count - 1))  # Exponential backoff
+                        logger.warning(f"Request failed with status {response.status_code}. Retrying in {wait_time}s (attempt {retry_count}/{max_retries})")
+                        time.sleep(wait_time)
+                        continue
+
+                # Break the loop if no retry needed or retries exhausted
+                break
+
+            except Exception as e:
+                # Network-related errors
+                if retry_count < max_retries:
+                    retry_count += 1
+                    wait_time = retry_delay * (2 ** (retry_count - 1))
+                    logger.warning(f"Request failed with error: {str(e)}. Retrying in {wait_time}s (attempt {retry_count}/{max_retries})")
+                    time.sleep(wait_time)
+                else:
+                    logger.error(f"Request failed after {max_retries} retries: {str(e)}")
+                    logger.error("Failed to fetch workflow runs from GitHub API. Status code: %s", response.status_code)
+                    raise lm_exceptions.GithubApiException(
+                        title="GitHub API Error",
+                        status=response.status_code,
+                        detail=response.text
+                    )
+
+        logger.debug("Successfully fetched workflow runs from GitHub API.")
+        # End timing
+        execution_time = time.time() - start_time
+        logger.info("REST query execution completed in %.2f seconds", execution_time)
+        # Parse the response JSON to get the workflow runs
+        workflow_runs = response.json().get('workflow_runs', [])
+        if workflow_runs:
+            # Assuming we want the first workflow run for simplicity
+            workflow_runs = workflow_runs[:limit] if limit else workflow_runs
+            return [WorkflowRun(
+                requester=None,  # self._gh_service.__requester,
+                headers=response.headers,
+                attributes=run,
+                completed=True
+            ) for run in workflow_runs]
+        # Return an empty list if no workflow runs were found
+        return []
 
     def get_test_instance_builds(self, test_instance: TestInstance) -> dict[str, TestBuild]:
         """
