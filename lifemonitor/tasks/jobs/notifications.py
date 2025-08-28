@@ -98,7 +98,7 @@ def send_email_notifications():
 def cleanup_notifications():
     logger.info("Starting notification cleanup")
     count = 0
-    current_time = datetime.datetime.utcnow()
+    current_time = datetime.datetime.now(datetime.timezone.utc)
     one_week_ago = current_time - datetime.timedelta(days=0)
     notifications = Notification.older_than(one_week_ago)
     for n in notifications:
