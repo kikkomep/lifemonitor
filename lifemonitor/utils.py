@@ -656,6 +656,9 @@ def download_file_from_remote_url(url, target_path: str = None,
 
     try:
         if target_path:
+            # Ensure the target directory exists
+            os.makedirs(os.path.dirname(target_path), exist_ok=True)
+            # Download the file
             with open(target_path, 'wb') as fd:
                 _download_from_remote(url, fd, authorization=authorization)
         else:
