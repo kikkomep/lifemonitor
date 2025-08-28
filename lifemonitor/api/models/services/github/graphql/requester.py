@@ -106,7 +106,7 @@ class GraphQLRequester:
 
     @cached(timeout=Timeout.BUILD, client_scope=False, transactional_update=True)
     def execute_query(self, query: str, variables: Optional[dict] = None,
-                      max_retries: int = 3, retry_delay: int = 1) -> dict:
+                      max_retries: int = 5, retry_delay: int = 1) -> dict:
         """
         Executes a GraphQL query against the GitHub API.
 
