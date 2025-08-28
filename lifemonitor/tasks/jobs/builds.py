@@ -94,7 +94,7 @@ def check_workflows():
     logger.info(f"Starting 'check_workflows' task.... DONE! Elapsed time: {elapsed_time:.2f} seconds")
 
 
-@schedule(trigger=IntervalTrigger(seconds=Timeout.BUILD * 3 / 4),
+@schedule(trigger=IntervalTrigger(seconds=Timeout.BUILD_REFRESH),
           queue_name='builds', options={'max_retries': 3, 'max_age': TASK_EXPIRATION_TIME})
 def check_last_build():
 

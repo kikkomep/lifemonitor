@@ -179,7 +179,7 @@ class GithubTestingService(TestingService):
         if timeout is None:
             timeout = Timeout.BUILD
 
-        logger.debug("Refresh timeout is set to %d seconds", timeout)
+        logger.debug("Configured build expiration timeout is set to %d seconds", timeout)
 
         # Retrieve the last refresh timestamp from the test_instance cache
         # and check if it is recent (less than 10 minutes ago)

@@ -47,7 +47,9 @@ def test_cache_config(app_settings, app_context):
     with pytest.raises(IllegalStateException):
         cache.backend
     # Check build timeout
+    assert Timeout.DEFAULT == int(app_settings["CACHE_DEFAULT_TIMEOUT"]), "Unexpected default timeout"
     assert Timeout.BUILD == int(app_settings["CACHE_BUILD_TIMEOUT"]), "Unexpected build timeout"
+    assert Timeout.BUILD_REFRESH == int(app_settings["CACHE_BUILD_REFRESH_TIMEOUT"]), "Unexpected build refresh timeout"
 
 
 def test_cache_transaction_setup(app_context, redis_cache):

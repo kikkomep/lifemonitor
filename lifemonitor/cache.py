@@ -72,10 +72,11 @@ class Timeout:
     SESSION = _get_timeout(_get_timeout_key('SESSION'), default=3600)
     WORKFLOW = _get_timeout(_get_timeout_key('WORKFLOW'), default=86400)
     BUILD = _get_timeout(_get_timeout_key('BUILD'), default=600)
+    BUILD_REFRESH = _get_timeout(_get_timeout_key('BUILD_REFRESH'), default=120)
 
     @classmethod
     def update(cls, config=None):
-        for t in ('DEFAULT', 'REQUEST', 'SESSION', 'BUILD', 'WORKFLOW'):
+        for t in ('DEFAULT', 'REQUEST', 'SESSION', 'BUILD', 'WORKFLOW', 'BUILD_REFRESH'):
             try:
                 key = _get_timeout_key(t)
                 setattr(cls, t, _get_timeout(key, config=config))
