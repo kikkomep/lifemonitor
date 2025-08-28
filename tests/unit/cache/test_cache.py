@@ -46,6 +46,8 @@ def test_cache_config(app_settings, app_context):
     assert cache.cache_enabled is False, "Cache should be disabled"
     with pytest.raises(IllegalStateException):
         cache.backend
+    # Check build timeout
+    assert Timeout.BUILD == int(app_settings["CACHE_BUILD_TIMEOUT"]), "Unexpected build timeout"
 
 
 def test_cache_transaction_setup(app_context, redis_cache):
