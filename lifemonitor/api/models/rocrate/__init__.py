@@ -154,6 +154,9 @@ class ROCrate(Resource):
                     self.__crate_reader__ = WorkflowRepositoryMetadata(
                         local_repository, init=False)
             else:
+                if not self.repository:
+                    raise lm_exceptions.NotValidROCrateException(
+                        detail=f"RO-Crate archive not found: {self.local_path}")
                 self.__crate_reader__ = self.repository.metadata
         return self.__crate_reader__
 
