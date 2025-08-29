@@ -71,7 +71,7 @@ class Timeout:
     REQUEST = _get_timeout(_get_timeout_key('REQUEST'), default=30)
     SESSION = _get_timeout(_get_timeout_key('SESSION'), default=3600)
     WORKFLOW = _get_timeout(_get_timeout_key('WORKFLOW'), default=86400)
-    BUILD = _get_timeout(_get_timeout_key('BUILD'), default=600)
+    BUILD = _get_timeout(_get_timeout_key('BUILD'), default=86400)
     BUILD_REFRESH = _get_timeout(_get_timeout_key('BUILD_REFRESH'), default=120)
 
     @classmethod
