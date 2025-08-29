@@ -246,6 +246,6 @@ def test_settings_class_config():
 
     MySettings.load(config)
 
-    assert MySettings.SETTING1 == 1
-    assert MySettings.SETTING2 == "default"
-    assert MySettings.SETTING3 is None
+    assert MySettings.SETTING1 == 20
+    assert MySettings.SETTING2 == "config_value"
+    assert MySettings.SETTING3 == "config_value3"
