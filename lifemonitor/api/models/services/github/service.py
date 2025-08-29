@@ -374,7 +374,7 @@ class GithubTestingService(TestingService):
         urls_map = {}
         for instance in test_instances:
             url = instance.external_link
-            if instance.resource not in urls_map:
+            if url not in urls_map:
                 urls_map[url] = []
             urls_map[url].append(instance)
             # check if the instance is in cache
