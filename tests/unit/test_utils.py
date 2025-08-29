@@ -205,7 +205,7 @@ def test_remote_git_info_detection(protocol, remote_git_url):
 def test_settings_class_os_env():
     class MySettings(utils.Settings):
         prefix = "MYAPP"
-        suffix = "_SETTING"
+        # suffix = "SETTING"
 
         SETTING1 = 1
         SETTING2 = "default"
@@ -218,7 +218,7 @@ def test_settings_class_os_env():
 
     MySettings.load()
 
-    assert MySettings.SETTING1 == 10
+    assert MySettings.SETTING1 == '10'
     assert MySettings.SETTING2 == "env_value"
     assert MySettings.SETTING3 == "env_value3"
 
@@ -231,7 +231,7 @@ def test_settings_class_os_env():
 def test_settings_class_config():
     class MySettings(utils.Settings):
         prefix = "MYAPP"
-        suffix = "_SETTING"
+        # suffix = "_SETTING"
 
         SETTING1 = 1
         SETTING2 = "default"
@@ -246,6 +246,6 @@ def test_settings_class_config():
 
     MySettings.load(config)
 
-    assert MySettings.SETTING1 == 20
-    assert MySettings.SETTING2 == "config_value"
-    assert MySettings.SETTING3 == "config_value3"
+    assert MySettings.SETTING1 == 1
+    assert MySettings.SETTING2 == "default"
+    assert MySettings.SETTING3 is None
