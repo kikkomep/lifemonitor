@@ -92,6 +92,7 @@ integrations:
   #     secret:
   #     filename:
 
+# Cache settings
 cache:
   db: 0
   timeout:
@@ -102,6 +103,15 @@ cache:
     build: 84600
     build_refresh: 120
 
+# Job settings
+job:
+  max_retries: 0
+  max_age: 120
+  misfire_grace_time: 30
+  max_instances: 1
+  coalesce: true
+
+# Proxy settings
 proxy:
   instances: []
   # - name: production
