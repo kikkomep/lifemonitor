@@ -405,49 +405,43 @@ class GithubTestingService(TestingService):
         start_time = time.time()
         url_keys = list(urls_map.keys())
         for i in range(0, len(url_keys), 20):
-            try:
-                batch = url_keys[i:i + 20]
-                logger.debug("Fetching batch %d-%d of workflows...", i + 1, min(i + 20, len(url_keys)))
-                workflows.update(self._gh_graphql_service.fetch_workflows_runs_by_urls(batch))
-                elapsed_time = time.time() - start_time
-                logger.info("Fetched %d workflows in %.2f seconds", len(workflows), elapsed_time)
+            batch = url_keys[i:i + 20]
+            logger.debug("Fetching batch %d-%d of workflows...", i + 1, min(i + 20, len(url_keys)))
+            workflows.update(self._gh_graphql_service.fetch_workflows_runs_by_urls(batch))
+        elapsed_time = time.time() - start_time
+        logger.info("Fetched %d workflows in %.2f seconds", len(workflows), elapsed_time)
 
-                # Map runs to test instances and update test_instance cache
-                logger.info("Mapping fetched workflows to test instances...")
-                start_time = time.time()
-                for w, wdata in workflows.items():
-                    logger.info("- Processing workflow %s...", w)
-                    logger.info("- Processing test instances related to the workflow %s", w)
-                    logger.info("Searching for matching test instances for workflow %s ...", w)
-                    for instance in urls_map[w]:
-                        logger.info("Processing test instance %r ...", instance.uuid)
-                        instance_runs = cache_manager.get_latest_run_ids(instance.uuid)
-                        workflow_runs = wdata.get("workflow_runs", [])
-                        logger.info("Found %d workflow runs for workflow %s", len(workflow_runs), w)
-                        for run in workflow_runs:
-                            if instance_runs and run["id"] in instance_runs:
-                                logger.info("Found matching run %d for test instance %r", run["id"], instance.uuid)
-                                cached_run = cache_manager.get_run_by_id(w, run["id"])
-                                if cached_run and cached_run["conclusion"]:
-                                    logger.info("The workflow run %d for test instance %r is in cache and completed",
-                                                run["id"], instance.uuid)
-                                    continue
-                            # Try to match the test instance with the workflow run
-                            params = (run["head_branch"], run["head_branch"], run["created_at"])
-                            match = match_test_instance_params(instance, params)
-                            if match:
-                                logger.info("Found matching test instance %r: %r", instance.uuid, params)
-                                cache_manager\
-                                    .associate_and_insert_run(instance.uuid, w,
-                                                              run["id"], run["head_branch"], run, True)
-                        cache_manager.set_update_timestamp(instance.uuid)
-                        # Add instance to updated instances
-                        updated_instances.add(instance)
-            except Exception as e:
-                logger.error("Error when fetching or processing workflow batch %d-%d: %s",
-                             i + 1, min(i + 20, len(url_keys)), str(e))
-                if logger.isEnabledFor(logging.DEBUG):
-                    logger.exception(e)
+        # Map runs to test instances and update test_instance cache
+        logger.info("Mapping fetched workflows to test instances...")
+        start_time = time.time()
+        for w, wdata in workflows.items():
+            logger.info("- Processing workflow %s...", w)
+            logger.info("- Processing test instances related to the workflow %s", w)
+            logger.info("Searching for matching test instances for workflow %s ...", w)
+            for instance in urls_map[w]:
+                logger.info("Processing test instance %r ...", instance.uuid)
+                instance_runs = cache_manager.get_latest_run_ids(instance.uuid)
+                workflow_runs = wdata.get("workflow_runs", [])
+                logger.info("Found %d workflow runs for workflow %s", len(workflow_runs), w)
+                for run in workflow_runs:
+                    if instance_runs and run["id"] in instance_runs:
+                        logger.info("Found matching run %d for test instance %r", run["id"], instance.uuid)
+                        cached_run = cache_manager.get_run_by_id(w, run["id"])
+                        if cached_run and cached_run["conclusion"]:
+                            logger.info("The workflow run %d for test instance %r is in cache and completed",
+                                        run["id"], instance.uuid)
+                            continue
+                    # Try to match the test instance with the workflow run
+                    params = (run["head_branch"], run["head_branch"], run["created_at"])
+                    match = match_test_instance_params(instance, params)
+                    if match:
+                        logger.info("Found matching test instance %r: %r", instance.uuid, params)
+                        cache_manager\
+                            .associate_and_insert_run(instance.uuid, w,
+                                                      run["id"], run["head_branch"], run, True)
+                cache_manager.set_update_timestamp(instance.uuid)
+                # Add instance to updated instances
+                updated_instances.add(instance)
 
         # Compute elapsed time
         elapsed_time = time.time() - start_time
