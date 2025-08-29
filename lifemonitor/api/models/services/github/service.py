@@ -417,25 +417,25 @@ class GithubTestingService(TestingService):
         for w, wdata in workflows.items():
             logger.info("- Processing workflow %s...", w)
             logger.info("- Processing test instances related to the workflow %s", w)
-            logger.info("Searching for matching test instances for workflow %s ...", w)
+            logger.debug("Searching for matching test instances for workflow %s ...", w)
             for instance in urls_map[w]:
-                logger.info("Processing test instance %r ...", instance.uuid)
+                logger.debug("Processing test instance %r ...", instance.uuid)
                 instance_runs = cache_manager.get_latest_run_ids(instance.uuid)
                 workflow_runs = wdata.get("workflow_runs", [])
-                logger.info("Found %d workflow runs for workflow %s", len(workflow_runs), w)
+                logger.debug("Found %d workflow runs for workflow %s", len(workflow_runs), w)
                 for run in workflow_runs:
                     if instance_runs and run["id"] in instance_runs:
                         logger.info("Found matching run %d for test instance %r", run["id"], instance.uuid)
                         cached_run = cache_manager.get_run_by_id(w, run["id"])
                         if cached_run and cached_run["conclusion"]:
-                            logger.info("The workflow run %d for test instance %r is in cache and completed",
-                                        run["id"], instance.uuid)
+                            logger.debug("The workflow run %d for test instance %r is in cache and completed",
+                                         run["id"], instance.uuid)
                             continue
                     # Try to match the test instance with the workflow run
                     params = (run["head_branch"], run["head_branch"], run["created_at"])
                     match = match_test_instance_params(instance, params)
                     if match:
-                        logger.info("Found matching test instance %r: %r", instance.uuid, params)
+                        logger.debug("Found matching test instance %r: %r", instance.uuid, params)
                         cache_manager\
                             .associate_and_insert_run(instance.uuid, w,
                                                       run["id"], run["head_branch"], run, True)
