@@ -42,7 +42,7 @@ class JobSettings(Settings):
 
     # Default settings
     MAX_RETRIES = 0
-    MAX_AGE = 600
+    MAX_AGE = 86400
 
     MISFIRE_GRACE_TIME = 60
     MAX_INSTANCES = 1
