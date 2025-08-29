@@ -41,7 +41,7 @@ class JobSettings(Settings):
     suffix = "TASK"
 
     # Default settings
-    MAX_RETRIES = 3
+    MAX_RETRIES = 0
     MAX_AGE = 600
 
     MISFIRE_GRACE_TIME = 60

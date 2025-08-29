@@ -106,7 +106,7 @@ cache:
 # Job settings
 job:
   max_retries: 0
-  max_age: 120
+  max_age: 600
   misfire_grace_time: 30
   max_instances: 1
   coalesce: true
