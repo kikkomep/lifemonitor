@@ -1671,19 +1671,32 @@ class Settings:
 
     @classmethod
     def load(cls, config=None):
-        config = config or getattr(cls, 'config', None)
+        """
+        Load settings from config or environment variables.
 
+        Args:
+            config: Configuration object that has a get method
+        """
         for attr, default in cls._get_settings_class_attrs():
             key = cls._get_key(attr)
             value = None
-            try:
-                if config is not None:
+
+            # Try to get value from config
+            logger.debug("Config: %s", config)
+            if config is not None:
+                try:
                     value = config.get(key)
-            except Exception as e:
-                logger.debug(e)
+                except Exception as e:
+                    logger.debug("Error getting %s from config: %s", key, e)
+
+            # Fall back to environment variables or default
             if value is None:
                 value = os.environ.get(key, default)
+                logger.debug("Using value for %s=%r from environment or default", key, value)
+
+            # Set the attribute on the class
             setattr(cls, attr, value)
+            logger.debug("Setting %s=%r", key, value)
 
     @classmethod
     def _get_settings_class_attrs(cls):
