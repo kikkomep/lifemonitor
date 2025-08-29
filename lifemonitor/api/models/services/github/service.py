@@ -425,7 +425,7 @@ class GithubTestingService(TestingService):
                 logger.debug("Found %d workflow runs for workflow %s", len(workflow_runs), w)
                 for run in workflow_runs:
                     if instance_runs and run["id"] in instance_runs:
-                        logger.info("Found matching run %d for test instance %r", run["id"], instance.uuid)
+                        logger.debug("Found matching run %d for test instance %r", run["id"], instance.uuid)
                         cached_run = cache_manager.get_run_by_id(w, run["id"])
                         if cached_run and cached_run["conclusion"]:
                             logger.debug("The workflow run %d for test instance %r is in cache and completed",
