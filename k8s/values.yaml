@@ -602,16 +602,75 @@ redis:
   ## ref: https://redis.io/topics/config
   ##
   commonConfiguration: |-
-    # Enable AOF https://redis.io/topics/persistence#append-only-file
+    # === OPTIMIZED PERSISTENCE ===
+    # Enable AOF with performance optimizations
     appendonly yes
-    # Disable RDB persistence, AOF persistence already enabled.
+    appendfsync everysec
+    aof-rewrite-incremental-fsync yes
+    aof-load-truncated yes
+    aof-use-rdb-preamble yes
+
+    # Disable automatic RDB (AOF is sufficient)
     save ""
-    # Max memory policy
-    maxmemory 256mb
+
+    # Optimized AOF rewrite to reduce I/O
+    auto-aof-rewrite-percentage 300
+    auto-aof-rewrite-min-size 512mb
+
+    # === OPTIMIZED MEMORY MANAGEMENT ===
+    # Maximum memory: 3GB (leave 1GB buffer in the 4GB container)
+    maxmemory 3072mb
     maxmemory-policy allkeys-lru
-    # Auto AOF rewrite settings
-    auto-aof-rewrite-percentage 100
-    auto-aof-rewrite-min-size 64mb
+
+    # Memory optimizations
+    hash-max-ziplist-entries 512
+    hash-max-ziplist-value 64
+    list-max-ziplist-size -2
+    list-compress-depth 1
+    set-max-intset-entries 512
+    zset-max-ziplist-entries 128
+    zset-max-ziplist-value 64
+
+    # === NETWORKING AND CONNECTIONS ===
+    # Optimized timeout for connection pooling
+    timeout 0
+    tcp-keepalive 300
+    tcp-backlog 2048
+
+    # Optimized client limits
+    maxclients 2000
+
+    # === PERFORMANCE TUNING ===
+    # Lazy freeing for performance
+    lazyfree-lazy-eviction yes
+    lazyfree-lazy-expire yes
+    lazyfree-lazy-server-del yes
+    replica-lazy-flush yes
+
+    # Threading for I/O (Redis 6+)
+    io-threads 4
+    io-threads-do-reads yes
+
+    # === OPTIMIZED REPLICATION ===
+    # Optimizations for replication
+    repl-diskless-sync yes
+    repl-diskless-sync-delay 5
+    repl-diskless-load swapdb
+
+    # === SECURITY AND STABILITY ===
+    # Disable dangerous commands
+    # rename-command FLUSHDB ""
+    # rename-command FLUSHALL ""
+    # rename-command DEBUG ""
+    # rename-command CONFIG LIFEMONITOR_CONFIG
+
+    # === LOGGING ===
+    loglevel notice
+
+    # === OS-LEVEL OPTIMIZATIONS ===
+    # Disable transparent huge pages warning
+    stop-writes-on-bgsave-error no
+
   ## @param existingConfigmap The name of an existing ConfigMap with your custom configuration for Redis&trade; nodes
   ##
   existingConfigmap: ""
