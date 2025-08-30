@@ -104,7 +104,7 @@ class GraphQLRequester:
         # Return the session for further use
         return self._session
 
-    @cached(timeout=Timeout.REQUEST, client_scope=False, transactional_update=True)
+    # @cached(timeout=Timeout.REQUEST, client_scope=False, transactional_update=True)
     def execute_query(self, query: str, variables: Optional[dict] = None,
                       max_retries: int = 5, retry_delay: int = 1) -> dict:
         """
