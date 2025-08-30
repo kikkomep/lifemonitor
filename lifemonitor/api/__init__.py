@@ -53,7 +53,8 @@ def register_testing_services_credentials(conf):
                     if service_name not in service_credentials:
                         service_credentials[service_name] = {}
                     service_credentials[service_name][key_type] = v
-                    service_credentials[service_name]['TYPE'] = service_name.lower().split('_')[0]
+                    service_credentials[service_name]['TYPE'] = \
+                        conf.get(f"{service_name}_TESTING_SERVICE_TYPE", service_name.lower().split('_')[0])
 
     # Initialize tokens for each service using the collected credentials
     for service_name, creds in service_credentials.items():
