@@ -73,8 +73,10 @@ class GithubTestBuild(models.TestBuild):
 
     @property
     def result(self) -> models.TestBuild.Result:
-        if self._metadata.status == GithubStatus.COMPLETED:
-            if self._metadata.conclusion == GithubConclusion.SUCCESS:
+        status = self._metadata.status.lower()
+        if status == GithubStatus.COMPLETED:
+            conclusion = self._metadata.conclusion.lower()
+            if conclusion == GithubConclusion.SUCCESS:
                 return models.TestBuild.Result.SUCCESS
             return models.TestBuild.Result.FAILED
         return None
