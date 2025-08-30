@@ -24,7 +24,7 @@ from typing import Optional
 
 import requests
 
-from lifemonitor.cache import Timeout, cached
+# from lifemonitor.cache import Timeout, cached
 
 # set module level logger
 logger = logging.getLogger(__name__)
