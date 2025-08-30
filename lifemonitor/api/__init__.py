@@ -19,10 +19,12 @@
 # SOFTWARE.
 
 import logging
+import os
 import pathlib
 import re
 
 import connexion
+
 from lifemonitor.api import models
 
 from .serializers import ma
