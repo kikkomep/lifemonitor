@@ -145,7 +145,7 @@ class GraphQLRequester:
                 # Break the loop if no retry needed or retries exhausted
                 break
 
-            except (requests.ConnectionError, requests.Timeout) as e:
+            except Exception as e:
                 # Network-related errors
                 if retry_count < max_retries:
                     retry_count += 1
