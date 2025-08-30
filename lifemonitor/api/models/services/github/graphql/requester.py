@@ -133,47 +133,71 @@ class GraphQLRequester:
                     headers=self.headers
                 )
 
-                # If we get a 429 (Too Many Requests) or 5xx server error, retry
-                if response.status_code == 429 or 500 <= response.status_code < 600:
-                    if retry_count < max_retries:
-                        retry_count += 1
-                        wait_time = retry_delay * (2 ** (retry_count - 1))  # Exponential backoff
-                        logger.warning(f"Request failed with status {response.status_code}. Retrying in {wait_time}s (attempt {retry_count}/{max_retries})")
-                        time.sleep(wait_time)
-                        continue
+                # If successful
+                if response.status_code == 200:
+                    # End timing
+                    execution_time = time.time() - start_time
+                    logger.info("GraphQL query execution completed in %.2f seconds", execution_time)
 
-                # Break the loop if no retry needed or retries exhausted
-                break
+                    # Check the response status
+                    logger.debug("GraphQL query response status: %s", response.status_code)
+                    logger.debug("GraphQL query response headers: %s", response.headers)
+                    if response.status_code != 200:
+                        logger.error("GraphQL query failed with status code %s: %s", response.status_code, response.text)
+                        response.raise_for_status()
+                    # Parse the response JSON
+                    data = response.json()
+                    # Check for errors in the response
+                    if 'errors' in data:
+                        raise Exception(f"GraphQL query failed: {data['errors']}")
+                    if 'data' not in data:
+                        raise Exception("GraphQL query returned no data")
+                    # Add execution time to the data for debugging purposes
+                    data["data"]["execution_time"] = execution_time
+                    # Return the parsed data
+                    return data
+
+                if response.status_code == 403 or \
+                        response.status_code == 429 or 500 <= response.status_code < 600:
+                    # Handle rate limit headers for GitHub API
+                    rate_limit_remaining = int(response.headers.get("x-ratelimit-remaining", 1))
+                    rate_limit_reset = int(response.headers.get("x-ratelimit-reset", 0))
+                    current_time = time.time()
+
+                    # If Retry-After header exists, respect it
+                    retry_after = int(response.headers.get("retry-after", 0))
+                    if retry_after > 0:
+                        logger.warning(f"Received status {response.status_code} with Retry-After={retry_after}. Sleeping...")
+                        time.sleep(retry_after)
+                    elif rate_limit_remaining == 0:
+                        # Calculate wait time until rate limit reset
+                        wait_time = rate_limit_reset - current_time
+                        if wait_time > 0:
+                            logger.warning(f"Rate limit reached, waiting {wait_time:.2f} seconds before retry")
+                            time.sleep(wait_time)
+                    else:
+                        # Handle other 5xx errors with exponential backoff
+                        if retry_count < max_retries:
+                            retry_count += 1
+                            wait_time = retry_delay * (2 ** (retry_count - 1))
+                            logger.warning(f"Request failed with status {response.status_code}. Retrying in {wait_time}s (attempt {retry_count}/{max_retries})")
+                            time.sleep(wait_time)
+                        else:
+                            logger.error(f"Request failed with status {response.status_code} after {max_retries} retries")
+                            response.raise_for_status()
+                    continue
+
+                else:
+                    # Other unexpected HTTP errors
+                    response.raise_for_status()
 
             except Exception as e:
-                # Network-related errors
+                # Handle network or unexpected errors with retry
                 if retry_count < max_retries:
                     retry_count += 1
                     wait_time = retry_delay * (2 ** (retry_count - 1))
-                    logger.warning(f"Request failed with error: {str(e)}. Retrying in {wait_time}s (attempt {retry_count}/{max_retries})")
+                    logger.warning(f"Request exception: {str(e)}. Retrying in {wait_time}s (attempt {retry_count}/{max_retries})")
                     time.sleep(wait_time)
                 else:
                     logger.error(f"Request failed after {max_retries} retries: {str(e)}")
                     raise
-
-        # End timing
-        execution_time = time.time() - start_time
-        logger.info("GraphQL query execution completed in %.2f seconds", execution_time)
-
-        # Check the response status
-        logger.debug("GraphQL query response status: %s", response.status_code)
-        logger.debug("GraphQL query response headers: %s", response.headers)
-        if response.status_code != 200:
-            logger.error("GraphQL query failed with status code %s: %s", response.status_code, response.text)
-            response.raise_for_status()
-        # Parse the response JSON
-        data = response.json()
-        # Check for errors in the response
-        if 'errors' in data:
-            raise Exception(f"GraphQL query failed: {data['errors']}")
-        if 'data' not in data:
-            raise Exception("GraphQL query returned no data")
-        # Add execution time to the data for debugging purposes
-        data["data"]["execution_time"] = execution_time
-        # Return the parsed data
-        return data
