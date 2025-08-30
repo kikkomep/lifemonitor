@@ -407,7 +407,11 @@ class GithubTestingService(TestingService):
         for i in range(0, len(url_keys), 20):
             batch = url_keys[i:i + 20]
             logger.debug("Fetching batch %d-%d of workflows...", i + 1, min(i + 20, len(url_keys)))
-            workflows.update(self._gh_graphql_service.fetch_workflows_runs_by_urls(batch))
+            try:
+                workflows.update(self._gh_graphql_service.fetch_workflows_runs_by_urls(batch))
+            except Exception as e:
+                logger.warning("Error fetching workflows for batch %d-%d: %s", i + 1, min(i + 20, len(url_keys)), e)
+        # Compute and log elapsed time
         elapsed_time = time.time() - start_time
         logger.info("Fetched %d workflows in %.2f seconds", len(workflows), elapsed_time)
 
