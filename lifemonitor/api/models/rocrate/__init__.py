@@ -49,7 +49,7 @@ from lifemonitor.storage import RemoteStorage
 from lifemonitor.utils import download_url, get_current_ref
 
 # set module level logger
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("ROCrate")
 
 
 class ROCrate(Resource):
