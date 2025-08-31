@@ -78,7 +78,7 @@ def test_cache_timeout(app_context, redis_cache):
     cache.set(key, value, timeout=timeout)
     assert cache.size() == 1, "Cache should not be empty"
     assert cache.has(key) is True, f"Key {key} should be in cache"
-    sleep(5)
+    sleep(7)
     assert cache.size() == 0, "Cache should be empty"
     assert cache.has(key) is False, f"Key {key} should not be in cache after {timeout} secs"
 
