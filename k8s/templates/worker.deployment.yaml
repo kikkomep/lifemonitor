@@ -9,8 +9,12 @@ metadata:
   labels:
     {{- include "chart.labels" $ | nindent 4 }}
 spec:
-  {{- if not $.Values.worker.autoscaling.enabled }}
+  {{- if and (not $queue.autoscaling) (not (and $queue.autoscaling (default false $queue.autoscaling.enabled))) }}
+  {{- if $queue.replicaCount }}
+  replicas: {{ $queue.replicaCount }}
+  {{- else }}
   replicas: {{ $.Values.worker.replicaCount }}
+  {{- end }}
   {{- end }}
   selector:
     matchLabels:
@@ -65,6 +69,18 @@ spec:
           command: ["/bin/sh","-c"]
           args: ["/usr/local/bin/worker_entrypoint.sh"]
           env:
+            - name: WORKER_PROCESSES
+            {{- if $queue.processes }}
+              value: "{{ $queue.processes }}"
+            {{- else }}
+              value: "{{ $.Values.worker.processes }}"
+            {{- end }}
+            - name: WORKER_THREADS
+            {{- if $queue.threads }}
+              value: "{{ $queue.threads }}"
+            {{- else }}
+              value: "{{ $.Values.worker.threads }}"
+            {{- end }}
           {{- include "lifemonitor.common-env" $ | nindent 12 }}
             - name: WORKER_QUEUES            
               {{if eq $queue.name "all" }}
@@ -93,7 +109,11 @@ spec:
           #   initialDelaySeconds: 5
           #   periodSeconds: 3
           resources:
+          {{- if $queue.resources }}
+            {{- toYaml $queue.resources | nindent 12 }}
+          {{- else }}
             {{- toYaml $.Values.worker.resources | nindent 12 }}
+          {{- end }}
         {{- if $.Values.monitoring.loki.enabled }}
         - name: log-exporter
           image: {{ $.Values.monitoring.loki.exporter.image }}
