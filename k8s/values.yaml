@@ -49,6 +49,17 @@ ingress:
   annotations:
     # nginx.ingress.kubernetes.io/rewrite-target: /
     # kubernetes.io/tls-acme: "true"
+    # Performance optimizations
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    # Security headers
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # Rate limiting for production
+    nginx.ingress.kubernetes.io/rate-limit-rps: "100"
+    nginx.ingress.kubernetes.io/rate-limit-burst: "200"
   hosts:
     - host: *hostname
       paths:
@@ -94,22 +105,23 @@ integrations:
 
 # Cache settings
 cache:
-  db: 0
+  db: 0  # Redis database for cache
   timeout:
-    default: 30
-    request: 15
-    session: 3600
-    workflow: 1800
-    build: 84600
-    build_refresh: 120
+    default: 15        # 15 seconds default cache
+    request: 15        # 15 seconds for API requests  
+    session: 7200      # 2 hours for user sessions
+    workflow: 3600     # 1 hour for workflow data
+    build: 86400       # 1 day for build results
+    build_refresh: 120 # 5 minutes for build refresh
 
 # Job settings
 job:
-  max_retries: 0
-  max_age: 86400
-  misfire_grace_time: 30
-  max_instances: 1
-  coalesce: true
+  # APScheduler optimized configuration
+  coalesce: true           # Coalesce multiple pending jobs
+  max_instances: 3         # Allow up to 3 concurrent instances
+  misfire_grace_time: 20   # Grace time for missed jobs
+  max_retries: 0           # Automatic retry on failure
+  max_age: 172800          # 2 days job retention
 
 # Proxy settings
 proxy:
@@ -179,11 +191,11 @@ console:
 rateLimiting:
   zone:
     accounts:
-      enabled: false
-      size: 60m
-      rate: 2r/s
-      burst: 20
-      delay: 2
+      enabled: true
+      size: 100m        # Increased for more users
+      rate: 10r/s       # Optimized rate
+      burst: 50         # Increased burst capacity
+      delay: 1          # Reduced delay
 
 lifemonitor:
   replicaCount: 1
@@ -196,19 +208,32 @@ lifemonitor:
   fullnameOverride: ""
 
   podAnnotations: {}
+  # Pod annotations for monitoring  
+    # prometheus.io/scrape: "true"
+    # prometheus.io/port: "9090"
+    # prometheus.io/path: "/metrics"
 
+  # SECURE POD SECURITY CONTEXT
   podSecurityContext:
-    {}
-    # fsGroup: 2000
+    runAsNonRoot: true
+    runAsUser: 1001
+    runAsGroup: 1001
+    fsGroup: 1001
+    seccompProfile:
+      type: RuntimeDefault
+    # sysctls: 
 
+  # SECURE CONTAINER SECURITY CONTEXT  
   securityContext:
-    {}
-    # capabilities:
-    #   drop:
-    #   - ALL
-    # readOnlyRootFilesystem: true
-    # runAsNonRoot: true
-    # runAsUser: 1000
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false  # Flask may need to write temp files
+    runAsNonRoot: true
+    runAsUser: 1001
+    capabilities:
+      drop:
+        - ALL
+      add:
+        - NET_BIND_SERVICE  # If needed for port binding
 
   administrator:
     password: admin
@@ -218,6 +243,7 @@ lifemonitor:
 
   # secret_key: "<SECRET_KEY>"
 
+  # Warning message for maintenance mode
   warning_message:
 
   service:
@@ -243,112 +269,147 @@ lifemonitor:
     #   cpu: 100m
     #   memory: 128Mi
     limits:
-      cpu: 1.8
-      memory: 7936Mi
+      cpu: 2000m      # 2 cores for request handling
+      memory: 4096Mi  # 4GB for Python app with SQLAlchemy
     requests:
-      cpu: 0.5
-      memory: 1024Mi
+      cpu: 500m       # 0.5 core guaranteed
+      memory: 1024Mi  # 1GB requested
+
 
   # gunicon settings
   gunicorn:
     # The number of worker threads for handling requests.
-    # A positive integer generally in the 2-4 x $(NUM_CORES) range.
+    # A positive integer generally in the 2-4 x $(NUM_CORES) range. 
     # You’ll want to vary this a bit to find the best for your particular application’s work load.
-    workers: 2
+    workers: 4
     # The number of worker processes for handling requests.
-    # A positive integer generally in the 2-4 x $(NUM_CORES) range.
+    # A positive integer generally in the 2-4 x $(NUM_CORES) range. 
     # You’ll want to vary this a bit to find the best for your particular application’s work load.
-    threads: 1
+    threads: 4
     # The maximum number of simultaneous clients.
-    worker_connections: 1000
+    worker_connections: 2000
+    
     # The maximum number of requests a worker will process before restarting.
-    max_requests: 0 # (0 = unlimited)
+    # Restart workers after N requests (prevent memory leaks)
+    max_requests: 10000 # (0 = unlimited)
     # The maximum jitter to add to the max_requests setting.
-    max_requests_jitter: 0 # (0 = no jitter)
+    max_requests_jitter: 1000 # (0 = no jitter)
     # Workers silent for more than this many seconds are killed and restarted.
-    timeout: 30
+    timeout: 300
     # The number of seconds to wait for requests on a Keep-Alive connection.
-    keepalive: 2
+    keepalive: 5
 
   # configure resources for the init containers
   initContainers:
     initBackend:
       resources:
         limits:
-          memory: 256Mi
+          cpu: 500m
+          memory: 512Mi
+        requests:
           cpu: 200m
+          memory: 256Mi
 
+  # HORIZONTAL POD AUTOSCALER
   autoscaling:
-    enabled: false
-    minReplicas: 1
-    maxReplicas: 100
-    targetCPUUtilizationPercentage: 80
-    # targetMemoryUtilizationPercentage: 80
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+    # Advanced scaling behavior to prevent flapping
+    behavior:
+      scaleDown:
+        stabilizationWindowSeconds: 300  # 5 minutes
+        policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 60
+      scaleUp:
+        stabilizationWindowSeconds: 60   # 1 minute
+        policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 30
+
+  # OPTIMIZED HEALTH PROBES for Flask
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 8000
+      scheme: HTTPS
+    initialDelaySeconds: 60  # Flask startup can be slow
+    periodSeconds: 30
+    timeoutSeconds: 10
+    failureThreshold: 3
+    successThreshold: 1
+
+  readinessProbe:
+    httpGet:
+      path: /ready    # Separate endpoint for readiness
+      port: 8000
+      scheme: HTTPS
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+    successThreshold: 1
+
+  # ANTI-AFFINITY for optimal distribution
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+            - key: app.kubernetes.io/component
+              operator: In
+              values:
+              - backend
+          topologyKey: kubernetes.io/hostname
 
   nodeSelector: {}
 
   tolerations: []
 
-  affinity: {}
-
+# Workers configuration
 worker:
   image: *lifemonitorImage
   imagePullPolicy: *lifemonitorImagePullPolicy
   imagePullSecrets: []
 
-  processes: 1
-  threads: 1
+  ##########################################################################################
+  ### Global worker settings
+  ### The global worker settings control behavior for all worker processes.
+  ### Individual worker configurations in the `queues` section can override these settings.
 
-  queues:
-    - name: github
-      # image: *lifemonitorImage
-    # - name: heartbeat
-    #   image: *lifemonitorImage
-    - name: notifications
-      # image: *lifemonitorImage
-    - name: builds
-      # image: *lifemonitorImage
-    - name: workflows
-      # image: *lifemonitorImage
-    # - name: metrics
-    #   image: *lifemonitorImage
-    - name: ws
-      # image: *lifemonitorImage
+  processes: 1  # Increased parallelism for job processing
+  threads: 1    # Increased concurrency per process
 
-  podAnnotations: {}
-
-  podSecurityContext:
-    {}
-    # fsGroup: 2000
-
-  securityContext:
-    {}
-    # capabilities:
-    #   drop:
-    #   - ALL
-    # readOnlyRootFilesystem: true
-    # runAsNonRoot: true
-    # runAsUser: 1000
-
+  # Increase worker replicas to ensure high availability and fault tolerance.
+  # Higher values provide better throughput and resilience during peak loads.
   replicaCount: 1
 
+  # Resources
   resources:
     # We usually recommend not to specify default resources and to leave this as a conscious
     # choice for the user. This also increases chances charts run on environments with little
     # resources, such as Minikube. If you do want to specify resources, uncomment the following
     # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-    # limits:
-    #   cpu: 100m
-    #   memory: 128Mi
-    # requests:
-    #   cpu: 100m
-    #   memory: 128Mi
+        # limits:
+        #   cpu: 1
+        #   memory: 2048Mi
+        # requests:
+        #   cpu: 0.8
+        #   memory: 512Mi
+    # OPTIMIZED RESOURCES for APScheduler workers
     limits:
-      cpu: 1.8
-      memory: 7936Mi
+      cpu: 1000m      # 1 core per worker
+      memory: 2048Mi  # 2GB for job processing
     requests:
-      cpu: 0.5
-      memory: 1024Mi
+      cpu: 300m       # 0.3 core guaranteed
+      memory: 512Mi   # 512MB requested
 
   # configure resources for the init containers
   initContainers:
@@ -358,18 +419,106 @@ worker:
           memory: 256Mi
           cpu: 200m
 
+  # WORKER AUTOSCALING
   autoscaling:
     enabled: false
     minReplicas: 1
-    maxReplicas: 100
-    targetCPUUtilizationPercentage: 80
-    # targetMemoryUtilizationPercentage: 80
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 75
+    targetMemoryUtilizationPercentage: 80
+
+  # Job Settings
+  queues:
+  ### GitHub integration jobs ###
+    - name: github
+      # image: *lifemonitorImage
+      processes: 2
+      threads: 4
+      replicaCount: 2
+      resources:
+        limits:
+          cpu: 2000m      # 2 cores per worker
+          memory: 4096Mi  # 4GB for GitHub job processing
+        requests:
+          cpu: 500m       # 0.5 core guaranteed
+          memory: 1024Mi  # 1GB requested
+  ### Heartbeat job
+    # - name: heartbeat
+    #   image: *lifemonitorImage
+  ### Notifications job ###
+    - name: notifications
+      # image: *lifemonitorImage
+  ### Builds job ###
+    - name: builds
+      # image: *lifemonitorImage
+  ### Workflows job ###
+    - name: workflows
+      # image: *lifemonitorImage
+  ### Metrics job ###
+    # - name: metrics
+    #   image: *lifemonitorImage
+  ### WebSocket job ###
+    - name: ws
+      # image: *lifemonitorImage
+      processes: 2
+      threads: 4
+      replicaCount: 2
+
+  # Pod annotations for monitoring
+  podAnnotations: {}
+    # prometheus.io/scrape: "true"
+    # prometheus.io/port: "9191"
+    # prometheus.io/path: "/metrics"
+
+  # SECURE POD SECURITY CONTEXT
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1001
+    runAsGroup: 1001
+    fsGroup: 1001
+    seccompProfile:
+      type: RuntimeDefault
+
+  # SECURE CONTAINER SECURITY CONTEXT
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false
+    runAsNonRoot: true
+    runAsUser: 1001
+    capabilities:
+      drop:
+        - ALL
+
+  # HEALTH PROBES for workers
+  livenessProbe:
+    exec:
+      command:
+      - python
+      - -c
+      - "import dramatiq; print('Worker OK')"
+    initialDelaySeconds: 60
+    periodSeconds: 30
+    timeoutSeconds: 10
+    failureThreshold: 3
+
+  # ANTI-AFFINITY for worker distribution
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+            - key: app.kubernetes.io/component
+              operator: In
+              values:
+              - worker
+          topologyKey: kubernetes.io/hostname
 
   nodeSelector: {}
 
   tolerations: []
 
-  affinity: {}
 
 postgresql:
   image:
@@ -497,16 +646,44 @@ postgresql:
     # loadBalancerSourceRanges:
     # - 10.10.10.0/24
 
+  # Resource requests and limits
+  resources:
+    # limits:
+    #   cpu: "500m"
+    #   memory: 4096Mi
+    # requests:
+    #   cpu: "200m"
+    #   memory: 1024Mi
+    limits:
+      cpu: 1000m      # 1 core for database operations
+      memory: 3072Mi  # 3GB for PostgreSQL with SQLAlchemy
+    requests:
+      cpu: 300m       # 0.3 core guaranteed
+      memory: 1536Mi  # 1.5GB requested
+
+
   # Enable container security context
   # (see https://github.com/bitnami/charts/tree/master/bitnami/postgresql)
   containerSecurityContext:
-    enabled: false
-    fsGroup: 1001
+    # enabled: true
+    # fsGroup: 1001
+    enabled: true
+    runAsUser: 1001
+    runAsNonRoot: true
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
 
   # Other pod security context to be included as-is in the pod spec
   # (see https://github.com/bitnami/charts/tree/master/bitnami/postgresql)
   securityContext:
-    enabled: false
+    enabled: true
+    fsGroup: 1001
+    runAsUser: 1001
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
 
   ## PostgreSQL data Persistent Volume Storage Class
   ## If defined, storageClassName: <storageClass>
@@ -537,6 +714,8 @@ postgresql:
     accessModes:
       - ReadWriteOnce
     size: 1Gi
+
+    ## Provide any additional annotations which may be required. Evaluated as a template.
     annotations: {}
     ## selector can be used to match an existing PersistentVolume
     ## selector:
@@ -548,7 +727,7 @@ redis:
   image:
     registry: docker.io
     repository: bitnami/redis
-    tag: 6.2.5-debian-10-r34
+    tag:  7.2.4-debian-12-r9
     ## Specify a imagePullPolicy
     ## Defaults to 'Always' if image tag is 'latest', else set to 'IfNotPresent'
     ## ref: http://kubernetes.io/docs/user-guide/images/#pre-pulling-images
@@ -633,7 +812,7 @@ redis:
 
     # === NETWORKING AND CONNECTIONS ===
     # Optimized timeout for connection pooling
-    timeout 0
+    timeout 300
     tcp-keepalive 300
     tcp-backlog 2048
 
@@ -657,6 +836,17 @@ redis:
     repl-diskless-sync-delay 5
     repl-diskless-load swapdb
 
+    # Increase replication backlog to prevent frequent full resyncs
+    repl-backlog-size 64mb
+    repl-backlog-ttl 3600
+    
+    # Optimize client output buffer limits for replicas
+    client-output-buffer-limit replica 512mb 256mb 60
+    client-output-buffer-limit normal 256mb 128mb 30
+    
+    # Improve replication timeout
+    repl-timeout 300
+    
     # === SECURITY AND STABILITY ===
     # Disable dangerous commands
     # rename-command FLUSHDB ""
@@ -763,8 +953,13 @@ redis:
     ## @param master.resources.requests The requested resources for the Redis&trade; master containers
     ##
     resources:
-      limits: {}
-      requests: {}
+      limits:
+        cpu: 2000m      # 2 CPU cores
+        memory: 4096Mi  # 4GB memory
+      requests:
+        cpu: 500m       # 0.5 guaranteed CPU cores
+        memory: 1536Mi  # 1.5GB guaranteed memory
+
     ## Configure Pods Security Context
     ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod
     ## @param master.podSecurityContext.enabled Enabled Redis&trade; master pods' Security Context
@@ -773,6 +968,8 @@ redis:
     podSecurityContext:
       enabled: true
       fsGroup: 1001
+      runAsUser: 1001
+      runAsNonRoot: true
     ## Configure Container Security Context
     ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod
     ## @param master.containerSecurityContext.enabled Enabled Redis&trade; master containers' Security Context
@@ -781,6 +978,11 @@ redis:
     containerSecurityContext:
       enabled: true
       runAsUser: 1001
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
     ## @param master.schedulerName Alternate scheduler for Redis&trade; master pods
     ## ref: https://kubernetes.io/docs/tasks/administer-cluster/configure-multiple-schedulers/
     ##
@@ -1068,12 +1270,13 @@ redis:
       # choice for the user. This also increases chances charts run on environments with little
       # resources, such as Minikube. If you do want to specify resources, uncomment the following
       # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-      limits: {}
-      #   cpu: 250m
-      #   memory: 256Mi
-      requests: {}
-      #   cpu: 250m
-      #   memory: 256Mi
+      limits:
+        cpu: 1500m      # 1.5 CPU cores
+        memory: 3072Mi  # 3GB memory
+      requests:
+        cpu: 300m       # 0.3 guaranteed CPU cores
+        memory: 1024Mi  # 1GB guaranteed memory
+
     ## Configure Pods Security Context
     ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod
     ## @param replica.podSecurityContext.enabled Enabled Redis&trade; replicas pods' Security Context
