@@ -67,8 +67,8 @@ def _log_key_value(key) -> str:
 class Timeout:
     # Set default timeouts
     NONE = 0
-    DEFAULT = _get_timeout(_get_timeout_key('DEFAULT'), default=30)
-    REQUEST = _get_timeout(_get_timeout_key('REQUEST'), default=30)
+    DEFAULT = _get_timeout(_get_timeout_key('DEFAULT'), default=15)
+    REQUEST = _get_timeout(_get_timeout_key('REQUEST'), default=15)
     SESSION = _get_timeout(_get_timeout_key('SESSION'), default=3600)
     WORKFLOW = _get_timeout(_get_timeout_key('WORKFLOW'), default=86400)
     BUILD = _get_timeout(_get_timeout_key('BUILD'), default=86400)
