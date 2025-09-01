@@ -113,7 +113,7 @@ def pick_workflow(app_user, name=None):
     raise RuntimeError(f"Unable to find the workflow {name}")
 
 
-def register_workflow(app_user, w):
+def register_workflow(app_user, w) -> tuple[dict, WorkflowVersion]:
     # get the registry
     registry = None
     if 'registry_uri' in w:

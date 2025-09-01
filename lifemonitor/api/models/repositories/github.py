@@ -131,6 +131,14 @@ class GithubRepositoryRevision():
     def refs(self):
         return map(lambda x: GithubRepositoryReference(self._repository, x), self._raw_data.get('refs'))
 
+    def is_branch(self) -> bool:
+        # Return True if the revision is a branch
+        return self.main_ref.type == "branch"
+
+    def is_tag(self) -> bool:
+        # Return True if the revision is a tag
+        return self.main_ref.type == "tag"
+
 
 class TempWorkflowRepositoryMetadata(WorkflowRepositoryMetadata):
 
@@ -255,10 +263,33 @@ class InstallationGithubWorkflowRepository(GithubRepository, WorkflowRepository)
 
     def get_revision(self, branch_or_ref: str) -> GithubRepositoryRevision:
         rev_data = get_git_repo_revision(self.local_repo.local_path)
-        main_ref = next((_ for _ in rev_data["refs"] if branch_or_ref in (_["shorthand"], _["ref"])), None)
+        main_ref = self.__find_ref__(rev_data, branch_or_ref)
         assert main_ref, "Unable to find ref '{}'".format(branch_or_ref)
         rev_data["main_ref"] = main_ref
         return GithubRepositoryRevision(self, rev_data)
+
+    @staticmethod
+    def __find_ref__(rev_data, branch_or_ref):
+        def normalize(ref: str) -> str:
+            # Remove common prefixes
+            if ref.startswith("refs/remotes/"):
+                ref = ref.removeprefix("refs/remotes/")
+            if ref.startswith("origin/"):
+                ref = ref.removeprefix("origin/")
+            return ref
+
+        for ref in rev_data["refs"]:
+            shorthand = ref.get("shorthand")
+            fullref = ref.get("ref")
+            candidates = {
+                shorthand,
+                fullref,
+                normalize(shorthand),
+                normalize(fullref),
+            }
+            if branch_or_ref in candidates:
+                return ref
+        return None
 
     @property
     def files(self):

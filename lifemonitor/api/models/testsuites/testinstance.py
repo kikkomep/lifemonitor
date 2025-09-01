@@ -27,6 +27,7 @@ from typing import List
 
 import lifemonitor.api.models as models
 from lifemonitor.api.models import db
+from lifemonitor.api.models.testsuites.testbuild import BuildStatus
 from lifemonitor.cache import Timeout, cached
 from lifemonitor.models import JSON, UUID, ModelMixin
 
@@ -47,8 +48,8 @@ class TestInstance(db.Model, ModelMixin):
     parameters = db.Column(JSON, nullable=True)
     submitter_id = db.Column(db.Integer,
                              db.ForeignKey(models.User.id), nullable=True)
-    last_builds_update = db.Column(db.DateTime, default=datetime.datetime.utcnow,
-                                   onupdate=datetime.datetime.utcnow)
+    _builds_refreshed_at = db.Column("builds_refreshed_at",
+                                     db.DateTime, default=datetime.datetime.now(datetime.timezone.utc))
     # configure relationships
     submitter = db.relationship("User", uselist=False)
     test_suite = db.relationship("TestSuite",
@@ -81,6 +82,9 @@ class TestInstance(db.Model, ModelMixin):
     def __eq__(self, o: object) -> bool:
         return isinstance(o, TestInstance) and o.uuid == self.uuid
 
+    def __hash__(self):
+        return hash(self.uuid)
+
     @property
     def _cache_key_prefix(self):
         return str(self)
@@ -108,27 +112,60 @@ class TestInstance(db.Model, ModelMixin):
     def last_test_build(self):
         return self.get_last_test_build()
 
+    @property
+    def builds_refreshed_at(self):
+        return self._builds_refreshed_at
+
+    @builds_refreshed_at.setter
+    def builds_refreshed_at(self, value: datetime.datetime = datetime.datetime.now(datetime.timezone.utc)):
+        assert isinstance(value, datetime.datetime), \
+            "builds_refreshed_at must be a datetime object"
+        self._builds_refreshed_at = value
+
     def start_test_build(self):
         return self.testing_service.start_test_build(self)
 
-    @cached(timeout=Timeout.NONE, client_scope=False, transactional_update=True)
+    # Uncomment if you want to cache the last test build
+    # @cached(timeout=Timeout.BUILD, client_scope=False, transactional_update=True)
     def get_last_test_build(self):
-        builds = self.get_test_builds(limit=10)
-        return builds[0] if builds and len(builds) > 0 else None
+        return self.testing_service.get_last_test_build(self)
 
-    @cached(timeout=Timeout.NONE, client_scope=False, transactional_update=True)
+    # Uncomment if you want to cache the test builds
+    # @cached(timeout=Timeout.BUILD, client_scope=False, transactional_update=True)
     def get_test_builds(self, limit=10):
+        builds = None
         try:
-            return self.testing_service.get_test_builds(self, limit=limit)
+            builds = self.testing_service.get_test_builds(self, limit=limit)
         finally:
-            self.last_builds_updated()
+            # self.update_builds_refresh_timestamp(builds)
+            pass
+        return builds
 
-    @cached(timeout=Timeout.BUILD, client_scope=False, transactional_update=True)
+    # Uncomment if you want to cache the test build
+    # @cached(timeout=Timeout.BUILD, client_scope=False, transactional_update=True)
     def get_test_build(self, build_number):
         return self.testing_service.get_test_build(self, build_number)
 
-    def last_builds_updated(self, when=datetime.datetime.utcnow()):
-        self.last_builds_update = when
+    def has_changed_state(self) -> bool:
+        # Check if the test instance has changed its state
+        # only considering transitions between FAILED and PASSED statuses
+
+        # Get the last several builds to find relevant status changes
+        builds = self.get_test_builds(limit=10)
+
+        if not builds:
+            # No builds available
+            return False
+
+        # Filter to get only builds with relevant statuses (PASSED or FAILED)
+        relevant_builds = [b for b in builds if b.status in (BuildStatus.PASSED, BuildStatus.FAILED)]
+
+        if len(relevant_builds) < 2:
+            # Not enough relevant builds to detect a change
+            return False
+
+        # Check if the status has changed between the last two relevant builds
+        return relevant_builds[0].status != relevant_builds[1].status
 
     def to_dict(self, test_build=False, test_output=False):
         data = {
@@ -145,13 +182,26 @@ class TestInstance(db.Model, ModelMixin):
     def all(cls) -> List[TestInstance]:
         return cls.query.all()
 
+    __cache__ = {}
+
     @classmethod
     def find_by_uuid(cls, uuid) -> TestInstance:
-        return cls.query.get(uuid)
+        if uuid in cls.__cache__:
+            return cls.__cache__[uuid]
+        if isinstance(uuid, str):
+            uuid = _uuid.UUID(uuid)
+        instance = cls.query.filter(cls.uuid == uuid).first()
+        if instance:
+            cls.__cache__[uuid] = instance
+        return instance
 
     @classmethod
     def find_by_resource(cls, resource: str) -> List[TestInstance]:
         return cls.query.filter(cls.resource == resource).all()
+
+    @classmethod
+    def find_by_testing_service(cls, testing_service) -> List[TestInstance]:
+        return cls.query.filter(cls.testing_service == testing_service).all()
 
 
 class ManagedTestInstance(TestInstance):

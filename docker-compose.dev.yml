@@ -12,7 +12,6 @@ services:
       # rather than HTTPS. Setting this environment variable will prevent this error from being raised.
       # This is mostly useful for local testing, or automated tests. Never set this variable in production.
       - "AUTHLIB_INSECURE_TRANSPORT=1"
-      - "SERVER_NAME=lm:8000"
     volumes:
       - "./:/lm"
       - "/lm/lifemonitor/static/dist"
@@ -50,7 +49,7 @@ services:
       - "/lm/lifemonitor/static/dist"
 
   dev_proxy:
-    image: bitnami/nginx:1.19-debian-10
+    image: bitnami/nginx:1.28.0
     depends_on:
       - "db"
       - "redis"

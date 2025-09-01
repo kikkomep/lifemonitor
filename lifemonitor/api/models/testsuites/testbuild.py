@@ -46,8 +46,8 @@ class TestBuild(ABC, CacheMixin):
         FAILED = 1
 
     def __init__(self, testing_service: models.TestingService, test_instance: models.TestInstance, metadata) -> None:
-        self.testing_service = testing_service
-        self.test_instance = test_instance
+        self._testing_service = testing_service
+        self._test_instance = test_instance
         self._metadata = metadata
         self._output = None
 
@@ -57,6 +57,9 @@ class TestBuild(ABC, CacheMixin):
     def __eq__(self, other):
         return isinstance(other, TestBuild) \
             and self.id == other.id and self.test_instance == other.test_instance
+
+    def __hash__(self):
+        return hash((self.id, self.test_instance.uuid))
 
     def is_successful(self):
         return self.result == TestBuild.Result.SUCCESS
@@ -146,3 +149,27 @@ class TestBuild(ABC, CacheMixin):
         self.testing_service = models.TestingService.find_by_uuid(state['testing_service'])
         self.test_instance = models.TestInstance.find_by_uuid(state['test_instance'])
         self._metadata = state['metadata']
+
+    @property
+    def test_instance(self) -> models.TestInstance:
+        if not self._test_instance and self._metadata and 'test_instance' in self._metadata:
+            self._test_instance = models.TestInstance.find_by_uuid(self._metadata['test_instance'])
+        return self._test_instance
+
+    @test_instance.setter
+    def test_instance(self, value: models.TestInstance):
+        assert isinstance(value, models.TestInstance), \
+            "test_instance must be a TestInstance object"
+        self._test_instance = value
+
+    @property
+    def testing_service(self) -> models.TestingService:
+        if not self._testing_service and self._metadata and 'testing_service' in self._metadata:
+            self._testing_service = models.TestingService.find_by_uuid(self._metadata['testing_service'])
+        return self._testing_service
+
+    @testing_service.setter
+    def testing_service(self, value: models.TestingService):
+        assert isinstance(value, models.TestingService), \
+            "testing_service must be a TestingService object"
+        self._testing_service = value

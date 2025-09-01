@@ -117,10 +117,21 @@ def workflows_get(status=False, versions=False, subscriptions=False, only_subscr
     elif current_registry:
         workflows.extend(lm.get_registry_workflows(current_registry))
     logger.debug("workflows_get. Got %s workflows (user: %s)", len(workflows), current_user)
-    return serializers.ListOfWorkflows(workflow_status=status, workflow_versions=versions,
-                                       subscriptionsOf=[current_user] if subscriptions else []).dump(
-        list(dict.fromkeys(workflows))
+    # Determine whose subscriptions to include
+    subscriptions_of = []
+    if subscriptions and current_user and not current_user.is_anonymous:
+        subscriptions_of = [current_user]
+
+    # Create the serializer
+    serializer = serializers.ListOfWorkflows(
+        workflow_status=status,
+        workflow_versions=versions,
+        subscriptionsOf=subscriptions_of
     )
+
+    # Remove duplicates and serialize the workflows
+    unique_workflows = list(dict.fromkeys(workflows))
+    return serializer.dump(unique_workflows)
 
 
 def __get_workflow_version__(wf_uuid, wf_version=None) -> models.WorkflowVersion:
@@ -156,7 +167,7 @@ def workflows_get_by_id(wf_uuid, wf_version):
     response = __get_workflow_version__(wf_uuid, wf_version)
     return response if isinstance(response, Response) \
         else serializers.WorkflowVersionSchema(subscriptionsOf=[current_user]
-                                               if not current_user.is_anonymous
+                                               if current_user and not current_user.is_anonymous
                                                else None, rocrate_metadata=True).dump(response)
 
 

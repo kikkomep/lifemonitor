@@ -168,7 +168,7 @@ class TestingConfig(BaseConfig):
     SECRET_KEY = os.getenv("TEST_SECRET_KEY", BaseConfig.SECRET_KEY)
     DEBUG = False
     TESTING = True
-    LOG_LEVEL = "DEBUG"
+    LOG_LEVEL = "WARNING"
     # SQLALCHEMY_DATABASE_URI = "sqlite:///{0}/app-test.db".format(basedir)
     # CACHE_TYPE = "flask_caching.backends.nullcache.NullCache"
     CACHE_TYPE = "flask_caching.backends.rediscache.RedisCache"
@@ -181,7 +181,7 @@ class TestingSupportConfig(TestingConfig):
     CONFIG_NAME = "testingSupport"
     DEBUG = False
     TESTING = False
-    LOG_LEVEL = "DEBUG"
+    LOG_LEVEL = "WARNING"
     DATA_WORKFLOWS = f"{BaseConfig.BASE_TEMP_FOLDER}/lm_tests_data"
     # Service Availability Timeout
     SERVICE_AVAILABILITY_TIMEOUT = 120

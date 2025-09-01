@@ -29,7 +29,7 @@ from .github import (GithubWorkflowRepository,
                      InstallationGithubWorkflowRepository,
                      RepoCloneContextManager)
 from .local import (LocalGitWorkflowRepository, LocalWorkflowRepository,
-                    Base64WorkflowRepository, ZippedWorkflowRepository)
+                    Base64WorkflowRepository, ZippedWorkflowRepository, ZippedLocalGitWorkflowRepository)
 from .templates import WorkflowRepositoryTemplate
 
 __all__ = [
@@ -38,5 +38,5 @@ __all__ = [
     "LocalWorkflowRepository", "LocalGitWorkflowRepository",
     "Base64WorkflowRepository", "ZippedWorkflowRepository",
     "InstallationGithubWorkflowRepository", "GithubWorkflowRepository", "RepoCloneContextManager",
-    "WorkflowRepositoryTemplate"
+    "WorkflowRepositoryTemplate", "ZippedLocalGitWorkflowRepository"
 ]
