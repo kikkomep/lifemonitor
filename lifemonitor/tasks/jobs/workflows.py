@@ -18,22 +18,26 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import datetime
 import logging
 import time
 
+from apscheduler.triggers.interval import IntervalTrigger
 from flask import Response
 
 from lifemonitor.api.controllers import process_workflows_post
+from lifemonitor.cache import Timeout
 from lifemonitor.exceptions import report_problem_from_exception
 
-from ..models import Job
-from ..scheduler import TASK_EXPIRATION_TIME, schedule
+from ..models import Job, JobSettings
+from ..scheduler import schedule
 
 # set module level logger
 logger = logging.getLogger(__name__)
 
 
-@schedule(name='register_workflow', queue_name="workflows", options={'max_retries': 0, 'max_age': TASK_EXPIRATION_TIME})
+@schedule(name='register_workflow', queue_name="workflows", options={
+    'max_retries': JobSettings.MAX_RETRIES, 'max_age': JobSettings.MAX_AGE})
 def register_workflow(job_id: str, registration_data: object):
     logger.debug("Event parameters: %r", registration_data)
     # get job
@@ -55,3 +59,63 @@ def register_workflow(job_id: str, registration_data: object):
     else:
         job.update_status('completed', save=False)
         job.update_data({'result': result})
+
+
+@schedule(trigger=IntervalTrigger(seconds=Timeout.WORKFLOW),
+          queue_name='workflows', options={
+              'max_retries': JobSettings.MAX_RETRIES,
+              'max_age': JobSettings.MAX_AGE},
+          job_options={'misfire_grace_time': JobSettings.MISFIRE_GRACE_TIME,
+                       'max_instances': JobSettings.MAX_INSTANCES,
+                       'coalesce': JobSettings.COALESCE})
+def check_workflows():
+    """
+    """
+    from flask import current_app
+
+    from lifemonitor.api.controllers import workflows_rocrate_download
+    from lifemonitor.api.models import Workflow
+    from lifemonitor.auth.services import login_user, logout_user
+    from lifemonitor.cache import cache
+
+    # Set start time
+    start_time = time.time()
+
+    logger.info(f"Starting 'check_workflows' task at {start_time}.....")
+    with cache.transaction(name=f"check_workflows@{datetime.datetime.now()}", force_update=True):
+        for w in Workflow.all():
+            try:
+                for v in w.versions.values():
+                    # Check if the Workflow ROCrate is downloadable
+                    u = v.submitter
+                    with current_app.test_request_context():
+                        try:
+                            if u is not None:
+                                login_user(u)
+                            logger.info(f"Updating RO-Crate of the workflow version {v}...")
+                            workflows_rocrate_download(w.uuid, v.version)
+                            logger.info(f"Updating RO-Crate of the workflow version {v}... DONE")
+                        except Exception as e:
+                            logger.error(f"Error when updating the RO-Crate of the workflow version {v}: {str(e)}")
+                            if logger.isEnabledFor(logging.DEBUG):
+                                logger.exception(e)
+                        finally:
+                            try:
+                                logout_user()
+                            except Exception as e:
+                                logger.debug(e)
+
+                    # Check is the workflow has an available workflow repository
+                    repo = v.get_repository(reload=True)
+                    if not repo:
+                        logger.warning(f"Workflow version {v} does not have an available repository.")
+                        assert not v.has_repository()
+                    # Update the repository availability status
+                    v.save()
+            except Exception as e:
+                logger.error("Error when executing task 'check_workflows' against the workflow %s: %s", str(w), str(e))
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.exception(e)
+    # compute the elapsed time
+    elapsed_time = time.time() - start_time
+    logger.info(f"Starting 'check_workflows' task.... DONE! Elapsed time: {elapsed_time:.2f} seconds")

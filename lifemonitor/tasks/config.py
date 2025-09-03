@@ -29,6 +29,7 @@ from dramatiq.brokers.redis import RedisBroker
 from dramatiq.results import Results
 from dramatiq.results.backends.redis import RedisBackend
 
+from lifemonitor.tasks.models import JobSettings
 from lifemonitor.tasks.scheduler import Scheduler
 
 from .jobs import load_job_modules
@@ -72,6 +73,9 @@ def init_task_queues(app, load_jobs: bool = True):
     if app.config.get("WEBSOCKET_SERVER", False):
         logger.info("Init task queue disabled on SocketIO handler")
         return
+
+    # Load job settings
+    JobSettings.load(app.config)
 
     # register jobs controller
     from .controller import blueprint

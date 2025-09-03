@@ -25,5 +25,5 @@ from datetime import timedelta
 
 DEFAULT_BASE_URL = "https://api.github.com"
 DEFAULT_TIMEOUT = 15
-DEFAULT_PER_PAGE = 30
+DEFAULT_PER_PAGE = 100
 DEFAULT_TOKEN_EXPIRATION = timedelta(seconds=60)

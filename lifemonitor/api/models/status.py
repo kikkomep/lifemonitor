@@ -21,6 +21,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 
 import lifemonitor.exceptions as lm_exceptions
 from lifemonitor.lang import messages
@@ -42,6 +43,11 @@ class Status:
         self._status = AggregateTestStatus.NOT_AVAILABLE
         self._latest_builds = None
         self._availability_issues = None
+        self._updated_at = None
+
+    @property
+    def updated_at(self):
+        return self._updated_at
 
     @property
     def aggregated_status(self):
@@ -104,13 +110,11 @@ class Status:
                     else:
                         # Search the latest completed build
                         for latest_build in latest_test_builds:
-                            logger.debug("Checking build %r: %r", latest_build, latest_build.status)
                             if not cls._skip_build(latest_build):
                                 break
                         # add build to the set of latest builds
                         latest_builds.append(latest_build)
                         # Update aggregated status using the latest completed build
-                        logger.debug("Latest build found: %r", latest_build)
                         if not cls._skip_build(latest_build):
                             status = cls._update_status(status, latest_build.is_successful())
                 except lm_exceptions.TestingServiceException as e:
@@ -137,6 +141,7 @@ class WorkflowStatus(Status):
     def __init__(self, workflow) -> None:
         self.workflow = workflow
         self._status, self._latest_builds, self._availability_issues = WorkflowStatus.check_status(self.workflow.test_suites)
+        self._updated_at = datetime.now(tz=timezone.utc)
 
 
 class SuiteStatus(Status):
@@ -144,3 +149,4 @@ class SuiteStatus(Status):
     def __init__(self, suite) -> None:
         self.suite = suite
         self._status, self._latest_builds, self._availability_issues = Status.check_status([suite])
+        self._updated_at = datetime.now(tz=timezone.utc)

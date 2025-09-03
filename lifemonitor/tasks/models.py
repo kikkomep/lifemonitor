@@ -28,8 +28,25 @@ from git import List
 
 from lifemonitor.exceptions import EntityNotFoundException
 from lifemonitor.tasks.scheduler import Scheduler
+from lifemonitor.utils import Settings
 
 from .utils import get_job_data, make_job_id, notify_update, set_job_data
+
+# configure the module logger
+logger = logging.getLogger(__name__)
+
+
+class JobSettings(Settings):
+    # Prefix for task settings
+    suffix = "TASK"
+
+    # Default settings
+    MAX_RETRIES = 0
+    MAX_AGE = 86400
+
+    MISFIRE_GRACE_TIME = 60
+    MAX_INSTANCES = 1
+    COALESCE = True
 
 
 class JobNotFound(EntityNotFoundException):

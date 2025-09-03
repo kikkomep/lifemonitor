@@ -21,7 +21,7 @@ services:
       - "data_db:/bitnami/postgresql"
 
   nginx:
-    image: bitnami/nginx:1.19-debian-10
+    image: bitnami/nginx:1.28.0
     depends_on:
       - "lm"
     ports:
@@ -158,7 +158,7 @@ services:
       - life_monitor
 
   redis:
-    image: bitnami/redis:6.2
+    image: bitnami/redis:7.4.3
     ports:
       - "6379"
     env_file: *env_file

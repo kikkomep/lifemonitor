@@ -23,10 +23,16 @@ import logging
 
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
-from lifemonitor.auth.models import (Notification,
+
+from lifemonitor.api.models import TestInstance
+from lifemonitor.api.models.notifications import WorkflowStatusNotification
+from lifemonitor.api.models.testsuites.testbuild import BuildStatus
+from lifemonitor.api.serializers import BuildSummarySchema
+from lifemonitor.auth.models import (EventType, Notification,
                                      UnconfiguredEmailNotification, User)
 from lifemonitor.mail import send_notification
-from lifemonitor.tasks.scheduler import TASK_EXPIRATION_TIME, schedule
+from lifemonitor.tasks.models import JobSettings
+from lifemonitor.tasks.scheduler import schedule
 
 # set module level logger
 logger = logging.getLogger(__name__)
@@ -35,8 +41,44 @@ logger = logging.getLogger(__name__)
 logger.info("Importing task definitions")
 
 
+@schedule(trigger=IntervalTrigger(seconds=60),
+          queue_name="notifications", options={
+              'max_retries': JobSettings.MAX_RETRIES,
+              'max_age': JobSettings.MAX_AGE},
+          job_options={'misfire_grace_time': JobSettings.MISFIRE_GRACE_TIME,
+                       'max_instances': JobSettings.MAX_INSTANCES,
+                       'coalesce': JobSettings.COALESCE})
+def send_test_instance_status_changed_notification():
+    # Handle notification for updated instances
+    for instance in TestInstance.all():
+        has_changed = instance.has_changed_state()
+        logger.info("Test instance %s has changed state: %s", instance, has_changed)
+        if has_changed:
+            last_build = instance.last_test_build
+            workflow_version = last_build.test_instance.test_suite.workflow_version
+            failed = last_build.status == BuildStatus.FAILED
+            notification_name = f"{last_build} {'FAILED' if failed else 'RECOVERED'}"
+            logger.info("Checking for existing notification: %s", notification_name)
+            if len(Notification.find_by_name(notification_name)) == 0:
+                users = workflow_version.workflow.get_subscribers()
+                n = WorkflowStatusNotification(
+                    EventType.BUILD_FAILED if failed else EventType.BUILD_RECOVERED,
+                    notification_name,
+                    {'build': BuildSummarySchema(exclude_nested=False).dump(last_build)},
+                    users)
+                n.save()
+                logger.info("Workflow status notification created: %r", n)
+            else:
+                logger.info("Notification already exists: %s", notification_name)
+
+
 @schedule(trigger=IntervalTrigger(seconds=30),
-          queue_name="notifications", options={'max_retries': 0, 'max_age': TASK_EXPIRATION_TIME})
+          queue_name="notifications", options={
+              'max_retries': JobSettings.MAX_RETRIES,
+              'max_age': JobSettings.MAX_AGE},
+          job_options={'misfire_grace_time': JobSettings.MISFIRE_GRACE_TIME,
+                       'max_instances': JobSettings.MAX_INSTANCES,
+                       'coalesce': JobSettings.COALESCE})
 def send_email_notifications():
     notifications = [n for n in Notification.not_emailed()
                      if not isinstance(n, UnconfiguredEmailNotification)]
@@ -63,11 +105,16 @@ def send_email_notifications():
 
 
 @schedule(trigger=CronTrigger(minute=0, hour=1),
-          queue_name="notifications", options={'max_retries': 0, 'max_age': TASK_EXPIRATION_TIME})
+          queue_name="notifications", options={
+              'max_retries': JobSettings.MAX_RETRIES,
+              'max_age': JobSettings.MAX_AGE},
+          job_options={'misfire_grace_time': JobSettings.MISFIRE_GRACE_TIME,
+                       'max_instances': JobSettings.MAX_INSTANCES,
+                       'coalesce': JobSettings.COALESCE})
 def cleanup_notifications():
     logger.info("Starting notification cleanup")
     count = 0
-    current_time = datetime.datetime.utcnow()
+    current_time = datetime.datetime.now(datetime.timezone.utc)
     one_week_ago = current_time - datetime.timedelta(days=0)
     notifications = Notification.older_than(one_week_ago)
     for n in notifications:
@@ -81,7 +128,11 @@ def cleanup_notifications():
 
 
 @schedule(trigger=IntervalTrigger(seconds=60),
-          queue_name="notifications", options={'max_retries': 0, 'max_age': TASK_EXPIRATION_TIME})
+          queue_name="notifications", options={
+              'max_retries': JobSettings.MAX_RETRIES, 'max_age': JobSettings.MAX_AGE},
+          job_options={'misfire_grace_time': JobSettings.MISFIRE_GRACE_TIME,
+                       'max_instances': JobSettings.MAX_INSTANCES,
+                       'coalesce': JobSettings.COALESCE})
 def check_email_configuration():
     logger.info("Check for users without notification email")
     users = []

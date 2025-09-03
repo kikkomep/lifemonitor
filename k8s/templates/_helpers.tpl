@@ -131,10 +131,6 @@ Define environment variables shared by some pods.
   value: "{{ .Values.redis.master.service.port }}"
 - name: REDIS_PASSWORD
   value: "{{ .Values.redis.auth.password }}"
-- name: WORKER_PROCESSES
-  value: "{{ .Values.worker.processes }}"
-- name: WORKER_THREADS
-  value: "{{ .Values.worker.threads }}"
 - name: GUNICORN_WORKERS
   value: "{{ .Values.lifemonitor.gunicorn.workers }}"
 - name: GUNICORN_THREADS

@@ -21,8 +21,10 @@
 import logging
 
 from apscheduler.triggers.interval import IntervalTrigger
-from lifemonitor.tasks.scheduler import TASK_EXPIRATION_TIME, schedule
+
 from lifemonitor.metrics.services import update_stats
+from lifemonitor.tasks.models import JobSettings
+from lifemonitor.tasks.scheduler import schedule
 
 # set module level logger
 logger = logging.getLogger(__name__)
@@ -32,7 +34,8 @@ logger.info("Importing task definitions")
 
 
 @schedule(trigger=IntervalTrigger(seconds=30), queue_name="metrics",
-          options={'max_retries': 3, 'max_age': TASK_EXPIRATION_TIME})
+          options={'max_retries': JobSettings.MAX_RETRIES,
+                   'max_age': JobSettings.MAX_AGE})
 def update_metrics():
     logger.info("Updating metrics...")
     update_stats()

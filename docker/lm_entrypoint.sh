@@ -24,17 +24,26 @@ else
     export PROMETHEUS_MULTIPROC_DIR=$(mktemp -d ${metrics_base_path}/backend.XXXXXXXX)
   fi
 
+# Compute the number of recommended workers based on the number of CPU cores
+# Formula: (number of cores * 2) + 1
+# This is a common recommendation for Gunicorn to optimize performance
+# Reference: https://docs.gunicorn.org/en/stable/design.html#how-many-workers
+# Note: This is a heuristic and may need adjustment based on the specific application and workload
+# For example, if you have 4 CPU cores, the recommended number of workers would be 9
+# (4 * 2) + 1 = 9  
+RECOMMENDED_WORKERS=$(( $(nproc) * 2 + 1 ))
+
   # gunicorn settings
   export GUNICORN_SERVER="true"
-  export GUNICORN_WORKERS="${GUNICORN_WORKERS:-2}"
-  export GUNICORN_THREADS="${GUNICORN_THREADS:-1}"
+  export GUNICORN_WORKERS="${GUNICORN_WORKERS:-$RECOMMENDED_WORKERS}"
+  export GUNICORN_THREADS="${GUNICORN_THREADS:-2}"
   export GUNICORN_WORKER_CLASS="${GUNICORN_WORKER_CLASS:-sync}"
   export GUNICORN_MAX_REQUESTS="${GUNICORN_MAX_REQUESTS:-0}"
   export GUNICORN_MAX_REQUESTS_JITTER="${GUNICORN_MAX_REQUESTS_JITTER:-0}"
   export GUNICORN_WORKER_CONNECTIONS="${GUNICORN_WORKER_CONNECTIONS:-1000}"
   export GUNICORN_TIMEOUT="${GUNICORN_TIMEOUT:-30}"
   export GUNICORN_GRACEFUL_TIMEOUT="${GUNICORN_GRACEFUL_TIMEOUT:-30}"
-  export GUNICORN_KEEPALIVE="${GUNICORN_KEEPALIVE:-2}"
+  export GUNICORN_KEEPALIVE="${GUNICORN_KEEPALIVE:-10}"
 
   # run app with gunicorn
   printf "Starting app in PROD mode (Gunicorn)"

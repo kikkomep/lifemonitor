@@ -1258,6 +1258,77 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /workflows/{wf_uuid}/validate:
+    get:
+      summary: Validate the latest version of a workflow
+      description: "Validate the latest version of the specified workflow"
+      x-openapi-router-controller: lifemonitor.integrations.validator.controllers
+      operationId: "validate_workflow"
+      tags: ["Workflows"]
+      security:
+        - cookieAuth: []
+        - apiKey: ["workflow.read"]
+        - AuthorizationCodeFlow: ["workflow.read"]
+        - RegistryClientCredentials: ["workflow.read"]
+        - RegistryCodeFlow: ["workflow.read"]
+        - {}
+      parameters:
+        - $ref: "#/components/parameters/wf_uuid"
+        - $ref: "#/components/parameters/validation_severity"
+      responses:
+        "200":
+          description: >
+            Validate the latest version of the specified workflow.
+          # content:
+          #   application/json:
+          #     schema:
+              #   $ref: "#/components/schemas/WorkflowDetails"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /workflows/{wf_uuid}/versions/{wf_version}/validate:
+    get:
+      summary: Validate a workflow version
+      description: Validate the specified version of the specified workflow
+      x-openapi-router-controller: lifemonitor.integrations.validator.controllers
+      operationId: "validate_workflow_version"
+      tags: ["Workflows"]
+      security:
+        - cookieAuth: []
+        - apiKey: ["workflow.read"]
+        - AuthorizationCodeFlow: ["workflow.read"]
+        - RegistryClientCredentials: ["workflow.read"]
+        - RegistryCodeFlow: ["workflow.read"]
+        - {}
+      parameters:
+        - $ref: "#/components/parameters/wf_uuid"
+        - $ref: "#/components/parameters/wf_version"
+        - $ref: "#/components/parameters/validation_severity"
+      responses:
+        "200":
+          description: >
+            Validate the latest version of the specified workflow.
+          # content:
+          #   application/json:
+          #     schema:
+              #   $ref: "#/components/schemas/WorkflowDetails"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+
+
   /suites/{suite_uuid}:
     get:
       summary: "Get a test suite"
@@ -1648,6 +1719,17 @@ components:
         type: string
       required: true
       example: "1.0"
+    validation_severity:
+      name: "severity"
+      in: query
+      schema:
+        type: string
+        enum: [REQUIRED, RECOMMENDED, OPTIONAL]
+        default: "REQUIRED"
+      description: |
+        Severity level of the validation issues to retrieve.
+        Possible values are: `REQUIRED`, `RECOMMENDED`, `OPTIONAL`
+      example: "REQUIRED"
     wf_status:
       name: "status"
       in: query

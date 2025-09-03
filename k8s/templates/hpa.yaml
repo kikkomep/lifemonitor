@@ -1,5 +1,5 @@
 {{- if .Values.lifemonitor.autoscaling.enabled }}
-apiVersion: autoscaling/v2beta1
+apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: {{ include "chart.fullname" . }}
@@ -17,12 +17,16 @@ spec:
     - type: Resource
       resource:
         name: cpu
-        targetAverageUtilization: {{ .Values.lifemonitor.autoscaling.targetCPUUtilizationPercentage }}
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.lifemonitor.autoscaling.targetCPUUtilizationPercentage }}
     {{- end }}
     {{- if .Values.lifemonitor.autoscaling.targetMemoryUtilizationPercentage }}
     - type: Resource
       resource:
         name: memory
-        targetAverageUtilization: {{ .Values.lifemonitor.autoscaling.targetMemoryUtilizationPercentage }}
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.lifemonitor.autoscaling.targetMemoryUtilizationPercentage }}
     {{- end }}
 {{- end }}

@@ -34,7 +34,7 @@ logger = logging.getLogger()
 @pytest.mark.parametrize("client_auth_method", [
     ClientAuthenticationMethod.API_KEY,
 ], indirect=True)
-def test_github_service(app_client, client_auth_method,
+def test_github_service(app_client, client_auth_method, redis_cache,
                         user1, user1_auth, client_credentials_registry):
     wf = {
         'uuid': str(uuid.uuid4()),
