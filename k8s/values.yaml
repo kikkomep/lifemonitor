@@ -332,28 +332,28 @@ lifemonitor:
           value: 100
           periodSeconds: 30
 
-  # OPTIMIZED HEALTH PROBES for Flask
-  livenessProbe:
-    httpGet:
-      path: /health
-      port: 8000
-      scheme: HTTPS
-    initialDelaySeconds: 60  # Flask startup can be slow
-    periodSeconds: 30
-    timeoutSeconds: 10
-    failureThreshold: 3
-    successThreshold: 1
+  # Override default health probes
+  # livenessProbe:
+  #   httpGet:
+  #     path: /health
+  #     port: 8000
+  #     scheme: HTTPS
+  #   initialDelaySeconds: 60  # Flask startup can be slow
+  #   periodSeconds: 30
+  #   timeoutSeconds: 10
+  #   failureThreshold: 3
+  #   successThreshold: 1
 
-  readinessProbe:
-    httpGet:
-      path: /ready    # Separate endpoint for readiness
-      port: 8000
-      scheme: HTTPS
-    initialDelaySeconds: 30
-    periodSeconds: 10
-    timeoutSeconds: 5
-    failureThreshold: 3
-    successThreshold: 1
+  # readinessProbe:
+  #   httpGet:
+  #     path: /ready    # Separate endpoint for readiness
+  #     port: 8000
+  #     scheme: HTTPS
+  #   initialDelaySeconds: 30
+  #   periodSeconds: 10
+  #   timeoutSeconds: 5
+  #   failureThreshold: 3
+  #   successThreshold: 1
 
   # ANTI-AFFINITY for optimal distribution
   affinity:

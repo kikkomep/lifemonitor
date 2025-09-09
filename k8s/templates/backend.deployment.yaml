@@ -78,17 +78,31 @@ spec:
               containerPort: 9090
               protocol: TCP
           livenessProbe:
+          {{- if .Values.lifemonitor.livenessProbe }}
+          {{- toYaml .Values.lifemonitor.livenessProbe | nindent 12 }}
+          {{- else }}
             httpGet:
-              scheme: HTTPS
               path: /health
               port: 8000
+              scheme: HTTPS
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 15
+            failureThreshold: 5
+            {{- end }}
           readinessProbe:
+          {{- if .Values.lifemonitor.readinessProbe }}
+          {{- toYaml .Values.lifemonitor.readinessProbe | nindent 12 }}
+          {{- else }}
             httpGet:
-              scheme: HTTPS
               path: /health
               port: 8000
-            initialDelaySeconds: 5
-            periodSeconds: 3
+              scheme: HTTPS
+            initialDelaySeconds: 60
+            periodSeconds: 60
+            timeoutSeconds: 30
+            failureThreshold: 5
+          {{- end }}
           resources:
             {{- toYaml .Values.lifemonitor.resources | nindent 12 }}
         {{- if .Values.monitoring.loki.enabled }}
