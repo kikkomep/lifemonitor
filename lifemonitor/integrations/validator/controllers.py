@@ -25,9 +25,11 @@ from typing import Optional
 
 from flask import current_app
 
+import lifemonitor.exceptions as lm_exceptions
 from lifemonitor.api.models.workflows import Workflow, WorkflowVersion
 from lifemonitor.api.services import LifeMonitor
-from lifemonitor.integrations.validator.services import validate_workflow_version as do_validate_workflow_version
+from lifemonitor.integrations.validator.services import \
+    validate_workflow_version as do_validate_workflow_version
 
 # Initialize a reference to the LifeMonitor instance
 lm = LifeMonitor.get_instance()
@@ -37,13 +39,28 @@ logger = logging.getLogger(__name__)
 
 
 def validate_workflow(wf_uuid: str, severity: str) -> dict:
-    w = Workflow.find_by_uuid(wf_uuid)
-    return validation_workflow_version_object(w.latest_version, severity)
+    try:
+        workflow: Workflow = Workflow.find_by_uuid(wf_uuid)
+        if not workflow:
+            raise lm_exceptions.EntityNotFoundException(Workflow, entity_id=wf_uuid)
+        return validation_workflow_version_object(workflow.latest_version, severity)
+    except (KeyError, ValueError) as e:
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"Error handling workflow {wf_uuid}: {e}")
+        raise lm_exceptions.BadRequestException(detail=f"Invalid workflow {wf_uuid}")
 
 
 def validate_workflow_version(wf_uuid: str, wf_version: str, severity: str) -> dict:
-    workflow_version: WorkflowVersion = Workflow.find_by_uuid(wf_uuid).versions[wf_version]
-    return validation_workflow_version_object(workflow_version, severity)
+    try:
+        workflow: Workflow = Workflow.find_by_uuid(wf_uuid)
+        if not workflow:
+            raise lm_exceptions.EntityNotFoundException(Workflow, entity_id=wf_uuid)
+        workflow_version: WorkflowVersion = workflow.versions[wf_version]
+        return validation_workflow_version_object(workflow_version, severity)
+    except (KeyError, ValueError) as e:
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"Error handling workflow {wf_uuid} version {wf_version}: {e}")
+        raise lm_exceptions.BadRequestException(detail=f"Invalid workflow {wf_uuid} version {wf_version}")
 
 
 def validation_workflow_version_object(workflow_version: WorkflowVersion,

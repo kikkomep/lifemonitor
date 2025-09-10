@@ -141,6 +141,9 @@ class Workflow(Resource):
         except NoResultFound as e:
             logger.debug(e)
             return None
+        except ValueError as e:
+            logger.debug(e)
+            raise lm_exceptions.BadRequestException(detail=f"Invalid workflow {uuid}")
         except Exception as e:
             raise lm_exceptions.LifeMonitorException(detail=str(e), stack=str(e))
 
@@ -154,6 +157,9 @@ class Workflow(Resource):
         except NoResultFound as e:
             logger.debug(e)
             return None
+        except ValueError as e:
+            logger.debug(e)
+            raise lm_exceptions.BadRequestException(detail=f"Invalid workflow {uuid}")
         except Exception as e:
             raise lm_exceptions.LifeMonitorException(detail=str(e), stack=str(e))
 
