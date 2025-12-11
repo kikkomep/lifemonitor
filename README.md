@@ -52,5 +52,6 @@ guide](https://crs4.github.io/life_monitor/lm_admin_guide).
     Life Monitor was originally developed as part of the <a href="https://www.eosc-life.eu/">EOSC-Life project</a>,
     <br>and its development is now supported by the Region of Sardinia through the <a href="https://www.crs4.it/projects/xdata/">XDATA project</a>.
   </div>
+  <br>
   <img alt="Originally developed as part of the EOSC-Life project and its development is now supported by the Region of Sardinia through the XDATA project" src="https://github.com/kikkomep/lifemonitor/blob/docs/add-xdata-logo/docs/footer-logo-xdata.png" width="350" align="center"/>
 </div>
