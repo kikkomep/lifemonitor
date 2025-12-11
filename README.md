@@ -49,9 +49,8 @@ guide](https://crs4.github.io/life_monitor/lm_admin_guide).
 <div align="center" style="text-align: center;">
   <div><b style="font-size: larger">Acknowledgements</b></div>
   <div>
-    Life Monitor is being developed as part of the <a href="https://www.eosc-life.eu/">EOSC-Life project</a>.
+    Life Monitor was originally developed as part of the <a href="https://www.eosc-life.eu/">EOSC-Life project</a>,
+    <br>and its development is now supported by the Region of Sardinia through the <a href="https://www.crs4.it/projects/xdata/">XDATA project</a>.
   </div>
-  <img alt="EOSC-Life, CRS4, BBMRI-ERIC Logos"
-       src="https://github.com/crs4/life_monitor/raw/master/docs/footer-logo.svg"
-	   width="350" align="center"/>
+  <img alt="Originally developed as part of the EOSC-Life project and its development is now supported by the Region of Sardinia through the XDATA project" src="https://github.com/kikkomep/lifemonitor/blob/docs/add-xdata-logo/docs/footer-logo-xdata.png" width="350" align="center"/>
 </div>
