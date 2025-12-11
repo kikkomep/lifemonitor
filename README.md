@@ -47,7 +47,7 @@ guide](https://crs4.github.io/life_monitor/lm_admin_guide).
 
 <br><br><br>
 <div align="center" style="text-align: center;">
-  <div><b style="font-size: larger">Acknowledgements</b></div>
+  <h3>Acknowledgements</h3>
   <div>
     Life Monitor was originally developed as part of the <a href="https://www.eosc-life.eu/">EOSC-Life project</a>,
     <br>and its development is now supported by the Region of Sardinia through the <a href="https://www.crs4.it/projects/xdata/">XDATA project</a>.
