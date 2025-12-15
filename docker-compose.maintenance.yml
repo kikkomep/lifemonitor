@@ -31,6 +31,7 @@ services:
       - "./settings.conf:/lm/settings.conf:ro" # default settings
       - "./:/lm"
       - "data_workflows:/var/data/lm"
+      - "/tmp/lifemonitor-logs:/var/log/lm"
     ports:
       - "8000"
     networks:
