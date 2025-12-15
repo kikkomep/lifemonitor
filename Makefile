@@ -196,7 +196,7 @@ permissions: certs
 		settings.conf \
 		tests/config/registries/seek/nginx.conf \
 		tests/config/registries/seek/doorkeeper.rb \
-	&& mkdir -p /tmp/lifemonitor-logs
+	&& mkdir -p /tmp/lifemonitor-logs && chmod a+rw /tmp/lifemonitor-logs
 
 
 aux_images: tests/config/registries/seek/seek.Dockerfile certs
