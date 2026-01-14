@@ -3,7 +3,7 @@ services:
     # Docker image docs: https://github.com/bitnami/bitnami-docker-postgresql
     # We use PgSQL 11 instead of 12 since that's the newest version of the client
     # available in the Python image we're using for the application
-    image: bitnami/postgresql:11
+    image: bitnami/postgresql:latest
     ports:
       - "5432"
     env_file: &env_file
