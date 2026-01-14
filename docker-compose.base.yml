@@ -158,7 +158,7 @@ services:
       - life_monitor
 
   redis:
-    image: bitnami/redis:7.4.3
+    image: bitnami/redis:sha256-d92ea14fbdd2fd0e0e3a5f3e657261ba2bd63a1d69d1eda32b1cc3ae6451bc1f
     ports:
       - "6379"
     env_file: *env_file
