@@ -39,6 +39,7 @@ from lifemonitor.api.models.rocrate import ROCrate
 from lifemonitor.auth.models import (HostingService, Permission, Resource,
                                      Subscription, User)
 from lifemonitor.auth.oauth2.client.models import OAuthIdentity
+from lifemonitor.models import PaginationInfo
 from lifemonitor.storage import RemoteStorage
 
 # set module level logger
@@ -164,31 +165,43 @@ class Workflow(Resource):
             raise lm_exceptions.LifeMonitorException(detail=str(e), stack=str(e))
 
     @classmethod
-    def get_user_workflows(cls, owner: User, include_subscriptions=False) -> List[Workflow]:
-        result: List[Workflow] = cls.query.join(Permission)\
-            .filter(Permission.user_id == owner.id).all()
-        if include_subscriptions:
-            subscribed_workflows = cls.query\
+    def get_user_workflows(cls,
+                           owner: User, include_subscriptions=False,
+                           page: Optional[PaginationInfo] = None) -> List[Workflow]:
+        result: List[Workflow] = None
+        if not include_subscriptions:
+            query = cls.query.join(Permission)\
+                .filter(Permission.user_id == owner.id)
+        else:
+            query = cls.query\
                 .join(Subscription).filter(Subscription.user_id == owner.id and Subscription.resource_id == cls.id) \
-                .filter(cls.public == true()).all()
-            user_wf_ids = [w.uuid for w in result]
-            result.extend([w for w in subscribed_workflows if w.uuid not in user_wf_ids])
+                .filter(cls.public == true())
+        if page:
+            result = cls.paginate_query(query, page)
+        else:
+            result = query.all()
         return result
 
     @classmethod
-    def get_public_workflows(cls) -> List[Workflow]:
+    def get_public_workflows(cls, page: Optional[PaginationInfo] = None) -> List[Workflow]:
+        if page:
+            return cls.paginate_query(cls.query.filter(cls.public == true()), page)  # noqa: E712
         return cls.query\
             .filter(cls.public == true()).all()  # noqa: E712
 
     @classmethod
-    def get_hosted_workflows_by_uri(cls, hosting_service: HostingService, uri: str, submitter: User = None) -> List[Workflow]:
+    def get_hosted_workflows_by_uri(cls, hosting_service: HostingService,
+                                    uri: str, submitter: User = None,
+                                    page: Optional[PaginationInfo] = None) -> List[Workflow]:
         query = cls.query\
             .join(WorkflowVersion, cls.id == WorkflowVersion.workflow_id)\
             .join(HostingService, WorkflowVersion.hosting_service_id == HostingService.id)\
             .filter(HostingService.uuid == lm_utils.uuid_param(hosting_service.uuid))\
             .filter(WorkflowVersion.uri == uri)
         if submitter:
-            query.filter(WorkflowVersion.submitter_id == submitter.id)
+            query = query.filter(WorkflowVersion.submitter_id == submitter.id)
+        if page:
+            return cls.paginate_query(query, page)
         return query.all()
 
 
