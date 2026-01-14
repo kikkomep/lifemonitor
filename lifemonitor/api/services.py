@@ -642,7 +642,7 @@ class LifeMonitor:
         return cls._find_and_check_workflow_version(None, uuid, version).workflow
 
     @classmethod
-    def get_public_workflow_version(cls, uuid, version=None) -> models.Workflow:
+    def get_public_workflow_version(cls, uuid, version=None) -> models.WorkflowVersion:
         return cls._find_and_check_workflow_version(None, uuid, version)
 
     @classmethod
