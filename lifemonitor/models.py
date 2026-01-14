@@ -20,17 +20,102 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
-from typing import List
 from datetime import datetime, timezone
+from typing import List, Optional, Union
 
-from sqlalchemy import VARCHAR, types, inspect
+from flask_sqlalchemy import Pagination
+from sqlalchemy import VARCHAR, inspect, types
 
 from lifemonitor.cache import CacheMixin
 from lifemonitor.db import db
 
+logger = logging.getLogger(__name__)
 
-class ModelMixin(CacheMixin):
+
+class PaginationInfo:
+    def __init__(self, page: int, per_page: int, max_items: Optional[int] = None):
+        self.page = page
+        self.per_page = per_page
+        self.max_items = max_items
+        self._data: Union[Pagination, List] = None
+
+    @property
+    def data(self) -> Union[Pagination, List]:
+        return self._data
+
+    @data.setter
+    def data(self, value: Union[Pagination, List]):
+        self._data = value
+
+    @property
+    def total_items(self) -> int:
+        if isinstance(self._data, Pagination):
+            return self._data.total
+        elif isinstance(self._data, list):
+            return len(self._data)
+        else:
+            return 0
+
+    @property
+    def total_pages(self) -> int:
+        """
+        Calculate the total number of pages based on items per page.
+
+        Returns the total number of pages by dividing the total number of items
+        by the number of items per page. If items per page is 0, returns 0 to
+        avoid division by zero.
+
+        Returns:
+            int: The total number of pages. If items per page is 0, returns 0;
+                 otherwise returns (total_items + per_page - 1) // per_page (integer division).
+        """
+        if not self.per_page or self.per_page == 0:
+            return 0
+        return (self.total_items + (self.per_page - 1)) // self.per_page
+
+
+class PageableMixin:
+    @classmethod
+    def paginate_query(cls, query, page: PaginationInfo):
+        """ Paginate a query
+        :param query: The query to paginate
+        :param page: The page number (1-based)
+        :param per_page: The number of items per page
+        :param max_per_page: The maximum number of items per page
+        :return: A list of items for the requested page
+        """
+        pagination = query.paginate(
+            page=page.page,
+            per_page=page.per_page,
+            max_per_page=page.max_items,
+            error_out=False
+        )
+        page.data = pagination
+        return pagination.items
+
+    @classmethod
+    def paginate_list(cls, items: List, page: PaginationInfo):
+        """ Paginate a list of items
+        :param items: The list of items to paginate
+        :param page: The page number. The first page is 0.
+        :param per_page: The number of items per page
+        :param max_per_page: The maximum number of items per page
+        :return: A list of items for the requested page
+        """
+        if page.max_items is not None:
+            per_page = min(page.per_page, page.max_items)
+        else:
+            per_page = page.per_page
+        start = page.page * per_page
+        end = start + per_page
+        paginated_items = items[start:end]
+        page.data = paginated_items
+        return paginated_items
+
+
+class ModelMixin(CacheMixin, PageableMixin):
 
     def refresh(self, **kwargs):
         db.session.refresh(self, **kwargs)
