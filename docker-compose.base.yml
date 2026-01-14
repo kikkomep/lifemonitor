@@ -21,7 +21,7 @@ services:
       - "data_db:/bitnami/postgresql"
 
   nginx:
-    image: bitnami/nginx:1.28.0
+    image: bitnami/nginx:sha256-c1df1c4b07027d4fcc8e1bdf7e7118d4c05318d2a0f92cce511369a7979a3d05
     depends_on:
       - "lm"
     ports:
