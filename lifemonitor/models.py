@@ -104,9 +104,10 @@ class PageableMixin:
         :param max_per_page: The maximum number of items per page
         :return: A list of items for the requested page
         """
+        per_page = len(items)
         if page.max_items is not None:
             per_page = min(page.per_page, page.max_items)
-        else:
+        elif page.per_page is not None:
             per_page = page.per_page
         start = page.page * per_page
         end = start + per_page
