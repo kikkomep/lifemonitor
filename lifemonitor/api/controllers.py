@@ -113,20 +113,31 @@ def workflows_get(status=False, versions=False, subscriptions=False,
                   page: int = 0, per_page: Optional[int] = None,
                   max_items: Optional[int] = None,
                   only_subscriptions=False,):
+    # Prepare pagination info
     page_info = PaginationInfo(page=page, per_page=per_page, max_items=max_items)
+    # Collect workflows depending on the current user/registry in session
     workflows = []
+    # If no user is logged in
     if not current_user or current_user.is_anonymous:
-        workflows = lm.get_public_workflows(page=page_info)
-
+        # If a registry is in the current session,
+        # get both public and registry workflows
+        if current_registry:
+            workflows.extend(lm.get_registry_workflows(
+                current_registry, include_public=True,
+                page=page_info))
+        # Engage public workflows only
+        else:
+            workflows.extend(lm.get_public_workflows(page=page_info))
+    # If a user is logged in
+    # include public workflows as well as user workflows
     elif current_user and not current_user.is_anonymous:
         workflows.extend(lm.get_user_workflows(current_user,
                                                include_subscriptions=subscriptions,
                                                include_public=True,
                                                only_subscriptions=only_subscriptions,
                                                page=page_info))
-    elif current_registry:
-        workflows.extend(lm.get_registry_workflows(current_registry, page=page_info))
     logger.debug("workflows_get. Got %s workflows (user: %s)", len(workflows), current_user)
+
     # Determine whose subscriptions to include
     subscriptions_of = []
     if subscriptions and current_user and not current_user.is_anonymous:
