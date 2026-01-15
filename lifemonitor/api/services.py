@@ -538,8 +538,20 @@ class LifeMonitor:
         return models.Workflow.all()
 
     @staticmethod
-    def get_registry_workflows(registry: models.WorkflowRegistry) -> List[models.Workflow]:
-        return registry.get_workflows()
+    def get_registry_workflows(registry: models.WorkflowRegistry,
+                               include_public: bool = False,
+                               page: Optional[PaginationInfo] = None) -> List[models.Workflow]:
+        # Retrieve workflows from the registry
+        workflows = registry.get_workflows()
+        # Include public workflows if needed
+        if include_public:
+            public_workflows = models.Workflow.get_public_workflows(page=page)
+            workflows.extend([w for w in public_workflows if w not in workflows])
+        # Paginate results if needed
+        if page:
+            workflows = models.Workflow.paginate_list(workflows, page)
+        # Return the list of workflows
+        return workflows
 
     @staticmethod
     def get_registry_workflow(registry: models.WorkflowRegistry) -> models.Workflow:
