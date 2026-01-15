@@ -104,15 +104,22 @@ class PageableMixin:
         :param max_per_page: The maximum number of items per page
         :return: A list of items for the requested page
         """
+        # default per_page to the length of items
         per_page = len(items)
-        if page.max_items is not None:
-            per_page = min(page.per_page, page.max_items)
-        elif page.per_page is not None:
-            per_page = page.per_page
-        start = page.page * per_page
+        # choose per_page safely only when values are provided
+        if page.per_page and page.per_page > 0:
+            per_page = min(page.per_page, len(items))
+        # Compute start and end indices
+        start = (page.page - 1) * per_page
         end = start + per_page
+        # Adjust end index if max_items is set
+        if page.max_items is not None:
+            end = min(end, page.max_items)
+        # Slice the list to get the paginated items
         paginated_items = items[start:end]
+        # Set pagination data
         page.data = paginated_items
+        # Return the paginated items
         return paginated_items
 
 

@@ -110,7 +110,7 @@ def workflow_registries_get_current():
 
 @cached(timeout=Timeout.REQUEST)
 def workflows_get(status=False, versions=False, subscriptions=False,
-                  page: int = 0, per_page: Optional[int] = None,
+                  page: int = 1, per_page: Optional[int] = None,
                   max_items: Optional[int] = None,
                   only_subscriptions=False,):
     # Prepare pagination info

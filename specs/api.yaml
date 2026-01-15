@@ -1771,9 +1771,9 @@ components:
       in: query
       schema:
         type: integer
-        minimum: 0
-        default: 0
-      description: "Page number for paginated results. First page is 0"
+        minimum: 1
+        default: 1
+      description: "Page number for paginated results. First page is 1"
     per_page:
       name: "per_page"
       in: query
