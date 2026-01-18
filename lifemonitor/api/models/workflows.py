@@ -176,7 +176,7 @@ class Workflow(Resource):
             query = cls.query\
                 .join(Subscription).filter(Subscription.user_id == owner.id and Subscription.resource_id == cls.id) \
                 .filter(cls.public == true())
-        if page:
+        if page and page.per_page:
             result = cls.paginate_query(query, page)
         else:
             result = query.all()
@@ -184,7 +184,7 @@ class Workflow(Resource):
 
     @classmethod
     def get_public_workflows(cls, page: Optional[PaginationInfo] = None) -> List[Workflow]:
-        if page:
+        if page and page.per_page:
             return cls.paginate_query(cls.query.filter(cls.public == true()), page)  # noqa: E712
         return cls.query\
             .filter(cls.public == true()).all()  # noqa: E712
@@ -200,7 +200,7 @@ class Workflow(Resource):
             .filter(WorkflowVersion.uri == uri)
         if submitter:
             query = query.filter(WorkflowVersion.submitter_id == submitter.id)
-        if page:
+        if page and page.per_page:
             return cls.paginate_query(query, page)
         return query.all()
 
