@@ -2684,6 +2684,10 @@ components:
           required:
             - items
 
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+          optional: true
+
     AggregateTestStatus:
       type: string
       enum:
@@ -3051,6 +3055,31 @@ components:
       required:
         - title
         - status
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          description: Current page number
+          example: 1
+        per_page:
+          type: integer
+          description: Number of items per page
+          example: 10
+        total_items:
+          type: integer
+          description: Total number of items
+          example: 100
+        total_pages:
+          type: integer
+          description: Total number of pages
+          example: 10
+      required:
+          - page
+          - per_page
+          - total_items
+          - total_pages
 
   securitySchemes:
     cookieAuth:
