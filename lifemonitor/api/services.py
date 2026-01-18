@@ -26,6 +26,7 @@ from typing import Dict, List, Optional, Union
 
 import lifemonitor.exceptions as lm_exceptions
 from lifemonitor.api import models
+from lifemonitor.api.models.status import AggregateTestStatus
 from lifemonitor.auth.models import (EventType,
                                      ExternalServiceAuthorizationHeader,
                                      HostingService, Notification, Permission,
@@ -822,3 +823,43 @@ class LifeMonitor:
                 # "lastUpdate": int(row[2].timestamp() * 1000)
             })
         return result
+
+    @classmethod
+    def get_workflows_stats(cls, workflows: Optional[List[models.Workflow]] = None):
+        # Reference to the list of workflows
+        workflows = workflows if workflows is not None else models.Workflow.all()
+        workflow_versions = [v for w in workflows for v in w.versions.values()]
+        test_suites = [s for wv in workflow_versions for s in wv.test_suites]
+        test_instances = [ti for ts in test_suites for ti in ts.test_instances]
+
+        # Basic stats
+        return {
+            "total_workflows": len(workflows),
+            "total_workflow_versions": len(workflow_versions),
+            "total_test_suites": len(test_suites),
+            "total_test_instances": len(test_instances),
+            "total_public_workflows": len([w for w in workflows if w.public]),
+            "total_private_workflows": len([w for w in workflows if not w.public]),
+        }
+
+    @classmethod
+    def get_workflows_status_stats(cls, workflows: Optional[List[models.Workflow]] = None):
+        # Reference to the list of workflows
+        # Use provided workflows or all workflows if None
+        workflows = workflows if workflows is not None else models.Workflow.all()
+
+        # Group workflows by aggregated status
+        status_counts = {
+            AggregateTestStatus.ALL_PASSING: 0,
+            AggregateTestStatus.SOME_PASSING: 0,
+            AggregateTestStatus.ALL_FAILING: 0,
+            AggregateTestStatus.NOT_AVAILABLE: 0,
+        }
+
+        # Count workflows per status
+        for wf in workflows:
+            status = wf.latest_version.status.aggregated_status
+            if status not in status_counts:
+                status_counts[status] = 0
+            status_counts[status] += 1
+        return status_counts
