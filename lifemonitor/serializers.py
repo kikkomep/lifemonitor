@@ -149,7 +149,7 @@ class ListOfItems(ResourceMetadataSchema):
         self._page = page
 
     items = fields.Method("get_items")
-    page = fields.Method("get_pagination")
+    pagination = fields.Method("get_pagination")
 
     def get_pagination(self, obj):
         if self._page and self._page.per_page and self._page.per_page > 0:
