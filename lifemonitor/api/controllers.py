@@ -56,6 +56,28 @@ def _row_to_dict(row):
 
 
 @cached(timeout=Timeout.REQUEST)
+def stats_workflows_get():
+    """
+    Docstring for stats_get
+    """
+    workflows, _ = _get_workflows_list_()
+    stats = lm.get_workflows_stats(workflows)
+    logger.debug("stats_get. Got stats: %s", stats)
+    return stats
+
+
+@cached(timeout=Timeout.REQUEST)
+def stats_workflows_status_get():
+    """
+    Docstring for stats_get
+    """
+    workflows, _ = _get_workflows_list_()
+    stats = lm.get_workflows_status_stats(workflows)
+    logger.debug("stats_get. Got stats: %s", stats)
+    return stats
+
+
+@cached(timeout=Timeout.REQUEST)
 def workflow_registries_get():
     registries = lm.get_workflow_registries()
     logger.debug("registries_get. Got %s registries", len(registries))
