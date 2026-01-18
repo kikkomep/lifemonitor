@@ -93,6 +93,8 @@ class PageableMixin:
             error_out=False
         )
         page.data = pagination
+        page.per_page = pagination.per_page
+        page.max_items = pagination.total
         return pagination.items
 
     @classmethod
