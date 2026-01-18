@@ -481,7 +481,7 @@ class WorkflowVersionListItem(WorkflowSchema):
     def get_versions(self, workflow):
         try:
             if self.workflow_versions:
-                properties = ["uuid", "version", "ro_crate", "is_latest"]
+                properties = ["uuid", "version", "authors", "ro_crate", "is_latest"]
                 if "status" not in self.exclude:
                     properties.append("status")
                 schema = VersionDetailsSchema(only=properties)
