@@ -446,12 +446,22 @@ class WorkflowVersionListItem(WorkflowSchema):
     status = fields.Method("get_status")
     subscriptions = fields.Method("get_subscriptions")
     versions = fields.Method("get_versions")
+    suites = fields.Method("get_suites")
 
     def __init__(self, *args, self_link: bool = True,
-                 workflow_versions: bool = False, subscriptionsOf: List[auth_models.User] = None, **kwargs):
+                 workflow_versions: bool = False, subscriptionsOf: List[auth_models.User] = None,
+                 include_suites: bool = False,
+                 include_instances: bool = False,
+                 include_builds: bool = False,
+                 builds_limit: int = 10,
+                 **kwargs):
         super().__init__(*args, self_link=self_link, **kwargs)
         self.subscriptionsOf = subscriptionsOf
         self.workflow_versions = workflow_versions
+        self.include_suites = include_suites
+        self.include_instances = include_instances
+        self.include_builds = include_builds
+        self.builds_limit = builds_limit
 
     def get_status(self, workflow):
         try:
@@ -513,6 +523,23 @@ class WorkflowVersionListItem(WorkflowSchema):
                     result.append(SubscriptionSchema(exclude=('meta', 'links'), self_link=False).dump(s))
         return result
 
+    def get_suites(self, workflow: models.Workflow):
+        if not self.include_suites:
+            return None
+        from .serializers import ListOfSuites
+        suites = []
+        for suite in workflow.latest_version.test_suites:
+            if self.include_instances:
+                for instance in suite.test_instances:
+                    if self.include_builds:
+                        instance.test_builds = instance.get_test_builds(limit=self.builds_limit)
+            suites.append(suite)
+        return ListOfSuites(
+            self_link=False,
+            status=self.include_builds,
+            latest_builds=self.include_builds
+        ).dump(suites)['items']
+
     @post_dump
     def remove_skip_values(self, data, **kwargs):
         return {
@@ -532,11 +559,17 @@ class ListOfWorkflows(ListOfItems):
                  workflow_status: bool = False, workflow_versions: bool = False,
                  subscriptionsOf: List[auth_models.User] = None,
                  statistics: Optional[object] = None,
+                 include_suites: bool = False, include_instances: bool = False,
+                 include_builds: bool = False, builds_limit: int = 1,
                  **kwargs):
         super().__init__(*args, **kwargs)
         self.workflow_status = workflow_status
         self.workflow_versions = workflow_versions
         self.subscriptionsOf = subscriptionsOf
+        self.include_suites = include_suites
+        self.include_instances = include_instances
+        self.include_builds = include_builds
+        self.builds_limit = builds_limit
         self._statistics = statistics
 
     def get_statistics(self, workflow: models.Workflow):
@@ -550,7 +583,12 @@ class ListOfWorkflows(ListOfItems):
             exclude.append('subscriptions')
         return [self.__item_scheme__(exclude=tuple(exclude), many=False,
                                      subscriptionsOf=self.subscriptionsOf,
-                                     workflow_versions=self.workflow_versions).dump(_) for _ in obj] \
+                                     workflow_versions=self.workflow_versions,
+                                     include_suites=self.include_suites,
+                                     include_instances=self.include_instances,
+                                     include_builds=self.include_builds,
+                                     builds_limit=self.builds_limit
+                                     ).dump(_) for _ in obj] \
             if self.__item_scheme__ else None
 
 
@@ -571,10 +609,12 @@ class SuiteSchema(ResourceMetadataSchema):
     latest_builds = fields.Method("get_latest_builds")
 
     def __init__(self, *args, self_link: bool = True,
-                 status: bool = False, latest_builds: bool = False, **kwargs):
+                 status: bool = False,
+                 latest_builds: bool = False, builds_limit: int = 10, **kwargs):
         super().__init__(*args, self_link=self_link, **kwargs)
         self.status = status
         self.latest_builds = latest_builds
+        self.builds_limit = builds_limit
 
     def get_definition(self, obj):
         if not hasattr(obj, 'definition') or not obj.definition:
@@ -605,9 +645,14 @@ class SuiteSchema(ResourceMetadataSchema):
                 logger.exception(e)
             return None
 
-    def get_latest_builds(self, obj):
+    def get_latest_builds(self, obj: models.TestSuite):
         try:
-            return SuiteStatusSchema(only=('latest_builds',)).dump(obj)['latest_builds'] if self.latest_builds else None
+            # return SuiteStatusSchema(only=('latest_builds',)).dump(obj)['latest_builds'] if self.latest_builds else None
+            # return ListOfTestBuildsSchema().dump(obj.get_latest_builds(limit=self.builds_limit))
+            builds = []
+            for build in obj.get_latest_builds(limit=self.builds_limit):
+                builds.append(BuildSummarySchema(exclude=('meta', 'links')).dump(build))
+            return builds
         except Exception:
             logger.warning("Unable to extract latest_builds for suite: %r", obj)
             return None
