@@ -447,6 +447,10 @@ paths:
         - $ref: "#/components/parameters/wf_versions"
         - $ref: "#/components/parameters/wf_status"
         - $ref: "#/components/parameters/statistics"
+        - $ref: "#/components/parameters/suites"
+        - $ref: "#/components/parameters/instances"
+        - $ref: "#/components/parameters/builds"
+        - $ref: "#/components/parameters/builds_limit"
         - $ref: "#/components/parameters/page"
         - $ref: "#/components/parameters/per_page"
         - $ref: "#/components/parameters/max_items"
@@ -512,6 +516,10 @@ paths:
         - $ref: "#/components/parameters/registry_uuid"
         - $ref: "#/components/parameters/wf_versions"
         - $ref: "#/components/parameters/wf_status"
+        - $ref: "#/components/parameters/suites"
+        - $ref: "#/components/parameters/instances"
+        - $ref: "#/components/parameters/builds"
+        - $ref: "#/components/parameters/builds_limit"
         - $ref: "#/components/parameters/page"
         - $ref: "#/components/parameters/per_page"
         - $ref: "#/components/parameters/max_items"
@@ -576,6 +584,10 @@ paths:
         - $ref: "#/components/parameters/wf_versions"
         - $ref: "#/components/parameters/wf_status"
         - $ref: "#/components/parameters/statistics"
+        - $ref: "#/components/parameters/suites"
+        - $ref: "#/components/parameters/instances"
+        - $ref: "#/components/parameters/builds"
+        - $ref: "#/components/parameters/builds_limit"
         - $ref: "#/components/parameters/page"
         - $ref: "#/components/parameters/per_page"
         - $ref: "#/components/parameters/max_items"
@@ -643,6 +655,10 @@ paths:
         - $ref: "#/components/parameters/wf_versions"
         - $ref: "#/components/parameters/wf_subscriptions"
         - $ref: "#/components/parameters/statistics"
+        - $ref: "#/components/parameters/suites"
+        - $ref: "#/components/parameters/instances"
+        - $ref: "#/components/parameters/builds"
+        - $ref: "#/components/parameters/builds_limit"
         - $ref: "#/components/parameters/page"
         - $ref: "#/components/parameters/per_page"
         - $ref: "#/components/parameters/max_items"
@@ -732,6 +748,10 @@ paths:
         - $ref: "#/components/parameters/wf_versions"
         - $ref: "#/components/parameters/wf_subscriptions"
         - $ref: "#/components/parameters/statistics"
+        - $ref: "#/components/parameters/suites"
+        - $ref: "#/components/parameters/instances"
+        - $ref: "#/components/parameters/builds"
+        - $ref: "#/components/parameters/builds_limit"
         - $ref: "#/components/parameters/page"
         - $ref: "#/components/parameters/per_page"
         - $ref: "#/components/parameters/max_items"
@@ -818,6 +838,11 @@ paths:
         - $ref: "#/components/parameters/wf_uuid"
         - $ref: "#/components/parameters/previous_versions"
         - $ref: "#/components/parameters/rocrate_specs"
+        - $ref: "#/components/parameters/wf_status"
+        - $ref: "#/components/parameters/suites"
+        - $ref: "#/components/parameters/instances"
+        - $ref: "#/components/parameters/builds"
+        - $ref: "#/components/parameters/builds_limit"
       responses:
         "200":
           description: >
@@ -1065,6 +1090,11 @@ paths:
         - $ref: "#/components/parameters/wf_uuid"
         - $ref: "#/components/parameters/wf_version"
         - $ref: "#/components/parameters/rocrate_specs"
+        - $ref: "#/components/parameters/wf_status"
+        - $ref: "#/components/parameters/suites"
+        - $ref: "#/components/parameters/instances"
+        - $ref: "#/components/parameters/builds"
+        - $ref: "#/components/parameters/builds_limit"
       responses:
         "200":
           description: >
@@ -1815,7 +1845,7 @@ components:
       schema:
         type: boolean
       description: |
-        `true` to include the list of versions of each workflow
+        `true` to include the list of versions of the workflow
       example: "false"
     wf_subscriptions:
       name: "subscriptions"
@@ -1833,6 +1863,39 @@ components:
       description: |
         `true` to include workflows statistics
       example: "false"
+    builds:
+      name: "builds"
+      in: query
+      schema:
+        type: boolean
+      description: |
+        `true` to include the list of builds associated with the workflow version
+      example: "false"
+    suites:
+      name: "suites"
+      in: query
+      schema:
+        type: boolean
+      description: |
+        `true` to include the list of test suites associated with the workflow version
+      example: "false"
+    instances:
+      name: "instances"
+      in: query
+      schema:
+        type: boolean
+      description: |
+        `true` to include the list of test instances associated with the workflow version
+      example: "false"
+    builds_limit:
+      name: "builds_limit"
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 10
+      description: "Maximum number of builds to include per instance"
+      example: "10"
     page:
       name: "page"
       in: query
