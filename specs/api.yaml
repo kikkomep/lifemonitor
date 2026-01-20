@@ -574,6 +574,9 @@ paths:
         - $ref: "#/components/parameters/user_id"
         - $ref: "#/components/parameters/wf_versions"
         - $ref: "#/components/parameters/wf_status"
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/per_page"
+        - $ref: "#/components/parameters/max_items"
       responses:
         "200":
           description: List of workflows
