@@ -140,6 +140,45 @@ class RegistryWorkflowSchema(WorkflowSchema):
     registry = fields.Nested(WorkflowRegistrySchema(exclude=('meta', 'links')), attribute="")
 
 
+class VersionDetailsBaseSchema(BaseSchema):
+
+    uuid = fields.String(attribute="uuid")
+    name = fields.String(attribute="name")
+    version = fields.String(attribute="version")
+
+    suites = fields.Method("get_suites")
+
+    def __init__(self, *args,
+                 include_suites=False, include_instances=False,
+                 include_builds=False, builds_limit=1,
+                 include_status=False,
+                 **kwargs):
+
+        super().__init__(*args, **kwargs)
+        self.include_suites = include_suites
+        self.include_instances = include_instances
+        self.include_builds = include_builds
+        self.builds_limit = builds_limit
+        self.include_status = include_status
+
+    def get_suites(self, obj: models.WorkflowVersion):
+        if not self.include_suites:
+            return None
+        from .serializers import ListOfSuites
+        suites = []
+        for suite in obj.test_suites:
+            if self.include_instances:
+                for instance in suite.test_instances:
+                    if self.include_builds:
+                        instance.test_builds = instance.get_test_builds(limit=self.builds_limit)
+            suites.append(suite)
+        return ListOfSuites(
+            self_link=False,
+            status=self.include_status,
+            latest_builds=self.include_builds
+        ).dump(suites)['items']
+
+
 class VersionDetailsSchema(BaseSchema):
     __envelope__ = {"single": None, "many": "items"}
 
@@ -153,13 +192,24 @@ class VersionDetailsSchema(BaseSchema):
     links = fields.Method('get_links')
     status = fields.Method('get_status')
 
+    suites = fields.Method("get_suites")
+
     class Meta:
         model = models.WorkflowVersion
         additional = ('rocrate_metadata',)
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args,
+                 include_suites=False, include_instances=False,
+                 include_builds=False, builds_limit=1,
+                 include_status=False,
+                 **kwargs):
         exclude = kwargs.pop('exclude', ('status',) if "status" not in kwargs.get('only', ()) else ())
         super().__init__(*args, exclude=exclude, **kwargs)
+        self.include_suites = include_suites
+        self.include_instances = include_instances
+        self.include_builds = include_builds
+        self.builds_limit = builds_limit
+        self.include_status = include_status
 
     def get_links(self, obj: models.WorkflowVersion):
         links = {
@@ -204,6 +254,23 @@ class VersionDetailsSchema(BaseSchema):
             rocrate['unavailability_reason'] = str(e)
         return rocrate
 
+    def get_suites(self, obj: models.WorkflowVersion):
+        if not self.include_suites:
+            return None
+        from .serializers import ListOfSuites
+        suites = []
+        for suite in obj.test_suites:
+            if self.include_instances:
+                for instance in suite.test_instances:
+                    if self.include_builds:
+                        instance.test_builds = instance.get_test_builds(limit=self.builds_limit)
+            suites.append(suite)
+        return ListOfSuites(
+            self_link=False,
+            status=self.include_status,
+            latest_builds=self.include_builds
+        ).dump(suites)['items']
+
     @post_dump
     def remove_skip_values(self, data, **kwargs):
         return {
@@ -227,17 +294,37 @@ class WorkflowVersionSchema(ResourceSchema):
     registries = fields.Method("get_registries")
     subscriptions = fields.Method("get_subscriptions")
 
+    status = fields.Method('get_status')
+
     rocrate_metadata = False
     subscriptionsOf: List[auth_models.User] = None
 
-    def __init__(self, *args, rocrate_metadata=False, subscriptionsOf=None, **kwargs):
+    suites = fields.Method("get_suites")
+
+    def __init__(self, *args,
+                 rocrate_metadata=False,
+                 subscriptionsOf=None,
+                 status=False,
+                 include_suites=False, include_instances=False,
+                 include_builds=False, builds_limit=1,
+                 **kwargs):
         super().__init__(*args, **kwargs)
         self.rocrate_metadata = rocrate_metadata
         self.subscriptionsOf = subscriptionsOf
+        self.status = status
+        self.include_suites = include_suites
+        self.include_instances = include_instances
+        self.include_builds = include_builds
+        self.builds_limit = builds_limit
 
     def get_version(self, obj):
         try:
-            exclude = ('rocrate_metadata',) if not self.rocrate_metadata else ()
+            exclude = []
+            if not self.rocrate_metadata:
+                exclude.append('ro_crate')
+            if not self.status:
+                exclude.append('status')
+            # exclude = ('ro_crate',) if not self.rocrate_metadata else ()
         except Exception as e:
             exclude = ('rocrate_metadata',)
             if logger.isEnabledFor(logging.DEBUG):
@@ -256,11 +343,34 @@ class WorkflowVersionSchema(ResourceSchema):
                     result.append(SubscriptionSchema(exclude=('meta', 'links'), self_link=False).dump(s))
         return result
 
+    def get_suites(self, obj: models.WorkflowVersion):
+        if not self.include_suites:
+            return None
+        from .serializers import ListOfSuites
+        return ListOfSuites(
+            self_link=False,
+            status=self.include_builds,
+            include_builds=self.include_builds,
+            include_instances=self.include_instances,
+            latest_builds=self.include_builds,
+            builds_limit=self.builds_limit
+        ).dump(obj.test_suites)['items']
+
     def get_registries(self, obj):
         result = []
         for r in obj.registries:
             result.append(WorkflowRegistrySchema(exclude=('meta', 'links'), self_link=False).dump(r))
         return result
+
+    def get_status(self, obj: models.WorkflowVersion):
+        try:
+            logger.error("Getting status for workflow version %s %r", obj, self.status)
+            if self.status:
+                return WorkflowStatusSchema(only=('aggregate_test_status', 'latest_builds', 'reason')).dump(obj)
+            return None
+        except Exception as e:
+            logger.exception(e)
+            return None
 
     @post_dump
     def remove_skip_values(self, data, **kwargs):
@@ -274,8 +384,19 @@ class LatestWorkflowVersionSchema(WorkflowVersionSchema):
 
     previous_versions = fields.Method("get_versions")
 
+    def __init__(self, *args,
+                 rocrate_metadata=False,
+                 **kwargs):
+        super().__init__(*args,
+                         rocrate_metadata=rocrate_metadata,
+                         **kwargs)
+        self.rocrate_metadata = rocrate_metadata
+
     def get_versions(self, obj: models.WorkflowVersion):
-        schema = VersionDetailsSchema(only=("uuid", "version", "ro_crate"))
+        only = ["uuid", "version", "ro_crate"]
+        if self.rocrate_metadata:
+            only.append("ro_crate")
+        schema = VersionDetailsSchema(only=only)
         return [schema.dump(v)
                 for v in obj.workflow.versions.values() if not v.is_latest]
 
@@ -288,6 +409,17 @@ class ListOfWorkflowVersions(ResourceMetadataSchema):
 
     workflow = fields.Method("get_workflow")
     versions = fields.Method("get_versions")
+
+    def __init__(self, *args,
+                 self_link=True,
+                 rocrate_metadata=False,
+                 subscriptionsOf=None,
+                 include_suites=False,
+                 include_instances=False,
+                 include_builds=False,
+                 builds_limit=None,
+                 **kwargs):
+        super().__init__(*args, self_link=self_link, **kwargs)
 
     def get_workflow(self, obj: models.Workflow):
         return WorkflowSchema(exclude=('meta',)).dump(obj)
@@ -322,6 +454,15 @@ class TestInstanceSchema(ResourceMetadataSchema):
     service = fields.Method("get_testing_service")
     links = fields.Method('get_links')
 
+    builds = fields.Method("get_builds")
+
+    def __init__(self, *args,
+                 self_link=True,
+                 builds_limit=10,
+                 **kwargs):
+        super().__init__(*args, self_link=self_link, **kwargs)
+        self.builds_limit = builds_limit
+
     def get_links(self, obj):
         links = {}
         try:
@@ -340,6 +481,19 @@ class TestInstanceSchema(ResourceMetadataSchema):
             'url': obj.testing_service.url,
             'type': obj.testing_service._type.replace('_testing_service', '')
         }
+
+    def get_builds(self, obj: models.TestInstance):
+        try:
+            builds = []
+            for build in obj.get_test_builds(limit=self.builds_limit):
+                builds.append(BuildSummarySchema(
+                    exclude=('meta', 'links',
+                             'suite_uuid', 'instance_uuid',
+                             'instance')).dump(build))
+            return builds
+        except Exception:
+            logger.warning("Unable to extract latest_builds for suite: %r", obj)
+            return None
 
     @post_dump
     def remove_skip_values(self, data, **kwargs):
@@ -364,17 +518,21 @@ class BuildSummarySchema(ResourceMetadataSchema):
     class Meta:
         model = models.TestBuild
 
-    def __init__(self, *args, self_link: bool = True, exclude_nested=True, **kwargs):
+    def __init__(self, *args, self_link: bool = True,
+                 exclude_nested=True,
+                 exclude_instance_builds=False,
+                 **kwargs):
         exclude = set(kwargs.pop('exclude', ()))
         if exclude_nested:
             exclude = exclude.union(('suite', 'workflow'))
         super().__init__(*args, self_link=self_link, exclude=tuple(exclude), **kwargs)
+        self.exclude_instance_builds = exclude_instance_builds
 
     build_id = fields.String(attribute="id")
     suite_uuid = fields.String(attribute="test_instance.test_suite.uuid")
+    instance_uuid = fields.String(attribute="test_instance.uuid")
     status = fields.String()
-    instance = ma.Nested(TestInstanceSchema(self_link=False, exclude=('meta',)),
-                         attribute="test_instance")
+    instance = fields.Method("get_instance")
     timestamp = fields.String()
     duration = fields.Integer()
     links = fields.Method('get_links')
@@ -390,6 +548,10 @@ class BuildSummarySchema(ResourceMetadataSchema):
         if self._self_link:
             links['self'] = self.self_link
         return links
+
+    def get_instance(self, obj):
+        exclude = ('meta',) if self.exclude_instance_builds else ('meta', 'builds')
+        return TestInstanceSchema(self_link=False, exclude=exclude).dump(obj.test_instance)
 
 
 class WorkflowStatusSchema(WorkflowVersionSchema):
@@ -415,7 +577,7 @@ class WorkflowStatusSchema(WorkflowVersionSchema):
 
     def get_latest_builds(self, workflow_version):
         try:
-            return BuildSummarySchema(exclude=('meta', 'links'), many=True).dump(
+            return BuildSummarySchema(exclude=('meta', 'links', 'instance_uuid'), many=True).dump(
                 workflow_version.status.latest_builds)
         except Exception as e:
             logger.debug(e)
@@ -508,7 +670,7 @@ class WorkflowVersionListItem(WorkflowSchema):
             latest_builds = workflow.latest_version.status.latest_builds
             builds = []
             if latest_builds and len(latest_builds) > 0:
-                builds.append(BuildSummarySchema(exclude=('meta', 'links')).dump(latest_builds[0]))
+                builds.append(BuildSummarySchema(exclude=('meta', 'links', 'instance_uuid')).dump(latest_builds[0]))
             return builds
         except Exception as e:
             logger.debug(e)
@@ -527,18 +689,15 @@ class WorkflowVersionListItem(WorkflowSchema):
         if not self.include_suites:
             return None
         from .serializers import ListOfSuites
-        suites = []
-        for suite in workflow.latest_version.test_suites:
-            if self.include_instances:
-                for instance in suite.test_instances:
-                    if self.include_builds:
-                        instance.test_builds = instance.get_test_builds(limit=self.builds_limit)
-            suites.append(suite)
         return ListOfSuites(
             self_link=False,
             status=self.include_builds,
-            latest_builds=self.include_builds
-        ).dump(suites)['items']
+            latest_builds=self.include_builds,
+            include_builds=self.include_builds,
+            builds_limit=self.builds_limit,
+            include_instances=self.include_instances,
+            exclude=('meta', 'links')
+        ).dump(workflow.latest_version.test_suites)['items']
 
     @post_dump
     def remove_skip_values(self, data, **kwargs):
@@ -603,17 +762,21 @@ class SuiteSchema(ResourceMetadataSchema):
     roc_suite = fields.String(attribute="roc_suite")
     name = ma.auto_field()
     definition = fields.Method("get_definition")
-    instances = fields.Nested(TestInstanceSchema(self_link=False, exclude=('meta',)),
-                              attribute="test_instances", many=True)
     aggregate_test_status = fields.Method("get_status")
     latest_builds = fields.Method("get_latest_builds")
+    instances = fields.Method("get_instances")
 
     def __init__(self, *args, self_link: bool = True,
                  status: bool = False,
-                 latest_builds: bool = False, builds_limit: int = 10, **kwargs):
+                 latest_builds: bool = False,
+                 include_builds: bool = False,
+                 include_instances: bool = True,
+                 builds_limit: int = 10, **kwargs):
         super().__init__(*args, self_link=self_link, **kwargs)
         self.status = status
         self.latest_builds = latest_builds
+        self.include_builds = include_builds
+        self.include_instances = include_instances
         self.builds_limit = builds_limit
 
     def get_definition(self, obj):
@@ -651,11 +814,20 @@ class SuiteSchema(ResourceMetadataSchema):
             # return ListOfTestBuildsSchema().dump(obj.get_latest_builds(limit=self.builds_limit))
             builds = []
             for build in obj.get_latest_builds(limit=self.builds_limit):
-                builds.append(BuildSummarySchema(exclude=('meta', 'links')).dump(build))
+                builds.append(BuildSummarySchema(exclude=('meta', 'links', 'builds')).dump(build))
             return builds
         except Exception:
             logger.warning("Unable to extract latest_builds for suite: %r", obj)
             return None
+
+    def get_instances(self, obj):
+        if not self.include_instances:
+            return None
+        return TestInstanceSchema(
+            self_link=False,
+            builds_limit=self.builds_limit,
+            exclude=('meta', 'links') if self.include_builds else ('meta', 'links', 'builds')
+        ).dump(obj.test_instances, many=True)
 
     @post_dump
     def remove_skip_values(self, data, **kwargs):
@@ -671,10 +843,16 @@ class ListOfSuites(ListOfItems):
     def __init__(self, *args,
                  self_link: bool = True,
                  status: bool = False, latest_builds: bool = False,
+                 include_instances: bool = True,
+                 include_builds: bool = False,
+                 builds_limit: int = 10,
                  **kwargs):
         super().__init__(*args, self_link=self_link, **kwargs)
         self.status = status
         self.latest_builds = latest_builds
+        self.instances = include_instances
+        self.builds = include_builds
+        self.builds_limit = builds_limit
 
     def get_items(self, obj):
         exclude = ['meta', 'links']
@@ -682,10 +860,15 @@ class ListOfSuites(ListOfItems):
             exclude.append('aggregate_test_status')
         if not self.latest_builds:
             exclude.append('latest_builds')
+        if not self.instances:
+            exclude.append('instances')
         return [self.__item_scheme__(
             exclude=tuple(exclude), many=False,
             status=self.status,
-            latest_builds=self.latest_builds
+            latest_builds=self.latest_builds,
+            include_instances=self.instances,
+            include_builds=self.builds,
+            builds_limit=self.builds_limit
         ).dump(_) for _ in obj] if self.__item_scheme__ else None
 
 
