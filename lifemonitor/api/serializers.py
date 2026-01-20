@@ -810,14 +810,14 @@ class SuiteSchema(ResourceMetadataSchema):
 
     def get_latest_builds(self, obj: models.TestSuite):
         try:
-            # return SuiteStatusSchema(only=('latest_builds',)).dump(obj)['latest_builds'] if self.latest_builds else None
-            # return ListOfTestBuildsSchema().dump(obj.get_latest_builds(limit=self.builds_limit))
             builds = []
             for build in obj.get_latest_builds(limit=self.builds_limit):
-                builds.append(BuildSummarySchema(exclude=('meta', 'links', 'builds')).dump(build))
+                builds.append(BuildSummarySchema(exclude=('meta', 'links')).dump(build))
             return builds
-        except Exception:
+        except Exception as e:
             logger.warning("Unable to extract latest_builds for suite: %r", obj)
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.exception(e)
             return None
 
     def get_instances(self, obj):
