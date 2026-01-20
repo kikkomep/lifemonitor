@@ -590,7 +590,7 @@ class LifeMonitor:
         if not only_subscriptions:
 
             # Build a single query combining local workflows and registry workflows
-            workflows = models.Workflow.get_user_workflows(user, include_subscriptions=include_subscriptions, page=page)
+            workflows = models.Workflow.get_user_workflows(user, include_subscriptions=include_subscriptions)
 
             # Include public workflows if needed
             public_workflows = []

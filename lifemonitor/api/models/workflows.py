@@ -166,20 +166,15 @@ class Workflow(Resource):
 
     @classmethod
     def get_user_workflows(cls,
-                           owner: User, include_subscriptions=False,
-                           page: Optional[PaginationInfo] = None) -> List[Workflow]:
-        result: List[Workflow] = None
-        if not include_subscriptions:
-            query = cls.query.join(Permission)\
-                .filter(Permission.user_id == owner.id)
-        else:
-            query = cls.query\
+                           owner: User, include_subscriptions=False) -> List[Workflow]:
+        result: List[Workflow] = cls.query.join(Permission)\
+            .filter(Permission.user_id == owner.id).all()
+        if include_subscriptions:
+            subscribed_workflows = cls.query\
                 .join(Subscription).filter(Subscription.user_id == owner.id and Subscription.resource_id == cls.id) \
-                .filter(cls.public == true())
-        if page and page.per_page:
-            result = cls.paginate_query(query, page)
-        else:
-            result = query.all()
+                .filter(cls.public == true()).all()
+            user_wf_ids = [w.uuid for w in result]
+            result.extend([w for w in subscribed_workflows if w.uuid not in user_wf_ids])
         return result
 
     @classmethod
