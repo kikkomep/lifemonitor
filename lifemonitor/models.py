@@ -40,6 +40,7 @@ class PaginationInfo:
         self.per_page = per_page
         self.max_items = max_items
         self._data: Union[Pagination, List] = None
+        self._total_items: Optional[int] = None
 
     @property
     def data(self) -> Union[Pagination, List]:
@@ -51,6 +52,18 @@ class PaginationInfo:
 
     @property
     def total_items(self) -> int:
+        """
+        Get the total number of items.
+        If the total number of items has been explicitly set, it returns that value.
+        If the data is a Pagination object, it returns the total from that object.
+        If the data is a list, it returns the length of the list.
+        If none of the above conditions are met, it returns 0.
+
+        Returns:
+            int: The total number of items.
+        """
+        if self._total_items is not None:
+            return self._total_items
         if isinstance(self._data, Pagination):
             return self._data.total
         elif isinstance(self._data, list):
@@ -120,7 +133,9 @@ class PageableMixin:
         # Slice the list to get the paginated items
         paginated_items = items[start:end]
         # Set pagination data
+        page.per_page = per_page
         page.data = paginated_items
+        page._total_items = len(items)
         # Return the paginated items
         return paginated_items
 
