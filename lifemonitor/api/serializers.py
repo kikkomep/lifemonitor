@@ -826,7 +826,7 @@ class SuiteSchema(ResourceMetadataSchema):
         return TestInstanceSchema(
             self_link=False,
             builds_limit=self.builds_limit,
-            exclude=('meta', 'links') if self.include_builds else ('meta', 'links', 'builds')
+            exclude=('meta',) if self.include_builds else ('meta', 'builds')
         ).dump(obj.test_instances, many=True)
 
     @post_dump
