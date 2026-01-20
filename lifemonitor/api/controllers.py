@@ -172,7 +172,7 @@ def _get_workflows_list_(page: int = 1, per_page: Optional[int] = None, max_item
 @cached(timeout=Timeout.REQUEST)
 def workflows_get(status=False, versions=False, subscriptions=False,
                   suites: bool = False, instances: bool = False,
-                  builds: bool = False, build_limit: int = 1,
+                  builds: bool = False, builds_limit: int = 1,
                   page: int = 1, per_page: Optional[int] = None,
                   max_items: Optional[int] = None,
                   only_subscriptions=False,
@@ -194,9 +194,10 @@ def workflows_get(status=False, versions=False, subscriptions=False,
         include_suites=suites,
         include_instances=instances,
         include_builds=builds,
-        builds_limit=build_limit,
+        builds_limit=builds_limit,
         page=page_info
     )
+
     return serializer.dump(workflows)
 
 
@@ -238,25 +239,42 @@ def workflows_get_by_id(wf_uuid, wf_version):
 
 
 @cached(timeout=Timeout.REQUEST)
-def workflows_get_latest_version_by_id(wf_uuid, previous_versions=False, ro_crate=False):
+def workflows_get_latest_version_by_id(
+        wf_uuid, previous_versions=False, ro_crate=False,
+        status=False,
+        suites=True, instances=False,
+        builds=False, builds_limit=1):
     response = __get_workflow_version__(wf_uuid, None)
     exclude = ['previous_versions'] if not previous_versions else []
     logger.debug("Previous versions: %r", exclude)
     return response if isinstance(response, Response) \
         else serializers.LatestWorkflowVersionSchema(
             exclude=exclude, rocrate_metadata=ro_crate,
-            subscriptionsOf=[current_user] if not current_user.is_anonymous else None).dump(response)
+            subscriptionsOf=[current_user] if not current_user.is_anonymous else None,
+            status=status,
+            include_suites=suites,
+            include_instances=instances,
+            include_builds=builds,
+            builds_limit=builds_limit).dump(response)
 
 
 @cached(timeout=Timeout.REQUEST)
-def workflows_get_version_by_id(wf_uuid, wf_version, ro_crate=False):
+def workflows_get_version_by_id(wf_uuid, wf_version, ro_crate=False,
+                                status=False,
+                                suites=True, instances=False,
+                                builds=False, builds_limit=1):
     response = __get_workflow_version__(wf_uuid, wf_version)
     exclude = ['previous_versions']
     logger.debug("Previous versions: %r", exclude)
     return response if isinstance(response, Response) \
         else serializers.LatestWorkflowVersionSchema(
             exclude=exclude, rocrate_metadata=ro_crate,
-            subscriptionsOf=[current_user] if not current_user.is_anonymous else None).dump(response)
+            subscriptionsOf=[current_user] if not current_user.is_anonymous else None,
+            status=status,
+            include_suites=suites,
+            include_instances=instances,
+            include_builds=builds,
+            builds_limit=builds_limit).dump(response)
 
 
 @cached(timeout=Timeout.REQUEST)
@@ -304,7 +322,7 @@ def workflows_rocrate_download(wf_uuid, wf_version):
 @cached(timeout=Timeout.REQUEST)
 def registry_workflows_get(status=False, versions=False, stats=False,
                            suites=False, instances=False,
-                           builds=False, build_limit=1,
+                           builds=False, builds_limit=1,
                            page=None, per_page=None, max_items=None):
     page_info = PaginationInfo(page=page, per_page=per_page, max_items=max_items)
     workflows = lm.get_registry_workflows(current_registry, page=page_info)
@@ -315,7 +333,7 @@ def registry_workflows_get(status=False, versions=False, stats=False,
         include_suites=suites,
         include_instances=instances,
         include_builds=builds,
-        builds_limit=build_limit,
+        builds_limit=builds_limit,
         page=page_info
     ).dump(workflows)
 
@@ -333,7 +351,7 @@ def registry_workflows_post(body):
 def registry_user_workflows_get(user_id, status=False, versions=False,
                                 stats=False,
                                 suites=False, instances=False,
-                                builds=False, build_limit=1,
+                                builds=False, builds_limit=1,
                                 page=None, per_page=None, max_items=None):
     if not current_registry:
         return lm_exceptions.report_problem(401, "Unauthorized", detail=messages.no_registry_found)
@@ -346,7 +364,7 @@ def registry_user_workflows_get(user_id, status=False, versions=False,
             workflow_status=status, workflow_versions=versions,
             statistics=lm.get_workflows_stats(workflows) if stats else None,
             include_suites=suites, include_instances=instances,
-            include_builds=builds, builds_limit=build_limit,
+            include_builds=builds, builds_limit=builds_limit,
             page=page_info).dump(workflows)
     except OAuthIdentityNotFoundException as e:
         if logger.isEnabledFor(logging.DEBUG):
@@ -369,7 +387,7 @@ def registry_user_workflows_post(user_id, body):
 def user_workflows_get(status=False, versions=False, subscriptions=False, only_subscriptions: bool = False,
                        stats=False,
                        suites=False, instances=False,
-                       builds=False, build_limit=1,
+                       builds=False, builds_limit=1,
                        page=None, per_page=None, max_items=None):
     if not current_user or current_user.is_anonymous:
         return lm_exceptions.report_problem(401, "Unauthorized", detail=messages.no_user_in_session)
@@ -387,7 +405,7 @@ def user_workflows_get(status=False, versions=False, subscriptions=False, only_s
                                        include_suites=suites,
                                        include_instances=instances,
                                        include_builds=builds,
-                                       builds_limit=build_limit,
+                                       builds_limit=builds_limit,
                                        page=page_info).dump(workflows)
 
 
