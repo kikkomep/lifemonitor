@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import lifemonitor.exceptions as lm_exceptions
 from lifemonitor.api import models
@@ -825,7 +825,8 @@ class LifeMonitor:
         return result
 
     @classmethod
-    def get_workflows_stats(cls, workflows: Optional[List[models.Workflow]] = None):
+    def get_workflows_stats(cls, workflows: Optional[List[models.Workflow]] = None,
+                            status: bool = True) -> Dict[str, Any]:
         # Reference to the list of workflows
         workflows = workflows if workflows is not None else models.Workflow.all()
         workflow_versions = [v for w in workflows for v in w.versions.values()]
@@ -833,14 +834,19 @@ class LifeMonitor:
         test_instances = [ti for ts in test_suites for ti in ts.test_instances]
 
         # Basic stats
-        return {
-            "total_workflows": len(workflows),
-            "total_workflow_versions": len(workflow_versions),
-            "total_test_suites": len(test_suites),
-            "total_test_instances": len(test_instances),
-            "total_public_workflows": len([w for w in workflows if w.public]),
-            "total_private_workflows": len([w for w in workflows if not w.public]),
+        stats = {
+            "workflows": len(workflows),
+            "workflow_versions": len(workflow_versions),
+            "test_suites": len(test_suites),
+            "test_instances": len(test_instances),
+            "public_workflows": len([w for w in workflows if w.public]),
+            "private_workflows": len([w for w in workflows if not w.public]),
         }
+
+        # Workflows status stats
+        if status:
+            stats["workflows_by_status"] = cls.get_workflows_status_stats(workflows)
+        return stats
 
     @classmethod
     def get_workflows_status_stats(cls, workflows: Optional[List[models.Workflow]] = None):

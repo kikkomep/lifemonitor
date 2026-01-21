@@ -2023,30 +2023,34 @@ components:
     workflows_stats:
       type: object
       properties:
-        total_workflows:
+        workflows:
           type: integer
           description: "Total number of workflows monitored"
           example: 1500
-        total_workflow_versions:
+        workflow_versions:
           type: integer
           description: "Total number of workflow versions monitored"
           example: 3500
-        total_test_suites:
+        test_suites:
           type: integer
           description: "Total number of test suites monitored"
           example: 500
-        total_test_instances:
+        test_instances:
           type: integer
           description: "Total number of test instances monitored"
           example: 1200
-        total_public_workflows:
+        public_workflows:
           type: integer
           description: "Total number of public workflows monitored"
           example: 1200
-        total_private_workflows:
+        private_workflows:
           type: integer
           description: "Total number of private workflows monitored"
           example: 300
+        workflows_by_status:
+          type: object
+          description: "Number of workflows by their visibility status"
+          $ref: "#/components/schemas/workflow_status_stats"
 
     workflow_status_stats:
       type: object
