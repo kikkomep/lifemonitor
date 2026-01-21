@@ -60,7 +60,14 @@ def stats_workflows_get():
     """
     Docstring for stats_get
     """
-    workflows, _ = _get_workflows_list_()
+    workflows = None
+    if current_user and not current_user.is_anonymous:
+        workflows = lm.get_user_workflows(current_user, include_public=False,
+                                          include_subscriptions=True, only_subscriptions=True)
+    elif current_registry:
+        workflows = lm.get_registry_workflows(current_registry)
+    else:
+        workflows = lm.get_public_workflows()
     stats = lm.get_workflows_stats(workflows)
     logger.debug("stats_get. Got stats: %s", stats)
     return stats
@@ -71,7 +78,14 @@ def stats_workflows_status_get():
     """
     Docstring for stats_get
     """
-    workflows, _ = _get_workflows_list_()
+    workflows = None
+    if current_user and not current_user.is_anonymous:
+        workflows = lm.get_user_workflows(current_user, include_public=False,
+                                          include_subscriptions=True, only_subscriptions=True)
+    elif current_registry:
+        workflows = lm.get_registry_workflows(current_registry)
+    else:
+        workflows = lm.get_public_workflows()
     stats = lm.get_workflows_status_stats(workflows)
     logger.debug("stats_get. Got stats: %s", stats)
     return stats
