@@ -173,7 +173,8 @@ def _get_workflows_list_(page: int = 1, per_page: Optional[int] = None, max_item
 def workflows_get(status=False, versions=False, subscriptions=False,
                   page: int = 1, per_page: Optional[int] = None,
                   max_items: Optional[int] = None,
-                  only_subscriptions=False,):
+                  only_subscriptions=False,
+                  stats: bool = False):
     workflows, page_info = _get_workflows_list_(page, per_page, max_items,
                                                 subscriptions, only_subscriptions)
 
@@ -187,6 +188,7 @@ def workflows_get(status=False, versions=False, subscriptions=False,
         workflow_status=status,
         workflow_versions=versions,
         subscriptionsOf=subscriptions_of,
+        statistics=lm.get_workflows_stats(workflows) if stats else None,
         page=page_info
     )
     return serializer.dump(workflows)
@@ -294,13 +296,14 @@ def workflows_rocrate_download(wf_uuid, wf_version):
 
 @authorized
 @cached(timeout=Timeout.REQUEST)
-def registry_workflows_get(status=False, versions=False,
+def registry_workflows_get(status=False, versions=False, stats=False,
                            page=None, per_page=None, max_items=None):
     page_info = PaginationInfo(page=page, per_page=per_page, max_items=max_items)
     workflows = lm.get_registry_workflows(current_registry, page=page_info)
     logger.debug("workflows_get. Got %s workflows (registry: %s)", len(workflows), current_registry)
     return serializers.ListOfWorkflows(
         workflow_status=status, workflow_versions=versions,
+        statistics=lm.get_workflows_stats(workflows) if stats else None,
         page=page_info
     ).dump(workflows)
 
@@ -316,6 +319,7 @@ def registry_workflows_post(body):
 @authorized
 @cached(timeout=Timeout.REQUEST)
 def registry_user_workflows_get(user_id, status=False, versions=False,
+                                stats=False,
                                 page=None, per_page=None, max_items=None):
     if not current_registry:
         return lm_exceptions.report_problem(401, "Unauthorized", detail=messages.no_registry_found)
@@ -325,7 +329,8 @@ def registry_user_workflows_get(user_id, status=False, versions=False,
         workflows = lm.get_user_registry_workflows(identity.user, current_registry, page=page_info)
         logger.debug("registry_user_workflows_get. Got %s workflows (user: %s)", len(workflows), current_user)
         return serializers.ListOfWorkflows(
-            workflow_status=status, workflow_versions=versions, page=page_info
+            workflow_status=status, workflow_versions=versions,
+            statistics=lm.get_workflows_stats(workflows) if stats else None, page=page_info
         ).dump(workflows)
     except OAuthIdentityNotFoundException as e:
         if logger.isEnabledFor(logging.DEBUG):
@@ -346,6 +351,7 @@ def registry_user_workflows_post(user_id, body):
 @authorized
 @cached(timeout=Timeout.REQUEST)
 def user_workflows_get(status=False, versions=False, subscriptions=False, only_subscriptions: bool = False,
+                       stats=False,
                        page=None, per_page=None, max_items=None):
     if not current_user or current_user.is_anonymous:
         return lm_exceptions.report_problem(401, "Unauthorized", detail=messages.no_user_in_session)
@@ -359,6 +365,7 @@ def user_workflows_get(status=False, versions=False, subscriptions=False, only_s
     return serializers.ListOfWorkflows(workflow_status=status,
                                        workflow_versions=versions,
                                        subscriptionsOf=[current_user] if subscriptions else None,
+                                       statistics=lm.get_workflows_stats(workflows) if stats else None,
                                        page=page_info).dump(workflows)
 
 

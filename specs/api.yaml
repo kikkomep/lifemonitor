@@ -446,6 +446,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/wf_versions"
         - $ref: "#/components/parameters/wf_status"
+        - $ref: "#/components/parameters/statistics"
         - $ref: "#/components/parameters/page"
         - $ref: "#/components/parameters/per_page"
         - $ref: "#/components/parameters/max_items"
@@ -574,6 +575,7 @@ paths:
         - $ref: "#/components/parameters/user_id"
         - $ref: "#/components/parameters/wf_versions"
         - $ref: "#/components/parameters/wf_status"
+        - $ref: "#/components/parameters/statistics"
         - $ref: "#/components/parameters/page"
         - $ref: "#/components/parameters/per_page"
         - $ref: "#/components/parameters/max_items"
@@ -640,6 +642,7 @@ paths:
         - $ref: "#/components/parameters/wf_status"
         - $ref: "#/components/parameters/wf_versions"
         - $ref: "#/components/parameters/wf_subscriptions"
+        - $ref: "#/components/parameters/statistics"
         - $ref: "#/components/parameters/page"
         - $ref: "#/components/parameters/per_page"
         - $ref: "#/components/parameters/max_items"
@@ -728,6 +731,7 @@ paths:
         - $ref: "#/components/parameters/wf_status"
         - $ref: "#/components/parameters/wf_versions"
         - $ref: "#/components/parameters/wf_subscriptions"
+        - $ref: "#/components/parameters/statistics"
         - $ref: "#/components/parameters/page"
         - $ref: "#/components/parameters/per_page"
         - $ref: "#/components/parameters/max_items"
@@ -1821,6 +1825,14 @@ components:
       description: |
         `true` to include subscribed workflows
       example: "false"
+    statistics:
+      name: "stats"
+      in: query
+      schema:
+        type: boolean
+      description: |
+        `true` to include workflows statistics
+      example: "false"
     page:
       name: "page"
       in: query
@@ -2794,6 +2806,10 @@ components:
 
         pagination:
           $ref: "#/components/schemas/Pagination"
+          optional: true
+        
+        statistics:
+          $ref: "#/components/schemas/workflows_stats"
           optional: true
 
     AggregateTestStatus:

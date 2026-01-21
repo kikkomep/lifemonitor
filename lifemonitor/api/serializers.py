@@ -21,8 +21,10 @@
 from __future__ import annotations
 
 import logging
-from typing import List
+from typing import List, Optional
 from urllib.parse import urljoin
+
+from marshmallow import fields, post_dump
 
 from lifemonitor import exceptions as lm_exceptions
 from lifemonitor import utils as lm_utils
@@ -32,7 +34,6 @@ from lifemonitor.auth.serializers import SubscriptionSchema, UserSchema
 from lifemonitor.serializers import (BaseSchema, ListOfItems,
                                      ResourceMetadataSchema, ResourceSchema,
                                      ma)
-from marshmallow import fields, post_dump
 
 from . import models
 
@@ -525,13 +526,21 @@ class ListOfWorkflows(ListOfItems):
 
     subscriptionsOf: List[auth_models.User] = None
 
+    statistics = fields.Method("get_statistics")
+
     def __init__(self, *args,
                  workflow_status: bool = False, workflow_versions: bool = False,
-                 subscriptionsOf: List[auth_models.User] = None, **kwargs):
+                 subscriptionsOf: List[auth_models.User] = None,
+                 statistics: Optional[object] = None,
+                 **kwargs):
         super().__init__(*args, **kwargs)
         self.workflow_status = workflow_status
         self.workflow_versions = workflow_versions
         self.subscriptionsOf = subscriptionsOf
+        self._statistics = statistics
+
+    def get_statistics(self, workflow: models.Workflow):
+        return self._statistics if self._statistics else None
 
     def get_items(self, obj):
         exclude = ['meta', 'links']
