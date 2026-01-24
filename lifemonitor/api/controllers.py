@@ -175,9 +175,8 @@ def __filter_workflows_list__(workflows, filter_by_string: Optional[str] = None,
         filter_lower = filter_by_string.lower()
 
         workflows = [wf for wf in workflows if
-                     (filter_lower in (str(wf.uuid) or '').lower() or
-                      filter_lower in (wf.name or '').lower() or
-                      filter_lower in (wf.latest_version.name or '').lower())]
+                     (filter_lower in (str(wf.uuid) or '').lower() or filter_lower
+                      in (wf.name or '').lower() or filter_lower in (wf.latest_version.name or '').lower())]
 
     if filter_by_status:
         filter_status = filter_by_status.lower()
