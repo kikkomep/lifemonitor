@@ -626,7 +626,8 @@ def process_workflows_post(body, _registry=None, _submitter_id=None,
         logger.debug("workflows_post. Created workflow '%s' (ver.%s)", w.uuid, w.version)
         clear_cache()
         notify_workflow_version_updates([w], type='sync', delay=2)
-        job.update_status('completed', save=True)
+        if job:
+            job.update_status('completed', save=True)
         return {'uuid': str(w.workflow.uuid), 'wf_version': w.version, 'name': w.name,
                 'meta': {
                     'created': w.workflow.created.timestamp(),
