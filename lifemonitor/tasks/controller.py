@@ -20,8 +20,10 @@
 
 import json
 import logging
+import time
 
 import flask
+from flask_login import current_user
 
 from lifemonitor.auth.services import authorized
 from lifemonitor.cache import cache
@@ -46,3 +48,52 @@ def get_job_status(job_id: str):
     if not serialized_job_data:
         return f"job ${job_id} not found", 404
     return json.loads(serialized_job_data)
+
+
+@authorized
+@blueprint.route("/<job_id>/events", methods=("GET",))
+def get_job_events(job_id: str):
+    if not utils.validate_job_id(job_id):
+        raise ValueError(f"Invalid job id: {job_id}")
+
+    def event_stream():
+        import json
+        i = 0
+        sleep_interval = 1
+        last_sent_data = None
+        try:
+            while True:
+                serialized_job_data = cache.get(utils.get_job_key(job_id=job_id))
+                if not serialized_job_data:
+                    return f"job ${job_id} not found", 404
+                if serialized_job_data == last_sent_data:
+                    logger.warning("No new data for job %s, sleeping...", job_id)
+                    time.sleep(sleep_interval)
+                    continue
+                job_data = json.loads(serialized_job_data)
+                data = {
+                    "counter": i,
+                    "timestamp": time.time(),
+                    "session_id": current_user.is_anonymous,
+                    "type": "jobUpdate",
+                    "data": job_data
+                }
+                logger.info(f"Sending event data: {job_data['status']}")
+                yield f"data: {json.dumps(data)}\n\n"
+                if job_data.get("status", "") in ["completed", "failed", "canceled"]:
+                    break
+                i += 1
+                time.sleep(sleep_interval)
+        except Exception as e:
+            logger.error(f"Error in event stream for job {job_id}: {str(e)}")
+        logger.info(f"Job {job_id} ended with status: {job_data.get('status', '')}")
+
+    return flask.Response(
+        flask.stream_with_context(event_stream()),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",   # <--- IMPORTANT FOR NGINX
+        },
+    )
