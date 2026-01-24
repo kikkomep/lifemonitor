@@ -219,6 +219,8 @@ class LifeMonitor:
             except KeyError as e:
                 raise lm_exceptions.SpecificationNotValidException(f"Missing property: {e}")
             w.save()
+            if job:
+                job.update_status('workflow registered', save=True)
             return wv
 
     @classmethod
