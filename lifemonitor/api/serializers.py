@@ -179,6 +179,30 @@ class VersionDetailsBaseSchema(BaseSchema):
         ).dump(suites)['items']
 
 
+def get_rocrate(obj: models.WorkflowVersion, exclude_metadata: bool = False):
+    rocrate = {
+        'links': {
+            'origin': "local file uploaded" if obj.uri.startswith("tmp://") else obj.uri,
+            'metadata': urljoin(lm_utils.get_external_server_url(),
+                                f"workflows/{obj.workflow.uuid}/rocrate/{obj.version}/metadata"),
+            'download': urljoin(lm_utils.get_external_server_url(),
+                                f"workflows/{obj.workflow.uuid}/rocrate/{obj.version}/download")
+        }
+    }
+    try:
+        if obj.based_on:
+            rocrate['links']['based_on'] = obj.based_on
+        rocrate['links']['registries'] = {}
+        for r_name, rv in obj.registry_workflow_versions.items():
+            rocrate['links']['registries'][r_name] = rv.link
+        if not exclude_metadata:
+            rocrate['metadata'] = obj.crate_metadata
+    except Exception as e:
+        rocrate['unavailable'] = True
+        rocrate['unavailability_reason'] = str(e)
+    return rocrate
+
+
 class VersionDetailsSchema(BaseSchema):
     __envelope__ = {"single": None, "many": "items"}
 
@@ -201,7 +225,7 @@ class VersionDetailsSchema(BaseSchema):
     def __init__(self, *args,
                  include_suites=False, include_instances=False,
                  include_builds=False, builds_limit=1,
-                 include_status=False,
+                 include_status=False, rocrate_metadata=False,
                  **kwargs):
         exclude = kwargs.pop('exclude', ('status',) if "status" not in kwargs.get('only', ()) else ())
         super().__init__(*args, exclude=exclude, **kwargs)
@@ -210,6 +234,7 @@ class VersionDetailsSchema(BaseSchema):
         self.include_builds = include_builds
         self.builds_limit = builds_limit
         self.include_status = include_status
+        self.rocrate_metadata = rocrate_metadata
 
     def get_links(self, obj: models.WorkflowVersion):
         links = {
@@ -230,29 +255,9 @@ class VersionDetailsSchema(BaseSchema):
             return None
 
     def get_rocrate(self, obj: models.WorkflowVersion):
-        rocrate = {
-            'links': {
-                'origin': "local file uploaded" if obj.uri.startswith("tmp://") else obj.uri,
-                'metadata': urljoin(lm_utils.get_external_server_url(),
-                                    f"workflows/{obj.workflow.uuid}/rocrate/{obj.version}/metadata"),
-                'download': urljoin(lm_utils.get_external_server_url(),
-                                    f"workflows/{obj.workflow.uuid}/rocrate/{obj.version}/download")
-            }
-        }
-        try:
-            if obj.based_on:
-                rocrate['links']['based_on'] = obj.based_on
-            rocrate['links']['registries'] = {}
-            for r_name, rv in obj.registry_workflow_versions.items():
-                rocrate['links']['registries'][r_name] = rv.link
-            rocrate['metadata'] = obj.crate_metadata
-            if 'rocrate_metadata' in self.exclude or \
-                    self.only and 'rocrate_metadata' not in self.only:
-                del rocrate['metadata']
-        except Exception as e:
-            rocrate['unavailable'] = True
-            rocrate['unavailability_reason'] = str(e)
-        return rocrate
+        exclude_metadata = 'rocrate_metadata' in self.exclude or \
+            self.only and 'rocrate_metadata' not in self.only or not self.rocrate_metadata
+        return get_rocrate(obj, exclude_metadata=exclude_metadata)
 
     def get_suites(self, obj: models.WorkflowVersion):
         if not self.include_suites:
@@ -295,6 +300,8 @@ class WorkflowVersionSchema(ResourceSchema):
     subscriptions = fields.Method("get_subscriptions")
 
     status = fields.Method('get_status')
+
+    ro_crate = fields.Method("get_rocrate")
 
     rocrate_metadata = False
     subscriptionsOf: List[auth_models.User] = None
@@ -342,6 +349,11 @@ class WorkflowVersionSchema(ResourceSchema):
                 if s:
                     result.append(SubscriptionSchema(exclude=('meta', 'links'), self_link=False).dump(s))
         return result
+
+    def get_rocrate(self, obj: models.WorkflowVersion):
+        exclude_metadata = 'rocrate_metadata' in self.exclude or \
+            self.only and 'rocrate_metadata' not in self.only or not self.rocrate_metadata
+        return get_rocrate(obj, exclude_metadata=exclude_metadata)
 
     def get_suites(self, obj: models.WorkflowVersion):
         if not self.include_suites:
@@ -393,7 +405,7 @@ class LatestWorkflowVersionSchema(WorkflowVersionSchema):
         self.rocrate_metadata = rocrate_metadata
 
     def get_versions(self, obj: models.WorkflowVersion):
-        only = ["uuid", "version", "ro_crate"]
+        only = ["uuid", "version"]
         if self.rocrate_metadata:
             only.append("ro_crate")
         schema = VersionDetailsSchema(only=only)
