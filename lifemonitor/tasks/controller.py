@@ -74,7 +74,6 @@ def get_job_events(job_id: str):
                 data = {
                     "counter": i,
                     "timestamp": time.time(),
-                    "session_id": current_user.is_anonymous,
                     "type": "jobUpdate",
                     "data": job_data
                 }
