@@ -19,10 +19,13 @@
 # SOFTWARE.
 
 import logging
+from typing import Optional
 
 from flask.globals import request
 from flask_marshmallow import Marshmallow
 from marshmallow import fields, post_dump, post_load, pre_load
+
+from lifemonitor.models import PaginationInfo
 
 from . import utils as lm_utils
 
@@ -141,11 +144,33 @@ class ListOfItems(ResourceMetadataSchema):
     __item_scheme__ = None
     __exclude__ = ('meta',)
 
+    def __init__(self, *args, self_link=True, page: Optional[PaginationInfo] = None, **kwargs):
+        super().__init__(*args, self_link=self_link, **kwargs)
+        self._page = page
+
     items = fields.Method("get_items")
+    pagination = fields.Method("get_pagination")
+
+    def get_pagination(self, obj):
+        if self._page and self._page.per_page and self._page.per_page > 0:
+            return {
+                "page": self._page.page,
+                "per_page": self._page.per_page,
+                "total_items": self._page.total_items,
+                "total_pages": self._page.total_pages
+            }
+        return None
+
+    def get_page(self):
+        return self._page
 
     def get_items(self, obj):
         return [self.__item_scheme__(self_link=False, exclude=self.__exclude__, many=False).dump(_) for _ in obj] \
             if self.__item_scheme__ else None
+
+    @post_dump
+    def remove_none(self, data, **kwargs):
+        return {k: v for k, v in data.items() if v is not None}
 
 
 class ProblemDetailsSchema(BaseSchema):

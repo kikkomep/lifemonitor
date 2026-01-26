@@ -446,6 +446,9 @@ paths:
       parameters:
         - $ref: "#/components/parameters/wf_versions"
         - $ref: "#/components/parameters/wf_status"
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/per_page"
+        - $ref: "#/components/parameters/max_items"
       responses:
         "200":
           description: List of workflows
@@ -508,6 +511,9 @@ paths:
         - $ref: "#/components/parameters/registry_uuid"
         - $ref: "#/components/parameters/wf_versions"
         - $ref: "#/components/parameters/wf_status"
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/per_page"
+        - $ref: "#/components/parameters/max_items"
       responses:
         "200":
           description: List of workflows
@@ -568,6 +574,9 @@ paths:
         - $ref: "#/components/parameters/user_id"
         - $ref: "#/components/parameters/wf_versions"
         - $ref: "#/components/parameters/wf_status"
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/per_page"
+        - $ref: "#/components/parameters/max_items"
       responses:
         "200":
           description: List of workflows
@@ -631,6 +640,9 @@ paths:
         - $ref: "#/components/parameters/wf_status"
         - $ref: "#/components/parameters/wf_versions"
         - $ref: "#/components/parameters/wf_subscriptions"
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/per_page"
+        - $ref: "#/components/parameters/max_items"
       responses:
         "200":
           description: A list of Workflows
@@ -716,6 +728,9 @@ paths:
         - $ref: "#/components/parameters/wf_status"
         - $ref: "#/components/parameters/wf_versions"
         - $ref: "#/components/parameters/wf_subscriptions"
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/per_page"
+        - $ref: "#/components/parameters/max_items"
       responses:
         "200":
           description: List of Workflows
@@ -1754,6 +1769,28 @@ components:
       description: |
         `true` to include subscribed workflows
       example: "false"
+    page:
+      name: "page"
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+      description: "Page number for paginated results. First page is 1"
+    per_page:
+      name: "per_page"
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+      description: "Number of items per page for paginated results. If not provided, all items are returned"
+    max_items:
+      name: "max_items"
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+      description: "Maximum number of items to retrieve. If not provided, all items are returned"
     version:
       name: "version"
       in: query
@@ -2650,6 +2687,10 @@ components:
           required:
             - items
 
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+          optional: true
+
     AggregateTestStatus:
       type: string
       enum:
@@ -3017,6 +3058,31 @@ components:
       required:
         - title
         - status
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          description: Current page number
+          example: 1
+        per_page:
+          type: integer
+          description: Number of items per page
+          example: 10
+        total_items:
+          type: integer
+          description: Total number of items
+          example: 100
+        total_pages:
+          type: integer
+          description: Total number of pages
+          example: 10
+      required:
+          - page
+          - per_page
+          - total_items
+          - total_pages
 
   securitySchemes:
     cookieAuth:

@@ -53,8 +53,13 @@ def test_get_workflows_with_user(m, request_context, mock_user, fake_uri):
     w.add_version(data["version"], data['uri'], MagicMock(), name="Prova")
     m.get_user_workflows.return_value = [w]
     response = controllers.workflows_get(status=True)
-    m.get_public_workflows.assert_called_once()
     m.get_user_workflows.assert_called_once()
+    # Extract call arguments for further inspections if needed
+    args, kwargs = m.get_user_workflows.call_args
+
+    # Check the method is called with include_public=True
+    assert kwargs.get('include_public') is True, "include_public should be True"
+
     assert isinstance(response, dict), "Unexpected result type"
     logger.debug("Response: %r", response)
     assert response == serializers.ListOfWorkflows(workflow_status=True).dump([w])

@@ -33,8 +33,10 @@ from lifemonitor.auth.models import (EventType,
 from lifemonitor.auth.oauth2.client import providers
 from lifemonitor.auth.oauth2.client.models import OAuthIdentity
 from lifemonitor.auth.oauth2.server import server
+from lifemonitor.models import PaginationInfo
 from lifemonitor.tasks.models import Job
-from lifemonitor.utils import OpenApiSpecs, ROCrateLinkContext, is_service_alive, to_snake_case
+from lifemonitor.utils import (OpenApiSpecs, ROCrateLinkContext,
+                               is_service_alive, to_snake_case)
 from lifemonitor.ws import io
 
 logger = logging.getLogger()
@@ -536,8 +538,20 @@ class LifeMonitor:
         return models.Workflow.all()
 
     @staticmethod
-    def get_registry_workflows(registry: models.WorkflowRegistry) -> List[models.Workflow]:
-        return registry.get_workflows()
+    def get_registry_workflows(registry: models.WorkflowRegistry,
+                               include_public: bool = False,
+                               page: Optional[PaginationInfo] = None) -> List[models.Workflow]:
+        # Retrieve workflows from the registry
+        workflows = registry.get_workflows()
+        # Include public workflows if needed
+        if include_public:
+            public_workflows = models.Workflow.get_public_workflows(page=page)
+            workflows.extend([w for w in public_workflows if w not in workflows])
+        # Paginate results if needed
+        if page:
+            workflows = models.Workflow.paginate_list(workflows, page)
+        # Return the list of workflows
+        return workflows
 
     @staticmethod
     def get_registry_workflow(registry: models.WorkflowRegistry) -> models.Workflow:
@@ -560,32 +574,65 @@ class LifeMonitor:
             raise lm_exceptions.EntityNotFoundException(models.WorkflowVersion, f"{uuid}_{version}")
 
     @staticmethod
-    def get_public_workflows() -> List[models.Workflow]:
-        return models.Workflow.get_public_workflows()
+    def get_public_workflows(page: Optional[PaginationInfo] = None) -> List[models.Workflow]:
+        return models.Workflow.get_public_workflows(page=page)
 
     @staticmethod
     def get_user_workflows(user: User,
                            include_subscriptions: bool = False,
-                           only_subscriptions: bool = False) -> List[models.Workflow]:
-        if only_subscriptions:
-            return [_.resource for _ in user.subscriptions
-                    if _.resource.public or user in [p.user for p in _.resource.permissions]]
+                           include_public: bool = True,
+                           only_subscriptions: bool = False,
+                           page: Optional[PaginationInfo] = None) -> List[models.Workflow]:
+        # Reference to the list of workflows
+        all_workflows = []
 
-        workflows = [w for w in models.Workflow.get_user_workflows(user, include_subscriptions=include_subscriptions)]
-        for svc in models.WorkflowRegistry.all():
-            if not is_service_alive(svc.uri):
-                logger.warning("Service %r is not alive, skipping", svc.uri)
-                continue
-            if svc.get_user(user.id):
-                try:
-                    workflows.extend([w for w in svc.get_user_workflows(user)
-                                      if w not in workflows and w.public])
-                except lm_exceptions.NotAuthorizedException as e:
-                    logger.debug(e)
+        # If only_subscriptions is False, we need to collect also workflows from registries
+        if not only_subscriptions:
+
+            # Build a single query combining local workflows and registry workflows
+            workflows = models.Workflow.get_user_workflows(user, include_subscriptions=include_subscriptions)
+
+            # Include public workflows if needed
+            public_workflows = []
+            if include_public:
+                public_workflows = [
+                    w for w in models.Workflow.get_public_workflows()
+                    if w not in workflows
+                ]
+
+            # Collect workflows from alive registries
+            registry_workflows = []
+            for svc in models.WorkflowRegistry.all():
+                if not is_service_alive(svc.uri):
+                    logger.warning("Service %r is not alive, skipping", svc.uri)
+                    continue
+                if svc.get_user(user.id):
+                    try:
+                        registry_workflows.extend([w for w in svc.get_user_workflows(user)
+                                                   if w not in workflows and w.public])
+                    except lm_exceptions.NotAuthorizedException as e:
+                        logger.debug(e)
+            # Combine and paginate results if needed
+            all_workflows = list(set(workflows) | set(public_workflows) | set(registry_workflows))
+        # Otherwise, return only subscribed workflows
+        else:
+            all_workflows = [_.resource for _ in user.subscriptions
+                             if _.resource.public or user in [p.user for p in _.resource.permissions]]
+
+        # Sort workflows by last modified date
+        # all_workflows.sort(key=lambda w: w.modified, reverse=True)
+
+        # Paginate results if needed
+        if page:
+            workflows = models.Workflow.paginate_list(all_workflows, page)
+        else:
+            workflows = all_workflows
+        # Return the list of workflows
         return workflows
 
     @staticmethod
-    def get_user_registry_workflows(user: User, registry: models.WorkflowRegistry) -> List[models.Workflow]:
+    def get_user_registry_workflows(user: User, registry: models.WorkflowRegistry,
+                                    page: Optional[PaginationInfo] = None) -> List[models.Workflow]:
         workflows = []
         if not is_service_alive(registry.uri):
             logger.warning("Service %r is not alive, skipping", registry.uri)
@@ -596,6 +643,10 @@ class LifeMonitor:
                                   if w not in workflows])
             except lm_exceptions.NotAuthorizedException as e:
                 logger.debug(e)
+        # Paginate results if needed
+        if page:
+            workflows = models.Workflow.paginate_list(workflows, page)
+        # Return the list of workflows
         return workflows
 
     @classmethod
@@ -603,7 +654,7 @@ class LifeMonitor:
         return cls._find_and_check_workflow_version(None, uuid, version).workflow
 
     @classmethod
-    def get_public_workflow_version(cls, uuid, version=None) -> models.Workflow:
+    def get_public_workflow_version(cls, uuid, version=None) -> models.WorkflowVersion:
         return cls._find_and_check_workflow_version(None, uuid, version)
 
     @classmethod

@@ -37,6 +37,7 @@ from lifemonitor.auth.oauth2.client.models import \
     OAuthIdentityNotFoundException
 from lifemonitor.cache import Timeout, cached, clear_cache
 from lifemonitor.lang import messages
+from lifemonitor.models import PaginationInfo
 from lifemonitor.tasks.models import Job
 from lifemonitor.utils import notify_updates, notify_workflow_version_updates
 
@@ -108,15 +109,37 @@ def workflow_registries_get_current():
 
 
 @cached(timeout=Timeout.REQUEST)
-def workflows_get(status=False, versions=False, subscriptions=False, only_subscriptions=False):
-    workflows = lm.get_public_workflows()
+def workflows_get(status=False, versions=False, subscriptions=False,
+                  page: int = 1, per_page: Optional[int] = None,
+                  max_items: Optional[int] = None,
+                  only_subscriptions=False,):
+    # Prepare pagination info
+    page_info = PaginationInfo(page=page, per_page=per_page, max_items=max_items)
+    # Collect workflows depending on the current user/registry in session
+    workflows = []
+    # If a user is logged in
     if current_user and not current_user.is_anonymous:
+        logger.info("Getting workflows for user %s", current_user)
         workflows.extend(lm.get_user_workflows(current_user,
                                                include_subscriptions=subscriptions,
-                                               only_subscriptions=only_subscriptions))
+                                               include_public=True,
+                                               only_subscriptions=only_subscriptions,
+                                               page=page_info))
+        logger.info("Total workflows for user %s: %d", current_user, len(workflows))
+    # If a registry is in the current session,
+    # get both public and registry workflows
     elif current_registry:
-        workflows.extend(lm.get_registry_workflows(current_registry))
+        logger.info("Getting workflows for registry %s", current_registry)
+        workflows.extend(lm.get_registry_workflows(
+            current_registry, include_public=True,
+            page=page_info))
+    # Engage public workflows only
+    else:
+        logger.info("Getting public workflows")
+        workflows.extend(lm.get_public_workflows(page=page_info))
+
     logger.debug("workflows_get. Got %s workflows (user: %s)", len(workflows), current_user)
+
     # Determine whose subscriptions to include
     subscriptions_of = []
     if subscriptions and current_user and not current_user.is_anonymous:
@@ -126,7 +149,8 @@ def workflows_get(status=False, versions=False, subscriptions=False, only_subscr
     serializer = serializers.ListOfWorkflows(
         workflow_status=status,
         workflow_versions=versions,
-        subscriptionsOf=subscriptions_of
+        subscriptionsOf=subscriptions_of,
+        page=page_info
     )
 
     # Remove duplicates and serialize the workflows
@@ -236,10 +260,15 @@ def workflows_rocrate_download(wf_uuid, wf_version):
 
 @authorized
 @cached(timeout=Timeout.REQUEST)
-def registry_workflows_get(status=False, versions=False):
-    workflows = lm.get_registry_workflows(current_registry)
+def registry_workflows_get(status=False, versions=False,
+                           page=None, per_page=None, max_items=None):
+    page_info = PaginationInfo(page=page, per_page=per_page, max_items=max_items)
+    workflows = lm.get_registry_workflows(current_registry, page=page_info)
     logger.debug("workflows_get. Got %s workflows (registry: %s)", len(workflows), current_registry)
-    return serializers.ListOfWorkflows(workflow_status=status, workflow_versions=versions).dump(workflows)
+    return serializers.ListOfWorkflows(
+        workflow_status=status, workflow_versions=versions,
+        page=page_info
+    ).dump(workflows)
 
 
 @authorized
@@ -252,14 +281,18 @@ def registry_workflows_post(body):
 
 @authorized
 @cached(timeout=Timeout.REQUEST)
-def registry_user_workflows_get(user_id, status=False, versions=False):
+def registry_user_workflows_get(user_id, status=False, versions=False,
+                                page=None, per_page=None, max_items=None):
     if not current_registry:
         return lm_exceptions.report_problem(401, "Unauthorized", detail=messages.no_registry_found)
     try:
         identity = lm.find_registry_user_identity(current_registry, external_id=user_id)
-        workflows = lm.get_user_registry_workflows(identity.user, current_registry)
+        page_info = PaginationInfo(page=page, per_page=per_page, max_items=max_items)
+        workflows = lm.get_user_registry_workflows(identity.user, current_registry, page=page_info)
         logger.debug("registry_user_workflows_get. Got %s workflows (user: %s)", len(workflows), current_user)
-        return serializers.ListOfWorkflows(workflow_status=status, workflow_versions=versions).dump(workflows)
+        return serializers.ListOfWorkflows(
+            workflow_status=status, workflow_versions=versions, page=page_info
+        ).dump(workflows)
     except OAuthIdentityNotFoundException as e:
         if logger.isEnabledFor(logging.DEBUG):
             logger.exception(e)
@@ -278,16 +311,21 @@ def registry_user_workflows_post(user_id, body):
 
 @authorized
 @cached(timeout=Timeout.REQUEST)
-def user_workflows_get(status=False, versions=False, subscriptions=False, only_subscriptions: bool = False):
+def user_workflows_get(status=False, versions=False, subscriptions=False, only_subscriptions: bool = False,
+                       page=None, per_page=None, max_items=None):
     if not current_user or current_user.is_anonymous:
         return lm_exceptions.report_problem(401, "Unauthorized", detail=messages.no_user_in_session)
+    page_info = PaginationInfo(page=page, per_page=per_page, max_items=max_items)
     workflows = lm.get_user_workflows(current_user,
                                       include_subscriptions=subscriptions,
-                                      only_subscriptions=only_subscriptions)
+                                      only_subscriptions=only_subscriptions,
+                                      include_public=False,
+                                      page=page_info)
     logger.debug("user_workflows_get. Got %s workflows (user: %s)", len(workflows), current_user)
     return serializers.ListOfWorkflows(workflow_status=status,
                                        workflow_versions=versions,
-                                       subscriptionsOf=[current_user] if subscriptions else None).dump(workflows)
+                                       subscriptionsOf=[current_user] if subscriptions else None,
+                                       page=page_info).dump(workflows)
 
 
 @authorized
@@ -353,15 +391,19 @@ def user_workflow_unsubscribe(wf_uuid):
 
 @authorized
 @cached(timeout=Timeout.REQUEST)
-def user_registry_workflows_get(registry_uuid, status=False, versions=False):
+def user_registry_workflows_get(registry_uuid, status=False, versions=False,
+                                page: int = 0, per_page: Optional[int] = None,
+                                max_items: Optional[int] = None):
     if not current_user or current_user.is_anonymous:
         return lm_exceptions.report_problem(401, "Unauthorized", detail=messages.no_user_in_session)
     logger.debug("Registry UUID: %r", registry_uuid)
     try:
         registry = lm.get_workflow_registry_by_uuid(registry_uuid)
-        workflows = lm.get_user_registry_workflows(current_user, registry)
+        page_info = PaginationInfo(page=page, per_page=per_page, max_items=max_items)
+        workflows = lm.get_user_registry_workflows(current_user, registry, page=page_info)
         logger.debug("workflows_get. Got %s workflows (user: %s)", len(workflows), current_user)
-        return serializers.ListOfWorkflows(workflow_status=status, workflow_versions=versions).dump(workflows)
+        return serializers.ListOfWorkflows(
+            workflow_status=status, workflow_versions=versions, page=page_info).dump(workflows)
     except lm_exceptions.EntityNotFoundException:
         return lm_exceptions.report_problem(404, "Not Found",
                                             detail=messages.no_registry_found.format(registry_uuid))
