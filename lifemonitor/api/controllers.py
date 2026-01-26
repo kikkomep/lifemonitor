@@ -169,6 +169,22 @@ def _get_workflows_list_(page: int = 1, per_page: Optional[int] = None, max_item
     return list(dict.fromkeys(workflows)), page_info
 
 
+def __filter_workflows_list__(workflows, filter_by_string: Optional[str] = None,
+                              filter_by_status: Optional[str] = None):
+    if filter_by_string:
+        filter_lower = filter_by_string.lower()
+
+        workflows = [wf for wf in workflows if
+                     (filter_lower in (str(wf.uuid) or '').lower() or filter_lower
+                      in (wf.name or '').lower() or filter_lower in (wf.latest_version.name or '').lower())]
+
+    if filter_by_status:
+        filter_status = filter_by_status.lower()
+        workflows = [wf for wf in workflows if wf.latest_version.status and wf.latest_version.status.aggregated_status.lower() == filter_status]
+
+    return workflows
+
+
 @cached(timeout=Timeout.REQUEST)
 def workflows_get(status=False, versions=False, subscriptions=False,
                   suites: bool = False, instances: bool = False,
@@ -176,7 +192,9 @@ def workflows_get(status=False, versions=False, subscriptions=False,
                   page: int = 1, per_page: Optional[int] = None,
                   max_items: Optional[int] = None,
                   only_subscriptions=False,
-                  stats: bool = False):
+                  stats: bool = False,
+                  filter_by_string: Optional[str] = None,
+                  filter_by_status: Optional[str] = None):
     workflows, page_info = _get_workflows_list_(page, per_page, max_items,
                                                 subscriptions, only_subscriptions)
 
@@ -185,6 +203,9 @@ def workflows_get(status=False, versions=False, subscriptions=False,
     subscriptions_of = []
     if subscriptions and current_user and not current_user.is_anonymous:
         subscriptions_of = [current_user]
+
+    if filter_by_string or filter_by_status:
+        workflows = __filter_workflows_list__(workflows, filter_by_string, filter_by_status)
 
     serializer = serializers.ListOfWorkflows(
         workflow_status=status,
@@ -323,9 +344,12 @@ def workflows_rocrate_download(wf_uuid, wf_version):
 def registry_workflows_get(status=False, versions=False, stats=False,
                            suites=False, instances=False,
                            builds=False, builds_limit=1,
+                           filter_by_string: Optional[str] = None,
+                           filter_by_status: Optional[str] = None,
                            page=None, per_page=None, max_items=None):
     page_info = PaginationInfo(page=page, per_page=per_page, max_items=max_items)
     workflows = lm.get_registry_workflows(current_registry, page=page_info)
+    workflows = __filter_workflows_list__(workflows, filter_by_string, filter_by_status)
     logger.debug("workflows_get. Got %s workflows (registry: %s)", len(workflows), current_registry)
     return serializers.ListOfWorkflows(
         workflow_status=status, workflow_versions=versions,
@@ -352,6 +376,8 @@ def registry_user_workflows_get(user_id, status=False, versions=False,
                                 stats=False,
                                 suites=False, instances=False,
                                 builds=False, builds_limit=1,
+                                filter_by_string: Optional[str] = None,
+                                filter_by_status: Optional[str] = None,
                                 page=None, per_page=None, max_items=None):
     if not current_registry:
         return lm_exceptions.report_problem(401, "Unauthorized", detail=messages.no_registry_found)
@@ -360,6 +386,7 @@ def registry_user_workflows_get(user_id, status=False, versions=False,
         page_info = PaginationInfo(page=page, per_page=per_page, max_items=max_items)
         workflows = lm.get_user_registry_workflows(identity.user, current_registry, page=page_info)
         logger.debug("registry_user_workflows_get. Got %s workflows (user: %s)", len(workflows), current_user)
+        workflows = __filter_workflows_list__(workflows, filter_by_string, filter_by_status)
         return serializers.ListOfWorkflows(
             workflow_status=status, workflow_versions=versions,
             statistics=lm.get_workflows_stats(workflows) if stats else None,
@@ -388,6 +415,8 @@ def user_workflows_get(status=False, versions=False, subscriptions=False, only_s
                        stats=False,
                        suites=False, instances=False,
                        builds=False, builds_limit=1,
+                       filter_by_string: Optional[str] = None,
+                       filter_by_status: Optional[str] = None,
                        page=None, per_page=None, max_items=None):
     if not current_user or current_user.is_anonymous:
         return lm_exceptions.report_problem(401, "Unauthorized", detail=messages.no_user_in_session)
@@ -397,6 +426,7 @@ def user_workflows_get(status=False, versions=False, subscriptions=False, only_s
                                       only_subscriptions=only_subscriptions,
                                       include_public=False,
                                       page=page_info)
+    workflows = __filter_workflows_list__(workflows, filter_by_string, filter_by_status)
     logger.debug("user_workflows_get. Got %s workflows (user: %s)", len(workflows), current_user)
     return serializers.ListOfWorkflows(workflow_status=status,
                                        workflow_versions=versions,
@@ -475,6 +505,8 @@ def user_workflow_unsubscribe(wf_uuid):
 def user_registry_workflows_get(registry_uuid, status=False, versions=False,
                                 suites=False, instances=False,
                                 builds=False, build_limit=1,
+                                filter_by_string: Optional[str] = None,
+                                filter_by_status: Optional[str] = None,
                                 page: int = 0, per_page: Optional[int] = None,
                                 max_items: Optional[int] = None):
     if not current_user or current_user.is_anonymous:
@@ -484,6 +516,7 @@ def user_registry_workflows_get(registry_uuid, status=False, versions=False,
         registry = lm.get_workflow_registry_by_uuid(registry_uuid)
         page_info = PaginationInfo(page=page, per_page=per_page, max_items=max_items)
         workflows = lm.get_user_registry_workflows(current_user, registry, page=page_info)
+        workflows = __filter_workflows_list__(workflows, filter_by_string, filter_by_status)
         logger.debug("workflows_get. Got %s workflows (user: %s)", len(workflows), current_user)
         return serializers.ListOfWorkflows(
             workflow_status=status, workflow_versions=versions, include_suites=suites, include_instances=instances,

@@ -451,6 +451,8 @@ paths:
         - $ref: "#/components/parameters/instances"
         - $ref: "#/components/parameters/builds"
         - $ref: "#/components/parameters/builds_limit"
+        - $ref: "#/components/parameters/filter_by_string"
+        - $ref: "#/components/parameters/filter_by_status"
         - $ref: "#/components/parameters/page"
         - $ref: "#/components/parameters/per_page"
         - $ref: "#/components/parameters/max_items"
@@ -520,6 +522,8 @@ paths:
         - $ref: "#/components/parameters/instances"
         - $ref: "#/components/parameters/builds"
         - $ref: "#/components/parameters/builds_limit"
+        - $ref: "#/components/parameters/filter_by_string"
+        - $ref: "#/components/parameters/filter_by_status"
         - $ref: "#/components/parameters/page"
         - $ref: "#/components/parameters/per_page"
         - $ref: "#/components/parameters/max_items"
@@ -588,6 +592,8 @@ paths:
         - $ref: "#/components/parameters/instances"
         - $ref: "#/components/parameters/builds"
         - $ref: "#/components/parameters/builds_limit"
+        - $ref: "#/components/parameters/filter_by_string"
+        - $ref: "#/components/parameters/filter_by_status"
         - $ref: "#/components/parameters/page"
         - $ref: "#/components/parameters/per_page"
         - $ref: "#/components/parameters/max_items"
@@ -659,6 +665,8 @@ paths:
         - $ref: "#/components/parameters/instances"
         - $ref: "#/components/parameters/builds"
         - $ref: "#/components/parameters/builds_limit"
+        - $ref: "#/components/parameters/filter_by_string"
+        - $ref: "#/components/parameters/filter_by_status"
         - $ref: "#/components/parameters/page"
         - $ref: "#/components/parameters/per_page"
         - $ref: "#/components/parameters/max_items"
@@ -752,6 +760,8 @@ paths:
         - $ref: "#/components/parameters/instances"
         - $ref: "#/components/parameters/builds"
         - $ref: "#/components/parameters/builds_limit"
+        - $ref: "#/components/parameters/filter_by_string"
+        - $ref: "#/components/parameters/filter_by_status"
         - $ref: "#/components/parameters/page"
         - $ref: "#/components/parameters/per_page"
         - $ref: "#/components/parameters/max_items"
@@ -1811,7 +1821,7 @@ components:
       schema:
         type: string
       required: true
-      example: 123e4567-e89b-12d3-a456-426614174000
+      example: 5712af93-9d73-4dab-a047-335c28177307
     wf_version:
       name: "wf_version"
       description: "Workflow version"
@@ -1896,6 +1906,21 @@ components:
         default: 10
       description: "Maximum number of builds to include per instance"
       example: "10"
+    filter_by_string:
+      name: "filter_by_string"
+      in: query
+      schema:
+        type: string
+      description: "Filter workflows by a string contained in their `uuid` identifier or `name`"
+      example: ""
+    filter_by_status:
+      name: "filter_by_status"
+      in: query
+      schema:
+        type: string
+        enum: [all_passing, some_passing, all_failing, not_available]
+      description: "Filter workflows by their aggregated test status"
+      example: ""
     page:
       name: "page"
       in: query
