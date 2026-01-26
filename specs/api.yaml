@@ -1911,16 +1911,16 @@ components:
       in: query
       schema:
         type: string
-      description: "Filter items by a string contained in their name or description"
-      example: "my workflow"
+      description: "Filter workflows by a string contained in their `uuid` identifier or `name`"
+      example: ""
     filter_by_status:
       name: "filter_by_status"
       in: query
       schema:
         type: string
         enum: [all_passing, some_passing, all_failing, not_available]
-      description: "Filter items by their test status"
-      example: "all_passing"
+      description: "Filter workflows by their aggregated test status"
+      example: ""
     page:
       name: "page"
       in: query
