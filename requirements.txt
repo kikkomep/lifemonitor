@@ -9,7 +9,7 @@ cryptography>=44.0.1
 dnspython==2.7.0
 dramatiq[redis,watch]==1.18.0
 email-validator~=2.2.0
-eventlet==0.39.0
+eventlet==0.40.3
 flask-cors==6.0.0
 flask-login~=0.6.2
 flask-marshmallow~=0.14.0
@@ -55,9 +55,9 @@ rocrate==0.13.0
 snakemake==7.32.4
 roc-validator==0.6.2
 SQLAlchemy==1.4.41
-urllib3==1.26.19
+urllib3==2.6.3
 uwsgi==2.0.28
 watchdog==6.0.0
-wheel~=0.45.1
+wheel~=0.46.2
 # Werkzeug~=2.2.x
 git+https://github.com/pallets/werkzeug.git@2.2.x#egg=werkzeug
