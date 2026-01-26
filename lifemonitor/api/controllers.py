@@ -322,21 +322,41 @@ def workflows_rocrate_metadata(wf_uuid, wf_version):
 
 @cached(timeout=Timeout.WORKFLOW, client_scope=False)
 def workflows_rocrate_download(wf_uuid, wf_version):
-    response = __get_workflow_version__(wf_uuid, wf_version)
-    if isinstance(response, Response):
-        return response
+    try:
+        response = __get_workflow_version__(wf_uuid, wf_version)
+        if isinstance(response, Response):
+            return response
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        local_zip = response.download(tmpdir)
-        logger.debug("ZIP Archive: %s", local_zip)
-        with open(local_zip, "rb") as f:
-            return werkzeug.Response(f.read(), headers={
-                'Content-Type': 'application/zip',
-                'Accept': 'application/json',
-                'Access-Control-Allow-Credentials': 'true',
-                'Access-Control-Allow-Origin': '*',
-                'Content-Disposition': f'attachment; filename=rocrate_{response.workflow.uuid}_v{response.version}.zip'
-            }, direct_passthrough=False)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            local_zip = response.download(tmpdir)
+            logger.debug("ZIP Archive: %s", local_zip)
+            with open(local_zip, "rb") as f:
+                zip_content = f.read()
+                return werkzeug.Response(zip_content, headers={
+                    'Content-Type': 'application/zip',
+                    'Accept': 'application/json',
+                    'Access-Control-Allow-Credentials': 'true',
+                    'Access-Control-Allow-Origin': '*',
+                    'Content-Disposition': f'attachment; filename=rocrate_{response.workflow.uuid}_v{response.version}.zip'
+                }, direct_passthrough=False)
+    except (FileNotFoundError, lm_exceptions.EntityNotFoundException) as e:
+        logger.error("RO-Crate file not found: %s", str(e))
+        return lm_exceptions.report_problem(404, "Not Found",
+                                            detail=messages.workflow_version_not_found.format(wf_uuid, wf_version))
+    except PermissionError as e:
+        logger.error("Permission error accessing RO-Crate: %s", str(e))
+        return lm_exceptions.report_problem(403, "Forbidden",
+                                            detail="Unable to access workflow RO-Crate file")
+    except OSError as e:
+        logger.exception("OS error during RO-Crate download: %s", str(e))
+        return lm_exceptions.report_problem(500, "Internal Error",
+                                            detail="Error downloading RO-Crate archive",
+                                            extra_info={"exception": str(e)})
+    except Exception as e:
+        logger.exception("Unexpected error during RO-Crate download")
+        return lm_exceptions.report_problem(500, "Internal Error",
+                                            detail="Failed to generate RO-Crate archive",
+                                            extra_info={"exception": str(e)})
 
 
 @authorized
