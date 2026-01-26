@@ -171,6 +171,8 @@ def _get_workflows_list_(page: int = 1, per_page: Optional[int] = None, max_item
 
 @cached(timeout=Timeout.REQUEST)
 def workflows_get(status=False, versions=False, subscriptions=False,
+                  suites: bool = False, instances: bool = False,
+                  builds: bool = False, builds_limit: int = 1,
                   page: int = 1, per_page: Optional[int] = None,
                   max_items: Optional[int] = None,
                   only_subscriptions=False,
@@ -189,8 +191,13 @@ def workflows_get(status=False, versions=False, subscriptions=False,
         workflow_versions=versions,
         subscriptionsOf=subscriptions_of,
         statistics=lm.get_workflows_stats(workflows) if stats else None,
+        include_suites=suites,
+        include_instances=instances,
+        include_builds=builds,
+        builds_limit=builds_limit,
         page=page_info
     )
+
     return serializer.dump(workflows)
 
 
@@ -232,25 +239,42 @@ def workflows_get_by_id(wf_uuid, wf_version):
 
 
 @cached(timeout=Timeout.REQUEST)
-def workflows_get_latest_version_by_id(wf_uuid, previous_versions=False, ro_crate=False):
+def workflows_get_latest_version_by_id(
+        wf_uuid, previous_versions=False, ro_crate=False,
+        status=False,
+        suites=True, instances=False,
+        builds=False, builds_limit=1):
     response = __get_workflow_version__(wf_uuid, None)
     exclude = ['previous_versions'] if not previous_versions else []
     logger.debug("Previous versions: %r", exclude)
     return response if isinstance(response, Response) \
         else serializers.LatestWorkflowVersionSchema(
             exclude=exclude, rocrate_metadata=ro_crate,
-            subscriptionsOf=[current_user] if not current_user.is_anonymous else None).dump(response)
+            subscriptionsOf=[current_user] if not current_user.is_anonymous else None,
+            status=status,
+            include_suites=suites,
+            include_instances=instances,
+            include_builds=builds,
+            builds_limit=builds_limit).dump(response)
 
 
 @cached(timeout=Timeout.REQUEST)
-def workflows_get_version_by_id(wf_uuid, wf_version, ro_crate=False):
+def workflows_get_version_by_id(wf_uuid, wf_version, ro_crate=False,
+                                status=False,
+                                suites=True, instances=False,
+                                builds=False, builds_limit=1):
     response = __get_workflow_version__(wf_uuid, wf_version)
     exclude = ['previous_versions']
     logger.debug("Previous versions: %r", exclude)
     return response if isinstance(response, Response) \
         else serializers.LatestWorkflowVersionSchema(
             exclude=exclude, rocrate_metadata=ro_crate,
-            subscriptionsOf=[current_user] if not current_user.is_anonymous else None).dump(response)
+            subscriptionsOf=[current_user] if not current_user.is_anonymous else None,
+            status=status,
+            include_suites=suites,
+            include_instances=instances,
+            include_builds=builds,
+            builds_limit=builds_limit).dump(response)
 
 
 @cached(timeout=Timeout.REQUEST)
@@ -297,6 +321,8 @@ def workflows_rocrate_download(wf_uuid, wf_version):
 @authorized
 @cached(timeout=Timeout.REQUEST)
 def registry_workflows_get(status=False, versions=False, stats=False,
+                           suites=False, instances=False,
+                           builds=False, builds_limit=1,
                            page=None, per_page=None, max_items=None):
     page_info = PaginationInfo(page=page, per_page=per_page, max_items=max_items)
     workflows = lm.get_registry_workflows(current_registry, page=page_info)
@@ -304,6 +330,10 @@ def registry_workflows_get(status=False, versions=False, stats=False,
     return serializers.ListOfWorkflows(
         workflow_status=status, workflow_versions=versions,
         statistics=lm.get_workflows_stats(workflows) if stats else None,
+        include_suites=suites,
+        include_instances=instances,
+        include_builds=builds,
+        builds_limit=builds_limit,
         page=page_info
     ).dump(workflows)
 
@@ -320,6 +350,8 @@ def registry_workflows_post(body):
 @cached(timeout=Timeout.REQUEST)
 def registry_user_workflows_get(user_id, status=False, versions=False,
                                 stats=False,
+                                suites=False, instances=False,
+                                builds=False, builds_limit=1,
                                 page=None, per_page=None, max_items=None):
     if not current_registry:
         return lm_exceptions.report_problem(401, "Unauthorized", detail=messages.no_registry_found)
@@ -330,8 +362,10 @@ def registry_user_workflows_get(user_id, status=False, versions=False,
         logger.debug("registry_user_workflows_get. Got %s workflows (user: %s)", len(workflows), current_user)
         return serializers.ListOfWorkflows(
             workflow_status=status, workflow_versions=versions,
-            statistics=lm.get_workflows_stats(workflows) if stats else None, page=page_info
-        ).dump(workflows)
+            statistics=lm.get_workflows_stats(workflows) if stats else None,
+            include_suites=suites, include_instances=instances,
+            include_builds=builds, builds_limit=builds_limit,
+            page=page_info).dump(workflows)
     except OAuthIdentityNotFoundException as e:
         if logger.isEnabledFor(logging.DEBUG):
             logger.exception(e)
@@ -352,6 +386,8 @@ def registry_user_workflows_post(user_id, body):
 @cached(timeout=Timeout.REQUEST)
 def user_workflows_get(status=False, versions=False, subscriptions=False, only_subscriptions: bool = False,
                        stats=False,
+                       suites=False, instances=False,
+                       builds=False, builds_limit=1,
                        page=None, per_page=None, max_items=None):
     if not current_user or current_user.is_anonymous:
         return lm_exceptions.report_problem(401, "Unauthorized", detail=messages.no_user_in_session)
@@ -366,6 +402,10 @@ def user_workflows_get(status=False, versions=False, subscriptions=False, only_s
                                        workflow_versions=versions,
                                        subscriptionsOf=[current_user] if subscriptions else None,
                                        statistics=lm.get_workflows_stats(workflows) if stats else None,
+                                       include_suites=suites,
+                                       include_instances=instances,
+                                       include_builds=builds,
+                                       builds_limit=builds_limit,
                                        page=page_info).dump(workflows)
 
 
@@ -433,6 +473,8 @@ def user_workflow_unsubscribe(wf_uuid):
 @authorized
 @cached(timeout=Timeout.REQUEST)
 def user_registry_workflows_get(registry_uuid, status=False, versions=False,
+                                suites=False, instances=False,
+                                builds=False, build_limit=1,
                                 page: int = 0, per_page: Optional[int] = None,
                                 max_items: Optional[int] = None):
     if not current_user or current_user.is_anonymous:
@@ -444,7 +486,9 @@ def user_registry_workflows_get(registry_uuid, status=False, versions=False,
         workflows = lm.get_user_registry_workflows(current_user, registry, page=page_info)
         logger.debug("workflows_get. Got %s workflows (user: %s)", len(workflows), current_user)
         return serializers.ListOfWorkflows(
-            workflow_status=status, workflow_versions=versions, page=page_info).dump(workflows)
+            workflow_status=status, workflow_versions=versions, include_suites=suites, include_instances=instances,
+            include_builds=builds, builds_limit=build_limit,
+            page=page_info).dump(workflows)
     except lm_exceptions.EntityNotFoundException:
         return lm_exceptions.report_problem(404, "Not Found",
                                             detail=messages.no_registry_found.format(registry_uuid))
@@ -791,11 +835,9 @@ def _get_suite_or_problem(suite_uuid):
                                                     extra_info={"reason": response.get_json()['detail']})
             details_message = ""
             if current_user and not current_user.is_anonymous:
-                details_message = messages.unauthorized_user_suite_access\
-                    .format(current_user.username, suite_uuid)
+                details_message = messages.unauthorized_user_suite_access.format(current_user.username, suite_uuid)
             elif current_registry:
-                details_message = messages.unauthorized_registry_suite_access\
-                    .format(current_registry.name, suite_uuid)
+                details_message = messages.unauthorized_registry_suite_access.format(current_registry.name, suite_uuid)
             return lm_exceptions.report_problem(403, "Forbidden",
                                                 detail=details_message,
                                                 extra_info={"reason": response.get_json()['detail']})
@@ -808,7 +850,7 @@ def _get_suite_or_problem(suite_uuid):
 def suites_get_by_uuid(suite_uuid, status: bool = False, latest_builds: bool = False):
     suite = _get_suite_or_problem(suite_uuid)
     try:
-        return suite if isinstance(suite, Response) \
+        return suite if isinstance(suite, Response)\
             else serializers.SuiteSchema(status=status, latest_builds=latest_builds).dump(suite)
     except Exception as e:
         return __handle_testing_service_error__(e, instance_uuid=suite_uuid,
@@ -824,7 +866,7 @@ def suites_get_by_uuid(suite_uuid, status: bool = False, latest_builds: bool = F
 def suites_get_status(suite_uuid):
     suite = _get_suite_or_problem(suite_uuid)
     try:
-        return suite if isinstance(suite, Response) \
+        return suite if isinstance(suite, Response)\
             else serializers.SuiteStatusSchema().dump(suite)
     except Exception as e:
         return __handle_testing_service_error__(e, instance_uuid=suite_uuid,
@@ -853,7 +895,7 @@ def __handle_testing_service_error__(e: Exception, instance_uuid: str = None, me
 @cached(timeout=Timeout.REQUEST)
 def suites_get_instances(suite_uuid):
     response = _get_suite_or_problem(suite_uuid)
-    return response if isinstance(response, Response) \
+    return response if isinstance(response, Response)\
         else serializers.ListOfTestInstancesSchema().dump(response.test_instances)
 
 
@@ -947,11 +989,9 @@ def _get_instances_or_problem(instance_uuid):
                                                     extra_info={"reason": response.get_json()['detail']})
             details_message = ""
             if current_user and not current_user.is_anonymous:
-                details_message = messages.unauthorized_user_instance_access\
-                    .format(current_user.username, instance_uuid)
+                details_message = messages.unauthorized_user_instance_access.format(current_user.username, instance_uuid)
             elif current_registry:
-                details_message = messages.unauthorized_registry_instance_access\
-                    .format(current_registry.name, instance_uuid)
+                details_message = messages.unauthorized_registry_instance_access.format(current_registry.name, instance_uuid)
             return lm_exceptions.report_problem(403, "Forbidden", detail=details_message,
                                                 extra_info={"reason": response.get_json()})
         return instance
@@ -1042,13 +1082,11 @@ def instances_builds_get_by_id(instance_uuid, build_id):
         if build:
             return serializers.BuildSummarySchema().dump(build)
         else:
-            return lm_exceptions\
-                .report_problem(404, "Not Found",
-                                detail=messages.instance_build_not_found.format(build_id, instance_uuid))
+            return lm_exceptions.report_problem(404, "Not Found",
+                                                detail=messages.instance_build_not_found.format(build_id, instance_uuid))
     except lm_exceptions.EntityNotFoundException:
-        return lm_exceptions\
-            .report_problem(404, "Not Found",
-                            detail=messages.instance_build_not_found.format(build_id, instance_uuid))
+        return lm_exceptions.report_problem(404, "Not Found",
+                                            detail=messages.instance_build_not_found.format(build_id, instance_uuid))
     except lm_exceptions.RateLimitExceededException as e:
         return lm_exceptions.report_problem(403, e.title, detail=e.detail)
     except lm_exceptions.BadRequestException as e:
@@ -1071,13 +1109,11 @@ def instances_builds_get_logs(instance_uuid, build_id, offset_bytes=0, limit_byt
         logger.debug("offset = %r, limit = %r", offset_bytes, limit_bytes)
         if build:
             return build.get_output(offset_bytes=offset_bytes, limit_bytes=limit_bytes)
-        return lm_exceptions\
-            .report_problem(404, "Not Found",
-                            detail=messages.instance_build_not_found.format(build_id, instance_uuid))
+        return lm_exceptions.report_problem(404, "Not Found",
+                                            detail=messages.instance_build_not_found.format(build_id, instance_uuid))
     except lm_exceptions.EntityNotFoundException:
-        return lm_exceptions\
-            .report_problem(404, "Not Found",
-                            detail=messages.instance_build_not_found.format(build_id, instance_uuid))
+        return lm_exceptions.report_problem(404, "Not Found",
+                                            detail=messages.instance_build_not_found.format(build_id, instance_uuid))
     except lm_exceptions.RateLimitExceededException as e:
         return lm_exceptions.report_problem(403, e.title, detail=e.detail)
     except ValueError as e:

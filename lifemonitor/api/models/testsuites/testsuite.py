@@ -123,11 +123,27 @@ class TestSuite(db.Model, ModelMixin):
     @property
     def latest_test_builds(self) -> list[models.TestBuild]:
         """
-        Get the latest test builds across all test instances in this suite.
+        Get the latest test builds across all test instances in this suite,
+        one per test instance.
         """
         latest_builds = []
         for test_instance in self.test_instances:
             latest_builds.append(test_instance.last_test_build)
+        return latest_builds
+
+    def get_latest_builds(self, limit=None) -> list[models.TestBuild]:
+        """
+        Retrieve the most recent test builds from all test instances in this suite,
+        up to the specified limit.
+        """
+        latest_builds = []
+        for test_instance in self.test_instances:
+            builds = test_instance.get_test_builds(limit=limit)
+            latest_builds.extend(builds)
+        # sort by updated at descending
+        latest_builds.sort(key=lambda x: x.updated_at, reverse=True)
+        if limit:
+            return latest_builds[:limit]
         return latest_builds
 
     @classmethod
