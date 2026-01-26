@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024 CRS4
+# Copyright (c) 2020-2026 CRS4
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -621,6 +621,8 @@ class WorkflowVersionListItem(WorkflowSchema):
     subscriptions = fields.Method("get_subscriptions")
     versions = fields.Method("get_versions")
     suites = fields.Method("get_suites")
+    created = fields.Method("get_created")  # fields.DateTime(attribute='created', format='timestamp', tzinfo=pytz.utc)
+    modified = fields.Method("get_modified")  # fields.DateTime(attribute='modified', format='timestamp', tzinfo=pytz.utc)
 
     def __init__(self, *args, self_link: bool = True,
                  workflow_versions: bool = False, subscriptionsOf: List[auth_models.User] = None,
@@ -636,6 +638,16 @@ class WorkflowVersionListItem(WorkflowSchema):
         self.include_instances = include_instances
         self.include_builds = include_builds
         self.builds_limit = builds_limit
+
+    def get_created(self, obj):
+        if hasattr(obj, 'created') and obj.created:
+            return obj.created.timestamp()
+        return None
+
+    def get_modified(self, obj):
+        if hasattr(obj, 'modified') and obj.modified:
+            return obj.modified.timestamp()
+        return None
 
     def get_status(self, workflow):
         try:
@@ -665,7 +677,8 @@ class WorkflowVersionListItem(WorkflowSchema):
     def get_versions(self, workflow):
         try:
             if self.workflow_versions:
-                properties = ["uuid", "version", "authors", "ro_crate", "is_latest"]
+                properties = ["uuid", "version", "submitter",
+                              "authors", "ro_crate", "is_latest"]
                 if "status" not in self.exclude:
                     properties.append("status")
                 schema = VersionDetailsSchema(only=properties)
@@ -732,6 +745,7 @@ class ListOfWorkflows(ListOfItems):
                  statistics: Optional[object] = None,
                  include_suites: bool = False, include_instances: bool = False,
                  include_builds: bool = False, builds_limit: int = 1,
+                 meta: bool = False,
                  **kwargs):
         super().__init__(*args, **kwargs)
         self.workflow_status = workflow_status
@@ -742,12 +756,15 @@ class ListOfWorkflows(ListOfItems):
         self.include_builds = include_builds
         self.builds_limit = builds_limit
         self._statistics = statistics
+        self.meta = meta
 
     def get_statistics(self, workflow: models.Workflow):
         return self._statistics if self._statistics else None
 
     def get_items(self, obj):
         exclude = ['meta', 'links']
+        if not self.meta:
+            exclude.append('meta')
         if not self.workflow_status:
             exclude.append('status')
         if not self.subscriptionsOf or len(self.subscriptionsOf) == 0:
