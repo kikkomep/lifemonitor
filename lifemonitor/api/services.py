@@ -74,42 +74,48 @@ class LifeMonitor:
 
     @classmethod
     def _find_and_check_workflow_version(cls, user: User, uuid, version=None):
-        w = None
-        if not user or user.is_anonymous:
-            if not version or version.lower() == "latest":
-                _w = models.Workflow.get_public_workflow(uuid)
-                if _w:
-                    w = _w.latest_version
+        try:
+            w = None
+            if not user or user.is_anonymous:
+                if not version or version.lower() == "latest":
+                    _w = models.Workflow.get_public_workflow(uuid)
+                    if _w:
+                        w = _w.latest_version
+                else:
+                    w = models.WorkflowVersion.get_public_workflow_version(uuid, version)
             else:
-                w = models.WorkflowVersion.get_public_workflow_version(uuid, version)
-        else:
-            if not version or version.lower() == "latest":
-                _w = models.Workflow.get_user_workflow(user, uuid)
-                if _w:
-                    w = _w.latest_version
-            else:
-                w = models.WorkflowVersion.get_user_workflow_version(user, uuid, version)
-            if not w:
-                w = cls._find_and_check_shared_workflow_version(user, uuid, version=version)
+                if not version or version.lower() == "latest":
+                    _w = models.Workflow.get_user_workflow(user, uuid)
+                    if _w:
+                        w = _w.latest_version
+                else:
+                    w = models.WorkflowVersion.get_user_workflow_version(user, uuid, version)
+                if not w:
+                    w = cls._find_and_check_shared_workflow_version(user, uuid, version=version)
 
-        if w is None:
-            raise lm_exceptions.EntityNotFoundException(models.WorkflowVersion, entity_id=f"{uuid}_{version}")
-        # Check whether the user can access the workflow.
-        # As a general rule, we grant user access to the workflow
-        #   1. if the user belongs to the owners group
-        #   2. or the user belongs to the viewers group
-        # if user not in w.owners and user not in w.viewers:
-        if user and not user.is_anonymous and not user.has_permission(w):
-            # if the user is not the submitter
-            # and the workflow is associated with a registry
-            # then we try to check whether the user is allowed to view the workflow
-            if len(w.registries) == 0:
+            if w is None:
+                raise lm_exceptions.EntityNotFoundException(models.WorkflowVersion, entity_id=f"{uuid}_{version}")
+            # Check whether the user can access the workflow.
+            # As a general rule, we grant user access to the workflow
+            #   1. if the user belongs to the owners group
+            #   2. or the user belongs to the viewers group
+            # if user not in w.owners and user not in w.viewers:
+            if user and not user.is_anonymous and not user.has_permission(w):
+                # if the user is not the submitter
+                # and the workflow is associated with a registry
+                # then we try to check whether the user is allowed to view the workflow
+                if len(w.registries) == 0:
+                    raise lm_exceptions.NotAuthorizedException(f"User {user.username} is not allowed to access workflow")
+                for registry in w.registries:
+                    if w.workflow in registry.get_user_workflows(user):
+                        return w
                 raise lm_exceptions.NotAuthorizedException(f"User {user.username} is not allowed to access workflow")
-            for registry in w.registries:
-                if w.workflow in registry.get_user_workflows(user):
-                    return w
-            raise lm_exceptions.NotAuthorizedException(f"User {user.username} is not allowed to access workflow")
-        return w
+            return w
+        except ValueError as e:
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(f"Error handling workflow {uuid} version {version}: {e}")
+            raise lm_exceptions.BadRequestException(detail=f"Invalid workflow {uuid} version {version}")
+            # raise lm_exceptions.EntityNotFoundException(models.WorkflowVersion, entity_id=f"{uuid}_{version}")
 
     @classmethod
     def register_workflow(cls, rocrate_or_link, workflow_submitter: User, workflow_version,
