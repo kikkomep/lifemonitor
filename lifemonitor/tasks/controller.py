@@ -19,11 +19,11 @@
 # SOFTWARE.
 
 import json
+
 import logging
 import time
 
 import flask
-from flask_login import current_user
 
 from lifemonitor.auth.services import authorized
 from lifemonitor.cache import cache
