@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024 CRS4
+# Copyright (c) 2020-2026 CRS4
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -113,7 +113,7 @@ def pick_workflow(app_user, name=None):
     raise RuntimeError(f"Unable to find the workflow {name}")
 
 
-def register_workflow(app_user, w):
+def register_workflow(app_user, w) -> tuple[dict, WorkflowVersion]:
     # get the registry
     registry = None
     if 'registry_uri' in w:

@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024 CRS4
+# Copyright (c) 2020-2026 CRS4
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -27,7 +27,7 @@ from lifemonitor.cache import cache
 
 logger = logging.getLogger(__name__)
 
-JOB_CACHE_TIMEOUT = 60
+JOB_CACHE_TIMEOUT = 10 * 60  # in seconds
 
 
 def make_job_id() -> str:

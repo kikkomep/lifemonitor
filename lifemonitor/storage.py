@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024 CRS4
+# Copyright (c) 2020-2026 CRS4
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -41,9 +41,9 @@ def check_config(func):
     @functools.wraps(func)
     def check_config_impl(*args, **kwargs):
         storage: RemoteStorage = args[0]
-        assert isinstance(storage, RemoteStorage), "Invali argument"
+        assert isinstance(storage, RemoteStorage), "Invalid argument"
         if not storage._enabled:
-            logger.warning("S3 Storage not properly configured")
+            logger.debug("S3 Storage not configured")
             return False
         return func(*args, **kwargs)
     return check_config_impl
@@ -58,20 +58,35 @@ class RemoteStorage():
     _bucket_name = None
 
     def __init__(self, app: Flask = None, config: Optional[Dict] = None) -> None:
+        # set the app instance
         self.app = app = app or current_app
-        try:
-            self._config: Dict[str, str] = config if config is not None else {
-                'endpoint_url': app.config['S3_ENDPOINT_URL'],
-                'aws_access_key_id': app.config['S3_ACCESS_KEY'],
-                'aws_secret_access_key': app.config['S3_SECRET_KEY'],
-                'bucket_name': app.config.get('S3_BUCKET', 'lifemonitor-bucket')
-            }
-            self._bucket_name = self._config.pop('bucket_name')
-            self._enabled = True
+        # set disabled by default
+        self._enabled = False
+        # parse and set the config
+        defined = missing = None
+        for _ in (config, self.app.config):
+            defined, missing = self.__check_config_properties__(_)
+            if len(defined) == 4 and len(missing) == 0:
+                self._enabled = True
+            if len(defined) > 0:
+                break
+        # print the warning if the config is not valid
+        if len(defined) > 0 and len(missing) > 0:
+            logger.warning("S3 Storage config missing properties: %s", ', '.join(missing))
 
-        except KeyError as e:
-            logger.warning("S3 Storage not property configured: %s", str(e))
-            self._enabled = False
+    @staticmethod
+    def __check_config_properties__(config: Dict) -> tuple[dict, dict]:
+        # check if the config is valid
+        defined = []
+        missing = []
+        required_keys = ['S3_ENDPOINT_URL', 'S3_ACCESS_KEY', 'S3_SECRET_KEY', 'S3_BUCKET']
+        if config and isinstance(config, dict):
+            for _ in required_keys:
+                if _ in config:
+                    defined.append(_)
+                else:
+                    missing.append(_)
+        return defined, missing
 
     @property
     def enabled(self) -> bool:

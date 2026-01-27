@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024 CRS4
+# Copyright (c) 2020-2026 CRS4
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -106,7 +106,8 @@ class TestingService(db.Model, ModelMixin):
     token_type = "Bearer"
 
     # configure the class manager
-    service_type_registry = ClassManager('lifemonitor.api.models.services', class_suffix='TestingService', skip=['__init__', 'service'])
+    service_type_registry = ClassManager('lifemonitor.api.models.services', class_suffix='TestingService',
+                                         skip=['__init__', 'service'], load_sub_packages=True)
 
     __mapper_args__ = {
         'polymorphic_on': _type,
@@ -119,6 +120,14 @@ class TestingService(db.Model, ModelMixin):
 
     def __repr__(self):
         return f'<TestingService {self.url}, ({self.uuid})>'
+
+    def __eq__(self, other):
+        if not isinstance(other, TestingService):
+            return False
+        return self.uuid == other.uuid and self.url == other.url and self._type == other._type
+
+    def __hash__(self):
+        return hash((self.uuid, self.url, self._type))
 
     @property
     def base_url(self):
@@ -213,9 +222,18 @@ class TestingService(db.Model, ModelMixin):
     def all(cls) -> List[TestingService]:
         return cls.query.all()
 
+    __cache__ = {}
+
     @classmethod
     def find_by_uuid(cls, uuid) -> TestingService:
-        return cls.query.get(uuid)
+        if uuid in cls.__cache__:
+            return cls.__cache__[uuid]
+        if isinstance(uuid, str):
+            uuid = _uuid.UUID(uuid)
+        instance = cls.query.filter(cls.uuid == uuid).first()
+        if instance:
+            cls.__cache__[uuid] = instance
+        return instance
 
     @classmethod
     def find_by_url(cls, url) -> TestingService:

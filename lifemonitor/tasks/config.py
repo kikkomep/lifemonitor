@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024 CRS4
+# Copyright (c) 2020-2026 CRS4
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -29,6 +29,7 @@ from dramatiq.brokers.redis import RedisBroker
 from dramatiq.results import Results
 from dramatiq.results.backends.redis import RedisBackend
 
+from lifemonitor.tasks.models import JobSettings
 from lifemonitor.tasks.scheduler import Scheduler
 
 from .jobs import load_job_modules
@@ -73,6 +74,9 @@ def init_task_queues(app, load_jobs: bool = True):
         logger.info("Init task queue disabled on SocketIO handler")
         return
 
+    # Load job settings
+    JobSettings.load(app.config)
+
     # register jobs controller
     from .controller import blueprint
     app.register_blueprint(blueprint)
@@ -109,7 +113,7 @@ def init_task_queues(app, load_jobs: bool = True):
         logger.info("Running app in worker process")
 
     # load jobs
-    if load_jobs and app.config.get('ENV') not in ['testingSupport', 'testing']:
+    if load_jobs and app.config.get('LIFEMONITOR_ENV') not in ['testingSupport', 'testing']:
         init_task_jobs(app)
 
 

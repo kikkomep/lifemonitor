@@ -1,9 +1,28 @@
+# Copyright (c) 2020-2026 CRS4
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
 services:
   db:
     # Docker image docs: https://github.com/bitnami/bitnami-docker-postgresql
     # We use PgSQL 11 instead of 12 since that's the newest version of the client
     # available in the Python image we're using for the application
-    image: bitnami/postgresql:11
+    image: bitnami/postgresql:latest
     ports:
       - "5432"
     env_file: &env_file
@@ -21,7 +40,7 @@ services:
       - "data_db:/bitnami/postgresql"
 
   nginx:
-    image: bitnami/nginx:1.19-debian-10
+    image: bitnami/nginx:latest
     depends_on:
       - "lm"
     ports:
@@ -54,10 +73,11 @@ services:
     user: "${USER_UID}:${USER_GID}"
     env_file: *env_file
     environment:
-      - "FLASK_ENV=production"
+      - "LIFEMONITOR_ENV=production"
       - "POSTGRESQL_HOST=db"
       - "POSTGRESQL_PORT=5432"
       - "WEBSOCKET_SERVER=false"
+      - "LOG_FILE_NAME=lifemonitor-backend.log"
     volumes:
       - "./certs:/certs:ro"
       - "./instance:/lm/instance:ro"
@@ -79,15 +99,18 @@ services:
     depends_on:
       - "db"
     env_file: *env_file
+    user: "${USER_UID}:${USER_GID}"
     environment:
-      - "FLASK_ENV=production"
+      - "LIFEMONITOR_ENV=production"
       - "POSTGRESQL_HOST=db"
       - "POSTGRESQL_PORT=5432"
+      - "LOG_FILE_NAME=lifemonitor-init.log"
     volumes:
       - "./certs:/certs:ro"
       - "./instance:/lm/instance:ro"
       - "./settings.conf:/lm/settings.conf:ro" # default settings
       - "data_workflows:/var/data/lm"
+      - "/tmp/lifemonitor-logs:/var/log/lm"
       - type: volume
         source: data_static_files
         target: /lm/lifemonitor/static
@@ -108,15 +131,18 @@ services:
     user: "${USER_UID}:${USER_GID}"
     env_file: *env_file
     environment:
-      - "FLASK_ENV=production"
+      - "LIFEMONITOR_ENV=production"
       - "POSTGRESQL_HOST=db"
       - "POSTGRESQL_PORT=5432"
       - "WEBSOCKET_SERVER=false"
+      - "LOG_FILE_PATH=/var/log/lm"
+      - "LOG_FILE_NAME=lifemonitor-worker.log"
     volumes:
       - "./certs:/certs:ro"
       - "./instance:/lm/instance:ro"
       - "./settings.conf:/lm/settings.conf:ro" # default settings
       - "data_workflows:/var/data/lm"
+      - "/tmp/lifemonitor-logs:/var/log/lm"
     networks:
       - life_monitor
 
@@ -131,24 +157,27 @@ services:
     user: "${USER_UID}:${USER_GID}"
     env_file: *env_file
     environment:
-      - "FLASK_ENV=production"
+      - "LIFEMONITOR_ENV=production"
       - "WEBSOCKET_SERVER=true"
       - "POSTGRESQL_HOST=db"
       - "POSTGRESQL_PORT=5432"
       - "LIFEMONITOR_TLS_KEY=/certs/lm.key"
       - "LIFEMONITOR_TLS_CERT=/certs/lm.crt"
+      - "LOG_FILE_PATH=/var/log/lm"
+      - "LOG_FILE_NAME=lifemonitor-ws.log"
     volumes:
       - "./certs:/certs:ro"
       - "./instance:/lm/instance:ro"
       - "./settings.conf:/lm/settings.conf:ro" # default settings
       - "data_workflows:/var/data/lm"
+      - "/tmp/lifemonitor-logs:/var/log/lm"
     ports:
       - "8001:8000"
     networks:
       - life_monitor
 
   redis:
-    image: bitnami/redis:6.2
+    image: bitnami/redis:latest
     ports:
       - "6379"
     env_file: *env_file
@@ -165,6 +194,7 @@ volumes:
   data_specs:
   data_redis:
   data_workflows:
+  logs:
 
 
 networks:

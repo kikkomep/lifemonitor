@@ -1,12 +1,14 @@
-FROM python:3.10-slim-buster AS base
+FROM python:3.12-slim-bookworm AS base
 
 # Install base requirements
-RUN apt-get update -q \
- && apt-get install -y --no-install-recommends \
-        bash lftp curl rsync build-essential  \
-        redis-tools git \
-        postgresql-client-11 default-jre \
- && apt-get clean -y && rm -rf /var/lib/apt/lists
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update -q \
+    && apt-get install -y --no-install-recommends \
+    bash lftp curl rsync build-essential  \
+    redis-tools git \
+    postgresql-client default-jre \
+    && apt-get clean -y && rm -rf /var/lib/apt/lists
 
 # Set the parametric USER ID
 ARG USER_ID
@@ -16,22 +18,28 @@ ENV USER_ID=${USER_ID:-1000}
 ARG GROUP_ID
 ENV GROUP_ID=${GROUP_ID:-1000}
 
+# Set the pip cache directory
+ARG PIP_CACHE_DIR
+ENV PIP_CACHE_DIR=${PIP_CACHE_DIR:-/lm/.cache/pip}
+
+# Set the pip cache directory
+ARG NPM_CACHE_DIR
+ENV NPM_CACHE_DIR=${NPM_CACHE_DIR:-/lm/.npm}
+
 # Create a user 'lm' with HOME at /lm and set 'lm' as default git user
 RUN groupadd -g ${GROUP_ID} lm && \
     useradd -u ${USER_ID} -g lm -d /lm -m lm
 
-# Set the default user
-ENV USER=lm
-
-# Copy requirements and certificates
-COPY --chown=lm:lm requirements.txt certs/*.crt /lm/
-
 # Install requirements and install certificates
-RUN pip3 install --no-cache-dir --upgrade pip
-RUN pip3 install --no-cache-dir -r /lm/requirements.txt
+RUN --mount=type=cache,target=${PIP_CACHE_DIR} \
+    pip install --upgrade pip --cache-dir=${PIP_CACHE_DIR}
+
+RUN --mount=type=bind,source=requirements.txt,target=/lm/requirements.txt \
+    --mount=type=cache,target=${PIP_CACHE_DIR} \
+    pip install -r /lm/requirements.txt --cache-dir=${PIP_CACHE_DIR}
 
 # Update Environment
-ENV PYTHONPATH=/lm:/usr/local/lib/python3.10/dist-packages:/usr/lib/python3/dist-packages:${PYTHONPATH} \
+ENV PYTHONPATH=/lm:/usr/local/lib/python3.10/dist-packages:/usr/lib/python3/dist-packages \
     FLASK_RUN_HOST=0.0.0.0 \
     GUNICORN_WORKERS=1 \
     GUNICORN_THREADS=2 \
@@ -42,35 +50,6 @@ ENV PYTHONPATH=/lm:/usr/local/lib/python3.10/dist-packages:/usr/lib/python3/dist
 # Install Nextflow
 RUN curl -fsSL get.nextflow.io | bash
 
-# Set the final working directory
-WORKDIR /lm
-
-# Copy utility scripts
-COPY \
-    docker/wait-for-postgres.sh \
-    docker/wait-for-redis.sh \
-    docker/wait-for-file.sh \
-    docker/lm_entrypoint.sh \
-    docker/worker_entrypoint.sh \
-    docker/wss-entrypoint.sh \
-    /usr/local/bin/
-
-# Update permissions and install optional certificates
-RUN chmod 755 \
-    /usr/local/bin/wait-for-postgres.sh \
-    /usr/local/bin/wait-for-redis.sh \
-    /usr/local/bin/wait-for-file.sh \
-    /usr/local/bin/lm_entrypoint.sh \
-    /usr/local/bin/worker_entrypoint.sh \
-    /usr/local/bin/wss-entrypoint.sh \
-    /nextflow \
-    && certs=$(ls *.crt 2> /dev/null) \
-    && mv *.crt /usr/local/share/ca-certificates/ \
-    && update-ca-certificates || true \
-    && mv /nextflow /usr/local/bin
-
-# Set the container entrypoint
-ENTRYPOINT /usr/local/bin/lm_entrypoint.sh
 
 # Prepare data folder
 RUN mkdir -p /var/data/lm \
@@ -87,38 +66,48 @@ USER lm
 RUN git config --global user.name "LifeMonitor[bot]" \
     && git config --global user.email "noreply@lifemonitor.eu"
 
-# Copy lifemonitor app
-COPY --chown=lm:lm app.py ws.py lm-metrics-server lm-admin lm gunicorn.conf.py /lm/
-COPY --chown=lm:lm specs /lm/specs
-COPY --chown=lm:lm lifemonitor /lm/lifemonitor
-COPY --chown=lm:lm migrations /lm/migrations
-COPY --chown=lm:lm cli /lm/cli
-
-# Ensure read access to source code to unprivileged users
-RUN find /lm/lifemonitor/ -type d -exec chmod a+r {} \;
 
 ##################################################################
 ## Node Stage
 ##################################################################
-FROM node:14.16.0-alpine3.12 AS node
+FROM node:lts-slim AS node
 
+# Inherit from base
+ARG NPM_CACHE_DIR
+ENV NPM_CACHE_DIR=${NPM_CACHE_DIR:-/lm/.npm}
 
-RUN mkdir -p /static && apk add --no-cache bash python3 make g++ \
-    && addgroup -S lm && adduser -S lm -G lm \
-    && chown -R lm:lm /static
-WORKDIR /static/src
-COPY lifemonitor/static/src/package.json package.json
-RUN npm install
-# Copy and build static files
-# Use a separated run to take advantage
-# of node_modules cache from the previous layer
-COPY lifemonitor/static/src .
-RUN npm run production
+# Update npm
+RUN --mount=type=cache,target="${NPM_CACHE_DIR}"" \
+    npm --cache ${NPM_CACHE_DIR} -g install npm
 
+# Log node and npm versions
+RUN echo "Node version: $(node -v)" && echo "NPM version: $(npm -v)"
 
-##################################################################
-## Target Stage
-##################################################################
+# Create static folder
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    mkdir -p /static && apt-get update && apt-get install -y --no-install-recommends \
+    bash python3 python3-setuptools make g++ \
+    && groupadd -r lm && useradd -r -g lm lm \
+    && chown -R lm:lm /static \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Install node dependencies
+RUN --mount=type=bind,source=lifemonitor/static/src,target=/lm/lifemonitor/static/src,rw=true \
+    --mount=type=cache,target=${NPM_CACHE_DIR} \
+    cd /lm/lifemonitor/static/src && \
+    npm --cache ${NPM_CACHE_DIR} install && \
+    mkdir -p /static && \
+    cp -r /lm/lifemonitor/static/src /static
+
+# Build static files
+RUN --mount=type=cache,target=${NPM_CACHE_DIR} \
+    cd /static/src && \
+    npm --cache ${NPM_CACHE_DIR} run production
+
+# ##################################################################
+# ## Target Stage
+# ##################################################################
 FROM base AS target
 
 # Set software and build number
@@ -127,4 +116,53 @@ ARG BUILD_NUMBER
 ENV LM_SW_VERSION=$SW_VERSION
 ENV LM_BUILD_NUMBER=$BUILD_NUMBER
 
+# Set the final working directory
+WORKDIR /lm
+
+USER root
+
+# Copy utility scripts
+COPY --chown=lm:lm \
+    docker/wait-for-postgres.sh \
+    docker/wait-for-redis.sh \
+    docker/wait-for-file.sh \
+    docker/lm_entrypoint.sh \
+    docker/worker_entrypoint.sh \
+    docker/wss-entrypoint.sh \
+    /usr/local/bin/
+
+# Copy requirements and certificates
+COPY --chown=lm:lm certs/*.crt /lm/
+
+# Update permissions and install optional certificates
+RUN chmod 755 \
+    /usr/local/bin/wait-for-postgres.sh \
+    /usr/local/bin/wait-for-redis.sh \
+    /usr/local/bin/wait-for-file.sh \
+    /usr/local/bin/lm_entrypoint.sh \
+    /usr/local/bin/worker_entrypoint.sh \
+    /usr/local/bin/wss-entrypoint.sh \
+    /nextflow \
+    && certs=$(ls *.crt 2> /dev/null) \
+    && mv *.crt /usr/local/share/ca-certificates/ \
+    && update-ca-certificates || true \
+    && mv /nextflow /usr/local/bin
+
+# Copy lifemonitor app
+COPY --chown=lm:lm app.py ws.py lm-metrics-server lm-admin lm gunicorn.conf.py /lm/
+COPY --chown=lm:lm specs /lm/specs
+COPY --chown=lm:lm lifemonitor /lm/lifemonitor
+COPY --chown=lm:lm migrations /lm/migrations
+COPY --chown=lm:lm cli /lm/cli
+
+# Copy compiled Javascript code
 COPY --from=node --chown=lm:lm /static/dist /lm/lifemonitor/static/dist
+
+# Ensure read access to source code to unprivileged users
+RUN find /lm/lifemonitor/ -type d -exec chmod a+r {} \;
+
+# Set the default user
+USER lm
+
+# Set the container entrypoint
+ENTRYPOINT ["/usr/local/bin/lm_entrypoint.sh"]

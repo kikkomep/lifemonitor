@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024 CRS4
+# Copyright (c) 2020-2026 CRS4
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -29,6 +29,7 @@ import inspect
 import json
 import logging
 import os
+import pkgutil
 import random
 import re
 import shutil
@@ -521,8 +522,28 @@ class ROCrateLinkContext(object):
             if os.path.isdir(self.rocrate_or_link) or os.path.isfile(self.rocrate_or_link):
                 return self.rocrate_or_link
             try:
-                rocrate = base64.b64decode(self.rocrate_or_link)
+                # reference to the config
                 from . import config
+                # If the input is a zipped ROCrate
+                if self.rocrate_or_link.endswith('.zip'):
+                    logger.debug("RO-Crate param is a local zip file: %r", self.rocrate_or_link)
+
+                    zip_file = self.rocrate_or_link[7:] if self.rocrate_or_link.startswith('file://') else self.rocrate_or_link
+                    temp_rocrate_file = tempfile.NamedTemporaryFile(delete=False,
+                                                                    dir=config.BaseConfig.BASE_TEMP_FOLDER,
+                                                                    prefix="zipped-rocrate-",
+                                                                    suffix=".zip")
+                    # Copy the zip file to the temporary file
+                    shutil.copyfile(zip_file, temp_rocrate_file.name)
+                    # Set the file name to the temporary file
+                    local_roc_link = f"tmp://{temp_rocrate_file.name}"
+                    logger.debug("Local roc_link: %r", local_roc_link)
+                    self._local_path = temp_rocrate_file
+                    return local_roc_link
+
+                # If the input is a base64 encoded RO-Crate, decode it
+                rocrate = base64.b64decode(self.rocrate_or_link)
+
                 temp_rocrate_file = tempfile.NamedTemporaryFile(delete=False,
                                                                 dir=config.BaseConfig.BASE_TEMP_FOLDER,
                                                                 prefix="base64-rocrate")
@@ -635,12 +656,16 @@ def download_file_from_remote_url(url, target_path: str = None,
 
     try:
         if target_path:
+            # Ensure the target directory exists
+            os.makedirs(os.path.dirname(target_path), exist_ok=True)
+            # Download the file
             with open(target_path, 'wb') as fd:
                 _download_from_remote(url, fd, authorization=authorization)
         else:
             with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
                 _download_from_remote(url, tmp_file, authorization=authorization)
                 target_path = tmp_file.path
+        logger.debug("Downloaded file: %r", target_path)
         return target_path
     except urllib.error.URLError as e:
         handle_download_exception(url, e)
@@ -873,7 +898,7 @@ def find_refs_by_commit(repo: pygit2.Repository, commit: str):
 def find_commit_info(repo: pygit2.Repository, commit=None, ref=None) -> pygit2.Object:
     assert isinstance(repo, pygit2.Repository), repo
     for c in repo.walk(ref or repo.head.target):
-        if not commit or c.hex == commit or str(c.hex) == str(commit):
+        if not commit or c.id == commit or str(c.id) == str(commit):
             return c
     return None
 
@@ -1145,10 +1170,11 @@ class NextRouteRegistry(object):
 
 class ClassManager:
 
-    def __init__(self, package, class_prefix="", class_suffix="", skip=None, lazy=True):
+    def __init__(self, package, class_prefix="", class_suffix="", skip=None, lazy=True, load_sub_packages=False):
         self._package = package
         self._prefix = class_prefix
         self._suffix = class_suffix
+        self._load_sub_packages = load_sub_packages
         self._skip = ['__init__']
         if skip:
             if isinstance(skip, list):
@@ -1163,19 +1189,38 @@ class ClassManager:
         if not self.__concrete_types__:
             self.__concrete_types__ = {}
             module_obj = import_module(self._package)
-            modules_files = glob.glob(join(dirname(module_obj.__file__), "*.py"))
-            modules = ['{}'.format(basename(f)[:-3]) for f in modules_files if isfile(f)]
-            for m in modules:
-                if m not in self._skip:
-                    object_class = f"{self._prefix}{m.capitalize()}{self._suffix}"
-                    try:
-                        mod = import_module(f"{self._package}.{m}")
-                        self.__concrete_types__[m] = (
-                            getattr(mod, object_class),
-                        )
-                    except (ModuleNotFoundError, AttributeError) as e:
-                        logger.warning(f"Unable to load object module {m}")
+
+            # Helper function to load a module and get its class
+            def _load_module_class(module_name, package_prefix=""):
+                if module_name in self._skip:
+                    return
+
+                full_package_name = f"{self._package}{package_prefix}.{module_name}"
+                object_class = f"{self._prefix}{module_name.capitalize()}{self._suffix}"
+                logger.debug(f"Loading module: {full_package_name}, object class: {object_class}")
+
+                try:
+                    mod = import_module(full_package_name)
+                    self.__concrete_types__[module_name] = (
+                        getattr(mod, object_class),
+                    )
+                except (ModuleNotFoundError, AttributeError) as e:
+                    logger.warning(f"Unable to load object module {module_name}")
+                    if logger.isEnabledFor(logging.DEBUG):
                         logger.exception(e)
+
+            # Load modules from Python files
+            modules_files = glob.glob(join(dirname(module_obj.__file__), "*.py"))
+            modules = [basename(f)[:-3] for f in modules_files if isfile(f)]
+            for m in modules:
+                _load_module_class(m)
+
+            # Load modules from subpackages if enabled
+            if self._load_sub_packages:
+                for loader, module_name, is_pkg in pkgutil.iter_modules(module_obj.__path__):
+                    if is_pkg:
+                        _load_module_class(module_name)
+
         return self.__concrete_types__
 
     @property
@@ -1616,3 +1661,55 @@ def decrypt_folder(input_folder: str, output_folder: str,
         if raise_error:
             raise lm_exceptions.LifeMonitorException(detail=str(e))
     return count
+
+
+class Settings:
+    # Prefix for settings
+    prefix = None
+    # Suffix for settings
+    suffix = None
+
+    @classmethod
+    def load(cls, config=None):
+        """
+        Load settings from config or environment variables.
+
+        Args:
+            config: Configuration object that has a get method
+        """
+        for attr, default in cls._get_settings_class_attrs():
+            key = cls._get_key(attr)
+            value = None
+
+            # Try to get value from config
+            logger.debug("Config: %s", config)
+            if config is not None:
+                try:
+                    value = config.get(key)
+                except Exception as e:
+                    logger.debug("Error getting %s from config: %s", key, e)
+
+            # Fall back to environment variables or default
+            if value is None:
+                value = os.environ.get(key, default)
+                logger.debug("Using value for %s=%r from environment or default", key, value)
+
+            # Set the attribute on the class
+            setattr(cls, attr, value)
+            logger.debug("Setting %s=%r", key, value)
+
+    @classmethod
+    def _get_settings_class_attrs(cls):
+        for attr in dir(cls):
+            if attr.isupper() and not attr.startswith('__'):
+                yield attr, getattr(cls, attr)
+
+    @classmethod
+    def _get_key(cls, name: str) -> str:
+        parts = []
+        if cls.prefix:
+            parts.append(cls.prefix)
+        parts.append(name)
+        if cls.suffix:
+            parts.append(cls.suffix)
+        return "_".join(parts)

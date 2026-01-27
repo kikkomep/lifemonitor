@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright (c) 2020-2024 CRS4
+# Copyright (c) 2020-2026 CRS4
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -181,7 +181,7 @@ patch_metadata_graph_node('crates/ro-crate-galaxy-sortchangecase-github-actions/
                           node=("@type", "TestInstance"),
                           properties={
                               'url': 'https://api.github.com',
-                              'resource': 'repos/crs4/life_monitor/actions/workflows/docs.yaml',
+                              'resource': 'repos/crs4/life_monitor/actions/workflows/main.yaml',
                               'runsOn': {"@id": "https://w3id.org/ro/terms/test#GithubService"}
                           })
 patch_metadata_graph_node('crates/ro-crate-galaxy-sortchangecase-github-actions/ro-crate-metadata.json',

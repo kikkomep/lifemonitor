@@ -1,9 +1,28 @@
+# Copyright (c) 2020-2026 CRS4
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
 # vim: set et sw=2
 
 openapi: "3.0.0"
 
 info:
-  version: "0.15.0"
+  version: "0.20.0"
   title: "Life Monitor API"
   description: |
     *Workflow sustainability service*
@@ -18,7 +37,7 @@ info:
 servers:
   - url: /
     description: >
-      Version 0.15.0 of API.
+      Version 0.20.0 of API.
 
 tags:
   - name: GitHub Integration
@@ -446,6 +465,16 @@ paths:
       parameters:
         - $ref: "#/components/parameters/wf_versions"
         - $ref: "#/components/parameters/wf_status"
+        - $ref: "#/components/parameters/statistics"
+        - $ref: "#/components/parameters/suites"
+        - $ref: "#/components/parameters/instances"
+        - $ref: "#/components/parameters/builds"
+        - $ref: "#/components/parameters/builds_limit"
+        - $ref: "#/components/parameters/filter_by_string"
+        - $ref: "#/components/parameters/filter_by_status"
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/per_page"
+        - $ref: "#/components/parameters/max_items"
       responses:
         "200":
           description: List of workflows
@@ -508,6 +537,15 @@ paths:
         - $ref: "#/components/parameters/registry_uuid"
         - $ref: "#/components/parameters/wf_versions"
         - $ref: "#/components/parameters/wf_status"
+        - $ref: "#/components/parameters/suites"
+        - $ref: "#/components/parameters/instances"
+        - $ref: "#/components/parameters/builds"
+        - $ref: "#/components/parameters/builds_limit"
+        - $ref: "#/components/parameters/filter_by_string"
+        - $ref: "#/components/parameters/filter_by_status"
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/per_page"
+        - $ref: "#/components/parameters/max_items"
       responses:
         "200":
           description: List of workflows
@@ -568,6 +606,16 @@ paths:
         - $ref: "#/components/parameters/user_id"
         - $ref: "#/components/parameters/wf_versions"
         - $ref: "#/components/parameters/wf_status"
+        - $ref: "#/components/parameters/statistics"
+        - $ref: "#/components/parameters/suites"
+        - $ref: "#/components/parameters/instances"
+        - $ref: "#/components/parameters/builds"
+        - $ref: "#/components/parameters/builds_limit"
+        - $ref: "#/components/parameters/filter_by_string"
+        - $ref: "#/components/parameters/filter_by_status"
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/per_page"
+        - $ref: "#/components/parameters/max_items"
       responses:
         "200":
           description: List of workflows
@@ -631,6 +679,16 @@ paths:
         - $ref: "#/components/parameters/wf_status"
         - $ref: "#/components/parameters/wf_versions"
         - $ref: "#/components/parameters/wf_subscriptions"
+        - $ref: "#/components/parameters/statistics"
+        - $ref: "#/components/parameters/suites"
+        - $ref: "#/components/parameters/instances"
+        - $ref: "#/components/parameters/builds"
+        - $ref: "#/components/parameters/builds_limit"
+        - $ref: "#/components/parameters/filter_by_string"
+        - $ref: "#/components/parameters/filter_by_status"
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/per_page"
+        - $ref: "#/components/parameters/max_items"
       responses:
         "200":
           description: A list of Workflows
@@ -716,6 +774,16 @@ paths:
         - $ref: "#/components/parameters/wf_status"
         - $ref: "#/components/parameters/wf_versions"
         - $ref: "#/components/parameters/wf_subscriptions"
+        - $ref: "#/components/parameters/statistics"
+        - $ref: "#/components/parameters/suites"
+        - $ref: "#/components/parameters/instances"
+        - $ref: "#/components/parameters/builds"
+        - $ref: "#/components/parameters/builds_limit"
+        - $ref: "#/components/parameters/filter_by_string"
+        - $ref: "#/components/parameters/filter_by_status"
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/per_page"
+        - $ref: "#/components/parameters/max_items"
       responses:
         "200":
           description: List of Workflows
@@ -799,6 +867,11 @@ paths:
         - $ref: "#/components/parameters/wf_uuid"
         - $ref: "#/components/parameters/previous_versions"
         - $ref: "#/components/parameters/rocrate_specs"
+        - $ref: "#/components/parameters/wf_status"
+        - $ref: "#/components/parameters/suites"
+        - $ref: "#/components/parameters/instances"
+        - $ref: "#/components/parameters/builds"
+        - $ref: "#/components/parameters/builds_limit"
       responses:
         "200":
           description: >
@@ -1046,6 +1119,11 @@ paths:
         - $ref: "#/components/parameters/wf_uuid"
         - $ref: "#/components/parameters/wf_version"
         - $ref: "#/components/parameters/rocrate_specs"
+        - $ref: "#/components/parameters/wf_status"
+        - $ref: "#/components/parameters/suites"
+        - $ref: "#/components/parameters/instances"
+        - $ref: "#/components/parameters/builds"
+        - $ref: "#/components/parameters/builds_limit"
       responses:
         "200":
           description: >
@@ -1257,6 +1335,77 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+
+  /workflows/{wf_uuid}/validate:
+    get:
+      summary: Validate the latest version of a workflow
+      description: "Validate the latest version of the specified workflow"
+      x-openapi-router-controller: lifemonitor.integrations.validator.controllers
+      operationId: "validate_workflow"
+      tags: ["Workflows"]
+      security:
+        - cookieAuth: []
+        - apiKey: ["workflow.read"]
+        - AuthorizationCodeFlow: ["workflow.read"]
+        - RegistryClientCredentials: ["workflow.read"]
+        - RegistryCodeFlow: ["workflow.read"]
+        - {}
+      parameters:
+        - $ref: "#/components/parameters/wf_uuid"
+        - $ref: "#/components/parameters/validation_severity"
+      responses:
+        "200":
+          description: >
+            Validate the latest version of the specified workflow.
+          # content:
+          #   application/json:
+          #     schema:
+              #   $ref: "#/components/schemas/WorkflowDetails"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /workflows/{wf_uuid}/versions/{wf_version}/validate:
+    get:
+      summary: Validate a workflow version
+      description: Validate the specified version of the specified workflow
+      x-openapi-router-controller: lifemonitor.integrations.validator.controllers
+      operationId: "validate_workflow_version"
+      tags: ["Workflows"]
+      security:
+        - cookieAuth: []
+        - apiKey: ["workflow.read"]
+        - AuthorizationCodeFlow: ["workflow.read"]
+        - RegistryClientCredentials: ["workflow.read"]
+        - RegistryCodeFlow: ["workflow.read"]
+        - {}
+      parameters:
+        - $ref: "#/components/parameters/wf_uuid"
+        - $ref: "#/components/parameters/wf_version"
+        - $ref: "#/components/parameters/validation_severity"
+      responses:
+        "200":
+          description: >
+            Validate the latest version of the specified workflow.
+          # content:
+          #   application/json:
+          #     schema:
+              #   $ref: "#/components/schemas/WorkflowDetails"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+
 
   /suites/{suite_uuid}:
     get:
@@ -1603,6 +1752,58 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /stats/workflows:
+    get:
+      x-openapi-router-controller: lifemonitor.api.controllers
+      operationId: "stats_workflows_get"
+      summary: "Report workflow statistics"
+      tags: ["Statistics"]
+      description: |
+        Get statistics about the workflows monitored
+        by the LifeMonitor instance.
+      security:
+        - cookieAuth: []
+        - apiKey: ["workflow.read"]
+        - RegistryClientCredentials: ["workflow.read"]
+        - RegistryCodeFlow: ["workflow.read"]
+        - AuthorizationCodeFlow: ["workflow.read"]
+        - {}
+      responses:
+        "200":
+          description: Statistics about the LifeMonitor instance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/workflows_stats"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  
+  /stats/workflows/status:
+    get:
+      x-openapi-router-controller: lifemonitor.api.controllers
+      operationId: "stats_workflows_status_get"
+      summary: "Report workflow status statistics"
+      tags: ["Statistics"]
+      description: |
+        Get statistics about the status of workflows monitored
+        by the LifeMonitor instance.
+      security:
+        - cookieAuth: []
+        - apiKey: ["workflow.read"]
+        - RegistryClientCredentials: ["workflow.read"]
+        - RegistryCodeFlow: ["workflow.read"]
+        - AuthorizationCodeFlow: ["workflow.read"]
+        - {}
+      responses:
+        "200":
+          description: Statistics about the LifeMonitor instance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/workflow_status_stats"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
 components:
   parameters:
     registry_uuid:
@@ -1639,7 +1840,7 @@ components:
       schema:
         type: string
       required: true
-      example: 123e4567-e89b-12d3-a456-426614174000
+      example: 5712af93-9d73-4dab-a047-335c28177307
     wf_version:
       name: "wf_version"
       description: "Workflow version"
@@ -1648,6 +1849,17 @@ components:
         type: string
       required: true
       example: "1.0"
+    validation_severity:
+      name: "severity"
+      in: query
+      schema:
+        type: string
+        enum: [REQUIRED, RECOMMENDED, OPTIONAL]
+        default: "REQUIRED"
+      description: |
+        Severity level of the validation issues to retrieve.
+        Possible values are: `REQUIRED`, `RECOMMENDED`, `OPTIONAL`
+      example: "REQUIRED"
     wf_status:
       name: "status"
       in: query
@@ -1662,7 +1874,7 @@ components:
       schema:
         type: boolean
       description: |
-        `true` to include the list of versions of each workflow
+        `true` to include the list of versions of the workflow
       example: "false"
     wf_subscriptions:
       name: "subscriptions"
@@ -1672,6 +1884,84 @@ components:
       description: |
         `true` to include subscribed workflows
       example: "false"
+    statistics:
+      name: "stats"
+      in: query
+      schema:
+        type: boolean
+      description: |
+        `true` to include workflows statistics
+      example: "false"
+    builds:
+      name: "builds"
+      in: query
+      schema:
+        type: boolean
+      description: |
+        `true` to include the list of builds associated with the workflow version
+      example: "false"
+    suites:
+      name: "suites"
+      in: query
+      schema:
+        type: boolean
+      description: |
+        `true` to include the list of test suites associated with the workflow version
+      example: "false"
+    instances:
+      name: "instances"
+      in: query
+      schema:
+        type: boolean
+      description: |
+        `true` to include the list of test instances associated with the workflow version
+      example: "false"
+    builds_limit:
+      name: "builds_limit"
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 10
+      description: "Maximum number of builds to include per instance"
+      example: "10"
+    filter_by_string:
+      name: "filter_by_string"
+      in: query
+      schema:
+        type: string
+      description: "Filter workflows by a string contained in their `uuid` identifier or `name`"
+      example: ""
+    filter_by_status:
+      name: "filter_by_status"
+      in: query
+      schema:
+        type: string
+        enum: [all_passing, some_passing, all_failing, not_available]
+      description: "Filter workflows by their aggregated test status"
+      example: ""
+    page:
+      name: "page"
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+      description: "Page number for paginated results. First page is 1"
+    per_page:
+      name: "per_page"
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+      description: "Number of items per page for paginated results. If not provided, all items are returned"
+    max_items:
+      name: "max_items"
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+      description: "Maximum number of items to retrieve. If not provided, all items are returned"
     version:
       name: "version"
       in: query
@@ -1848,6 +2138,59 @@ components:
                 example: ba5bbdc3-d9fb-4381-a1d8-96a8ac5594d7
 
   schemas:
+
+    workflows_stats:
+      type: object
+      properties:
+        workflows:
+          type: integer
+          description: "Total number of workflows monitored"
+          example: 1500
+        workflow_versions:
+          type: integer
+          description: "Total number of workflow versions monitored"
+          example: 3500
+        test_suites:
+          type: integer
+          description: "Total number of test suites monitored"
+          example: 500
+        test_instances:
+          type: integer
+          description: "Total number of test instances monitored"
+          example: 1200
+        public_workflows:
+          type: integer
+          description: "Total number of public workflows monitored"
+          example: 1200
+        private_workflows:
+          type: integer
+          description: "Total number of private workflows monitored"
+          example: 300
+        workflows_by_status:
+          type: object
+          description: "Number of workflows by their visibility status"
+          $ref: "#/components/schemas/workflow_status_stats"
+
+    workflow_status_stats:
+      type: object
+      properties:
+        all_passing:
+          type: integer
+          description: "Number of workflows with all tests passing"
+          example: 800
+        some_passing:
+          type: integer
+          description: "Number of workflows with some tests passing"
+          example: 500
+        all_failing:
+          type: integer
+          description: "Number of workflows with all tests failing"
+          example: 200
+        not_available:
+          type: integer
+          description: "Number of workflows with unknown test status"
+          example: 0
+
     User:
       type: object
       properties:
@@ -2568,6 +2911,14 @@ components:
           required:
             - items
 
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+          optional: true
+        
+        statistics:
+          $ref: "#/components/schemas/workflows_stats"
+          optional: true
+
     AggregateTestStatus:
       type: string
       enum:
@@ -2935,6 +3286,31 @@ components:
       required:
         - title
         - status
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          description: Current page number
+          example: 1
+        per_page:
+          type: integer
+          description: Number of items per page
+          example: 10
+        total_items:
+          type: integer
+          description: Total number of items
+          example: 100
+        total_pages:
+          type: integer
+          description: Total number of pages
+          example: 10
+      required:
+          - page
+          - per_page
+          - total_items
+          - total_pages
 
   securitySchemes:
     cookieAuth:

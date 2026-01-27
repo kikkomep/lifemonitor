@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024 CRS4
+# Copyright (c) 2020-2026 CRS4
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -22,10 +22,11 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import lifemonitor.exceptions as lm_exceptions
 from lifemonitor.api import models
+from lifemonitor.api.models.status import AggregateTestStatus
 from lifemonitor.auth.models import (EventType,
                                      ExternalServiceAuthorizationHeader,
                                      HostingService, Notification, Permission,
@@ -33,8 +34,10 @@ from lifemonitor.auth.models import (EventType,
 from lifemonitor.auth.oauth2.client import providers
 from lifemonitor.auth.oauth2.client.models import OAuthIdentity
 from lifemonitor.auth.oauth2.server import server
+from lifemonitor.models import PaginationInfo
 from lifemonitor.tasks.models import Job
-from lifemonitor.utils import OpenApiSpecs, ROCrateLinkContext, is_service_alive, to_snake_case
+from lifemonitor.utils import (OpenApiSpecs, ROCrateLinkContext,
+                               is_service_alive, to_snake_case)
 from lifemonitor.ws import io
 
 logger = logging.getLogger()
@@ -74,42 +77,48 @@ class LifeMonitor:
 
     @classmethod
     def _find_and_check_workflow_version(cls, user: User, uuid, version=None):
-        w = None
-        if not user or user.is_anonymous:
-            if not version or version.lower() == "latest":
-                _w = models.Workflow.get_public_workflow(uuid)
-                if _w:
-                    w = _w.latest_version
+        try:
+            w = None
+            if not user or user.is_anonymous:
+                if not version or version.lower() == "latest":
+                    _w = models.Workflow.get_public_workflow(uuid)
+                    if _w:
+                        w = _w.latest_version
+                else:
+                    w = models.WorkflowVersion.get_public_workflow_version(uuid, version)
             else:
-                w = models.WorkflowVersion.get_public_workflow_version(uuid, version)
-        else:
-            if not version or version.lower() == "latest":
-                _w = models.Workflow.get_user_workflow(user, uuid)
-                if _w:
-                    w = _w.latest_version
-            else:
-                w = models.WorkflowVersion.get_user_workflow_version(user, uuid, version)
-            if not w:
-                w = cls._find_and_check_shared_workflow_version(user, uuid, version=version)
+                if not version or version.lower() == "latest":
+                    _w = models.Workflow.get_user_workflow(user, uuid)
+                    if _w:
+                        w = _w.latest_version
+                else:
+                    w = models.WorkflowVersion.get_user_workflow_version(user, uuid, version)
+                if not w:
+                    w = cls._find_and_check_shared_workflow_version(user, uuid, version=version)
 
-        if w is None:
-            raise lm_exceptions.EntityNotFoundException(models.WorkflowVersion, entity_id=f"{uuid}_{version}")
-        # Check whether the user can access the workflow.
-        # As a general rule, we grant user access to the workflow
-        #   1. if the user belongs to the owners group
-        #   2. or the user belongs to the viewers group
-        # if user not in w.owners and user not in w.viewers:
-        if user and not user.is_anonymous and not user.has_permission(w):
-            # if the user is not the submitter
-            # and the workflow is associated with a registry
-            # then we try to check whether the user is allowed to view the workflow
-            if len(w.registries) == 0:
+            if w is None:
+                raise lm_exceptions.EntityNotFoundException(models.WorkflowVersion, entity_id=f"{uuid}_{version}")
+            # Check whether the user can access the workflow.
+            # As a general rule, we grant user access to the workflow
+            #   1. if the user belongs to the owners group
+            #   2. or the user belongs to the viewers group
+            # if user not in w.owners and user not in w.viewers:
+            if user and not user.is_anonymous and not user.has_permission(w):
+                # if the user is not the submitter
+                # and the workflow is associated with a registry
+                # then we try to check whether the user is allowed to view the workflow
+                if len(w.registries) == 0:
+                    raise lm_exceptions.NotAuthorizedException(f"User {user.username} is not allowed to access workflow")
+                for registry in w.registries:
+                    if w.workflow in registry.get_user_workflows(user):
+                        return w
                 raise lm_exceptions.NotAuthorizedException(f"User {user.username} is not allowed to access workflow")
-            for registry in w.registries:
-                if w.workflow in registry.get_user_workflows(user):
-                    return w
-            raise lm_exceptions.NotAuthorizedException(f"User {user.username} is not allowed to access workflow")
-        return w
+            return w
+        except ValueError as e:
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(f"Error handling workflow {uuid} version {version}: {e}")
+            raise lm_exceptions.BadRequestException(detail=f"Invalid workflow {uuid} version {version}")
+            # raise lm_exceptions.EntityNotFoundException(models.WorkflowVersion, entity_id=f"{uuid}_{version}")
 
     @classmethod
     def register_workflow(cls, rocrate_or_link, workflow_submitter: User, workflow_version,
@@ -210,6 +219,8 @@ class LifeMonitor:
             except KeyError as e:
                 raise lm_exceptions.SpecificationNotValidException(f"Missing property: {e}")
             w.save()
+            if job:
+                job.update_status('workflow registered', save=True)
             return wv
 
     @classmethod
@@ -530,8 +541,20 @@ class LifeMonitor:
         return models.Workflow.all()
 
     @staticmethod
-    def get_registry_workflows(registry: models.WorkflowRegistry) -> List[models.Workflow]:
-        return registry.get_workflows()
+    def get_registry_workflows(registry: models.WorkflowRegistry,
+                               include_public: bool = False,
+                               page: Optional[PaginationInfo] = None) -> List[models.Workflow]:
+        # Retrieve workflows from the registry
+        workflows = registry.get_workflows()
+        # Include public workflows if needed
+        if include_public:
+            public_workflows = models.Workflow.get_public_workflows(page=page)
+            workflows.extend([w for w in public_workflows if w not in workflows])
+        # Paginate results if needed
+        if page:
+            workflows = models.Workflow.paginate_list(workflows, page)
+        # Return the list of workflows
+        return workflows
 
     @staticmethod
     def get_registry_workflow(registry: models.WorkflowRegistry) -> models.Workflow:
@@ -546,35 +569,73 @@ class LifeMonitor:
         w = registry.get_workflow(uuid)
         if w is None:
             raise lm_exceptions.EntityNotFoundException(models.WorkflowVersion, f"{uuid}_{version}")
-        return w.latest_version if version is None or version == "latest" else w.versions[version]
+        try:
+            return w.latest_version if version is None or version == "latest" else w.versions[version]
+        except KeyError as e:
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.exception(e)
+            raise lm_exceptions.EntityNotFoundException(models.WorkflowVersion, f"{uuid}_{version}")
 
     @staticmethod
-    def get_public_workflows() -> List[models.Workflow]:
-        return models.Workflow.get_public_workflows()
+    def get_public_workflows(page: Optional[PaginationInfo] = None) -> List[models.Workflow]:
+        return models.Workflow.get_public_workflows(page=page)
 
     @staticmethod
     def get_user_workflows(user: User,
                            include_subscriptions: bool = False,
-                           only_subscriptions: bool = False) -> List[models.Workflow]:
-        if only_subscriptions:
-            return [_.resource for _ in user.subscriptions
-                    if _.resource.public or user in [p.user for p in _.resource.permissions]]
+                           include_public: bool = True,
+                           only_subscriptions: bool = False,
+                           page: Optional[PaginationInfo] = None) -> List[models.Workflow]:
+        # Reference to the list of workflows
+        all_workflows = []
 
-        workflows = [w for w in models.Workflow.get_user_workflows(user, include_subscriptions=include_subscriptions)]
-        for svc in models.WorkflowRegistry.all():
-            if not is_service_alive(svc.uri):
-                logger.warning("Service %r is not alive, skipping", svc.uri)
-                continue
-            if svc.get_user(user.id):
-                try:
-                    workflows.extend([w for w in svc.get_user_workflows(user)
-                                      if w not in workflows and w.public])
-                except lm_exceptions.NotAuthorizedException as e:
-                    logger.debug(e)
+        # If only_subscriptions is False, we need to collect also workflows from registries
+        if not only_subscriptions:
+
+            # Build a single query combining local workflows and registry workflows
+            workflows = models.Workflow.get_user_workflows(user, include_subscriptions=include_subscriptions)
+
+            # Include public workflows if needed
+            public_workflows = []
+            if include_public:
+                public_workflows = [
+                    w for w in models.Workflow.get_public_workflows()
+                    if w not in workflows
+                ]
+
+            # Collect workflows from alive registries
+            registry_workflows = []
+            for svc in models.WorkflowRegistry.all():
+                if not is_service_alive(svc.uri):
+                    logger.warning("Service %r is not alive, skipping", svc.uri)
+                    continue
+                if svc.get_user(user.id):
+                    try:
+                        registry_workflows.extend([w for w in svc.get_user_workflows(user)
+                                                   if w not in workflows and w.public])
+                    except lm_exceptions.NotAuthorizedException as e:
+                        logger.debug(e)
+            # Combine and paginate results if needed
+            all_workflows = list(set(workflows) | set(public_workflows) | set(registry_workflows))
+        # Otherwise, return only subscribed workflows
+        else:
+            all_workflows = [_.resource for _ in user.subscriptions
+                             if _.resource.public or user in [p.user for p in _.resource.permissions]]
+
+        # Sort workflows by last modified date
+        # all_workflows.sort(key=lambda w: w.modified, reverse=True)
+
+        # Paginate results if needed
+        if page:
+            workflows = models.Workflow.paginate_list(all_workflows, page)
+        else:
+            workflows = all_workflows
+        # Return the list of workflows
         return workflows
 
     @staticmethod
-    def get_user_registry_workflows(user: User, registry: models.WorkflowRegistry) -> List[models.Workflow]:
+    def get_user_registry_workflows(user: User, registry: models.WorkflowRegistry,
+                                    page: Optional[PaginationInfo] = None) -> List[models.Workflow]:
         workflows = []
         if not is_service_alive(registry.uri):
             logger.warning("Service %r is not alive, skipping", registry.uri)
@@ -585,6 +646,10 @@ class LifeMonitor:
                                   if w not in workflows])
             except lm_exceptions.NotAuthorizedException as e:
                 logger.debug(e)
+        # Paginate results if needed
+        if page:
+            workflows = models.Workflow.paginate_list(workflows, page)
+        # Return the list of workflows
         return workflows
 
     @classmethod
@@ -592,7 +657,7 @@ class LifeMonitor:
         return cls._find_and_check_workflow_version(None, uuid, version).workflow
 
     @classmethod
-    def get_public_workflow_version(cls, uuid, version=None) -> models.Workflow:
+    def get_public_workflow_version(cls, uuid, version=None) -> models.WorkflowVersion:
         return cls._find_and_check_workflow_version(None, uuid, version)
 
     @classmethod
@@ -760,3 +825,49 @@ class LifeMonitor:
                 # "lastUpdate": int(row[2].timestamp() * 1000)
             })
         return result
+
+    @classmethod
+    def get_workflows_stats(cls, workflows: Optional[List[models.Workflow]] = None,
+                            status: bool = True) -> Dict[str, Any]:
+        # Reference to the list of workflows
+        workflows = workflows if workflows is not None else models.Workflow.all()
+        workflow_versions = [v for w in workflows for v in w.versions.values()]
+        test_suites = [s for wv in workflow_versions for s in wv.test_suites]
+        test_instances = [ti for ts in test_suites for ti in ts.test_instances]
+
+        # Basic stats
+        stats = {
+            "workflows": len(workflows),
+            "workflow_versions": len(workflow_versions),
+            "test_suites": len(test_suites),
+            "test_instances": len(test_instances),
+            "public_workflows": len([w for w in workflows if w.public]),
+            "private_workflows": len([w for w in workflows if not w.public]),
+        }
+
+        # Workflows status stats
+        if status:
+            stats["workflows_by_status"] = cls.get_workflows_status_stats(workflows)
+        return stats
+
+    @classmethod
+    def get_workflows_status_stats(cls, workflows: Optional[List[models.Workflow]] = None):
+        # Reference to the list of workflows
+        # Use provided workflows or all workflows if None
+        workflows = workflows if workflows is not None else models.Workflow.all()
+
+        # Group workflows by aggregated status
+        status_counts = {
+            AggregateTestStatus.ALL_PASSING: 0,
+            AggregateTestStatus.SOME_PASSING: 0,
+            AggregateTestStatus.ALL_FAILING: 0,
+            AggregateTestStatus.NOT_AVAILABLE: 0,
+        }
+
+        # Count workflows per status
+        for wf in workflows:
+            status = wf.latest_version.status.aggregated_status
+            if status not in status_counts:
+                status_counts[status] = 0
+            status_counts[status] += 1
+        return status_counts

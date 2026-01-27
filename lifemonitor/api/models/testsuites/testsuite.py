@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024 CRS4
+# Copyright (c) 2020-2026 CRS4
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -28,10 +28,27 @@ from typing import List
 import lifemonitor.api.models as models
 from lifemonitor.api.models import db
 from lifemonitor.auth.models import User
+# from lifemonitor.cache import Timeout, cached
 from lifemonitor.models import JSON, UUID, ModelMixin
 
 # set module level logger
 logger = logging.getLogger(__name__)
+
+
+def skip_cached_status(suite: models.TestSuite, status: models.Status) -> bool:
+    """
+    Check if the status updated at is less recent than the latest build's updated at.
+    """
+    assert status and isinstance(status, models.Status), \
+        f"Invalid status object: {status} (type: {type(status)})"
+
+    if not status.latest_builds or not status.updated_at:
+        return False
+    latest_build = max(suite.latest_test_builds, key=lambda x: x.updated_at)
+    result = status.updated_at < latest_build.updated_at
+    logger.debug(f"Test validity check: {result} (status updated at: {status.updated_at}, "
+                 f"latest build updated at: {latest_build.updated_at})")
+    return result
 
 
 class TestSuite(db.Model, ModelMixin):
@@ -62,9 +79,21 @@ class TestSuite(db.Model, ModelMixin):
         return '<TestSuite {} of workflow {} (version {})>'.format(
             self.uuid, self.workflow_version.uuid, self.workflow_version.version)
 
+    def __eq__(self, o: object) -> bool:
+        return isinstance(o, TestSuite) and o.uuid == self.uuid
+
+    def __hash__(self):
+        return hash(self.uuid)
+
     @property
+    # @cached(timeout=Timeout.NONE, client_scope=False, skip=skip_cached_status)
     def status(self) -> models.SuiteStatus:
         return models.SuiteStatus(self)
+
+    def has_changed_state(self) -> bool:
+        # Check if the test suite has changed its state
+        # from failing to passing or vice versa, or from unknown to a defined state
+        return any(ti.has_changed_state() for ti in self.test_instances)
 
     def get_test_instance_by_name(self, name) -> list:
         result = []
@@ -90,6 +119,32 @@ class TestSuite(db.Model, ModelMixin):
         test_instance = instance_cls(self, submitter, test_name, testing_service_resource, testing_service, roc_instance)
         logger.debug("Created TestInstance: %r", test_instance)
         return test_instance
+
+    @property
+    def latest_test_builds(self) -> list[models.TestBuild]:
+        """
+        Get the latest test builds across all test instances in this suite,
+        one per test instance.
+        """
+        latest_builds = []
+        for test_instance in self.test_instances:
+            latest_builds.append(test_instance.last_test_build)
+        return latest_builds
+
+    def get_latest_builds(self, limit=None) -> list[models.TestBuild]:
+        """
+        Retrieve the most recent test builds from all test instances in this suite,
+        up to the specified limit.
+        """
+        latest_builds = []
+        for test_instance in self.test_instances:
+            builds = test_instance.get_test_builds(limit=limit)
+            latest_builds.extend(builds)
+        # sort by updated at descending
+        latest_builds.sort(key=lambda x: x.updated_at, reverse=True)
+        if limit:
+            return latest_builds[:limit]
+        return latest_builds
 
     @classmethod
     def all(cls) -> List[TestSuite]:

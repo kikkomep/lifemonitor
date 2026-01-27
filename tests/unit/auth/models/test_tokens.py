@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024 CRS4
+# Copyright (c) 2020-2026 CRS4
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -30,7 +30,6 @@ import pytest
 from lifemonitor.auth.oauth2.client.models import OAuth2Token, OAuthIdentity
 from lifemonitor.db import db
 
-logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger()
 
 

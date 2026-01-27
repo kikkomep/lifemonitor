@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024 CRS4
+# Copyright (c) 2020-2026 CRS4
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -95,7 +95,7 @@ def __prepare_pr_head__(repo: InstallationGithubWorkflowRepository,
         try:
             branch = repo.get_branch(head)
             if branch and not allow_update:
-                return head
+                delete_branch(repo, head)
             branch_ref = repo.get_git_ref(f'head/{head}')
             branch_exists = True
         except GithubException as e:

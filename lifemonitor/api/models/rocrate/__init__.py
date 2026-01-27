@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024 CRS4
+# Copyright (c) 2020-2026 CRS4
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -40,7 +40,7 @@ from lifemonitor.api.models.repositories.base import (
     WorkflowRepository, WorkflowRepositoryMetadata)
 from lifemonitor.api.models.repositories.github import (
     GithubRepositoryRevision, GithubWorkflowRepository)
-from lifemonitor.api.models.repositories.local import LocalWorkflowRepository
+from lifemonitor.api.models.repositories.local import LocalGitWorkflowRepository, LocalWorkflowRepository
 from lifemonitor.auth.models import (ExternalServiceAuthorizationHeader,
                                      HostingService, Resource)
 from lifemonitor.config import BaseConfig
@@ -49,7 +49,7 @@ from lifemonitor.storage import RemoteStorage
 from lifemonitor.utils import download_url, get_current_ref
 
 # set module level logger
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("ROCrate")
 
 
 class ROCrate(Resource):
@@ -61,6 +61,7 @@ class ROCrate(Resource):
                                                       foreign_keys=[hosting_service_id])
     _metadata = db.Column("metadata", JSON, nullable=True)
     _local_path = db.Column("local_path", db.String, nullable=True)
+    _repo_exists = db.Column("repo_exists", db.Boolean, nullable=False, default=True)
     _metadata_loaded = False
     _repository: repositories.WorkflowRepository = None
     __crate_reader__: WorkflowRepositoryMetadata = None
@@ -83,6 +84,9 @@ class ROCrate(Resource):
         if not self.__storage:
             self.__storage = RemoteStorage()
         return self.__storage
+
+    def has_repository(self):
+        return self._repo_exists
 
     @property
     def local_path(self):
@@ -138,68 +142,112 @@ class ROCrate(Resource):
                             tmp_dir,
                             WorkflowRepositoryMetadata.DEFAULT_METADATA_FILENAME), 'w') as out:
                         json.dump(self._metadata, out)
+                    # Instantiate the proper local repository object
+                    local_repository = None
+                    if LocalWorkflowRepository.is_git_repo(tmp_dir):
+                        local_repository = LocalGitWorkflowRepository(
+                            local_path=tmp_dir, remote_url=self.uri)
+                    else:
+                        local_repository = LocalWorkflowRepository(
+                            local_path=tmp_dir, remote_url=self.uri)
+                    # Instantiate the ROCrate reader
                     self.__crate_reader__ = WorkflowRepositoryMetadata(
-                        LocalWorkflowRepository(tmp_dir), init=False)
+                        local_repository, init=False)
             else:
+                if not self.repository:
+                    raise lm_exceptions.NotValidROCrateException(
+                        detail=f"RO-Crate archive not found: {self.local_path}")
                 self.__crate_reader__ = self.repository.metadata
         return self.__crate_reader__
 
     @property
     def repository(self) -> repositories.WorkflowRepository:
-        logger.debug("Getting repository object bound to the ROCrate %r", self)
-        if not self.uri:
-            raise lm_exceptions.IllegalStateException("URI (roc_link) not set")
-        if not self._repository:
-            logger.debug("Initializing repository object bound to the ROCrate %r", self)
-            # download the RO-Crate if it is not locally stored
-            ref = None
-            if not os.path.exists(self.local_path):
-                logger.debug(f"{self.local_path} archive of {self} not found locally!!!")
-                logger.debug("Remote storage enabled: %r", self._storage.enabled)
-                logger.debug("File exists on remote storage: %r", self._storage.exists(self._get_storage_path(self.local_path)))
-                # download the workflow ROCrate and store it into the remote storage
-                if not inspect(self).persistent or not self._storage.exists(self._get_storage_path(self.local_path)):
-                    _, ref, _ = self.download_from_source(self.local_path)
-                    logger.debug(f"RO-Crate downloaded from {self.uri} to {self.storage_path}!")
-                    if self._storage.enabled and not self._storage.exists(self._get_storage_path(self.local_path)):
-                        self._storage.put_file_as_job(self.local_path, self._get_storage_path(self.local_path))
-                        logger.debug(f"Scheduled job to store {self.storage_path} into the remote storage!")
+        return self.get_repository()
+
+    def get_repository(self, reload: bool = False) -> repositories.WorkflowRepository:
+        try:
+            logger.debug("Getting repository object bound to the ROCrate %r", self)
+            if not self.uri:
+                raise lm_exceptions.IllegalStateException("URI (roc_link) not set")
+            if not self._repository:
+                # Skip the initialization if the repository is not available
+                if self.has_repository() is False and not reload:
+                    logger.warning("RO-Crate %r is not available (no git repository)", self)
+                    return None
+
+                logger.debug("Initializing repository object bound to the ROCrate %r", self)
+                # download the RO-Crate if it is not locally stored
+                ref = None
+                if not os.path.exists(self.local_path):
+                    logger.debug(f"{self.local_path} archive of {self} not found locally!!!")
+                    logger.debug("Remote storage enabled: %r", self._storage.enabled)
+                    logger.debug("File exists on remote storage: %r", self._storage.exists(self._get_storage_path(self.local_path)))
+                    # download the workflow ROCrate and store it into the remote storage
+                    if not inspect(self).persistent or not self._storage.exists(self._get_storage_path(self.local_path)):
+                        _, ref, _ = self.download_from_source(self.local_path)
+                        logger.debug(f"RO-Crate downloaded from {self.uri} to {self.storage_path}!")
+                        if self._storage.enabled and not self._storage.exists(self._get_storage_path(self.local_path)):
+                            self._storage.put_file_as_job(self.local_path, self._get_storage_path(self.local_path))
+                            logger.debug(f"Scheduled job to store {self.storage_path} into the remote storage!")
+                    else:
+                        # download the RO-Crate archive from the remote storage
+                        logger.warning(f"Getting path {self.storage_path} from remote storage!!!")
+                        if self._storage.enabled and not self._storage.exists(self._get_storage_path(self.local_path)):
+                            self._storage.get_file(self._get_storage_path(self.local_path), self.local_path)
+                            logger.warning(f"Getting path {self.storage_path} from remote storage.... DONE!!!")
+
+                # A stricter check to ensure that the local path points to the root of the RO-Crate
+                if not os.path.exists(self.local_path):
+                    raise lm_exceptions.NotValidROCrateException(
+                        detail=f"RO-Crate archive not found: {self.local_path}")
+
+                # instantiate a local ROCrate repository
+                if self._get_normalized_github_url_(self.uri):
+                    authorizations = self.authorizations + [None]
+                    token = None
+                    for authorization in authorizations:
+                        if not authorization or isinstance(authorization, ExternalServiceAuthorizationHeader):
+                            token = authorization.auth_token if authorization else None
+                            try:
+                                self._repository = repositories.GithubWorkflowRepository.from_zip(self.local_path, self.uri, token=token, ref=ref)
+                                logger.debug("The loaded repository: %r", self._repository)
+                            except RateLimitExceededException as e:
+                                raise lm_exceptions.RateLimitExceededException(detail=str(e))
+                            except Exception as e:
+                                if logger.isEnabledFor(logging.DEBUG):
+                                    logger.exception(e)
+                            if self._repository is not None:
+                                break
                 else:
-                    # download the RO-Crate archive from the remote storage
-                    logger.warning(f"Getting path {self.storage_path} from remote storage!!!")
-                    if self._storage.enabled and not self._storage.exists(self._get_storage_path(self.local_path)):
-                        self._storage.get_file(self._get_storage_path(self.local_path), self.local_path)
-                        logger.warning(f"Getting path {self.storage_path} from remote storage.... DONE!!!")
+                    logger.debug("RO-Crate URI is a Zipped repository: %s %s", self.uri, self.local_path)
+                    # Instantiate a ZippedWorkflowRepository to handle the ROCrate
+                    repository = repositories.ZippedWorkflowRepository(self.local_path)
+                    # Check if the repository is a local git repository
+                    if repository.is_git_repo(repository.local_path):
+                        logger.debug("RO-Crate is a local git repository: %s", self.local_path)
+                        # Instantiate a LocalGitWorkflowRepository to handle the ROCrate
+                        self._repository = repositories.ZippedLocalGitWorkflowRepository(self.local_path)
+                    else:
+                        logger.debug("RO-Crate is a local repository: %s", repository.local_path)
+                        # Instantiate a LocalWorkflowRepository to handle the ROCrate
+                        self._repository = repository
 
-            # instantiate a local ROCrate repository
-            if self._get_normalized_github_url_(self.uri):
-                authorizations = self.authorizations + [None]
-                token = None
-                for authorization in authorizations:
-                    if not authorization or isinstance(authorization, ExternalServiceAuthorizationHeader):
-                        token = authorization.auth_token if authorization else None
-                        try:
-                            self._repository = repositories.GithubWorkflowRepository.from_zip(self.local_path, self.uri, token=token, ref=ref)
-                            logger.debug("The loaded repository: %r", self._repository)
-                        except RateLimitExceededException as e:
-                            raise lm_exceptions.RateLimitExceededException(detail=str(e))
-                        except Exception as e:
-                            if logger.isEnabledFor(logging.DEBUG):
-                                logger.exception(e)
-                        if self._repository is not None:
-                            break
-            else:
-                self._repository = repositories.ZippedWorkflowRepository(self.local_path)
-
-            # set metadata
-            try:
-                self._metadata = self._repository.metadata.to_json()
-                self._metadata_loaded = True
-            except Exception as e:
-                if logger.isEnabledFor(logging.DEBUG):
-                    logger.exception(e)
-                raise lm_exceptions.NotValidROCrateException("Unable to load ROCrate metadata")
-        return self._repository
+                # set metadata
+                try:
+                    self._metadata = self._repository.metadata.to_json()
+                    self._metadata_loaded = True
+                except Exception as e:
+                    if logger.isEnabledFor(logging.DEBUG):
+                        logger.exception(e)
+                    raise lm_exceptions.NotValidROCrateException("Unable to load ROCrate metadata")
+            return self._repository
+        finally:
+            # Save the current repository availability status
+            previous_repo_exists = self._repo_exists
+            # Update the repository availability status
+            self._repo_exists = self._repository is not None
+            if previous_repo_exists != self._repo_exists:
+                logger.warning(f"Repository availability status changed: {previous_repo_exists} -> {self._repo_exists}")
 
     @property
     def authors(self) -> List[Dict]:
@@ -283,7 +331,7 @@ class ROCrate(Resource):
             raise lm_exceptions.DownloadException(detail="RO-Crate unavailable", status=410)
 
         tmpdir_path = Path(target_path)
-        local_zip = download_url(self.local_path,
+        local_zip = download_url(self.uri,
                                  target_path=(tmpdir_path / 'rocrate.zip').as_posix())
         logger.debug("ZIP Archive: %s", local_zip)
         return (tmpdir_path / 'rocrate.zip').as_posix()

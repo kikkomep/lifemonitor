@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright (c) 2020-2024 CRS4
+# Copyright (c) 2020-2026 CRS4
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -35,7 +35,7 @@ export WEBSOCKET_SERVER_PORT=${WEBSOCKET_SERVER_PORT:-8001}
 export WEBSOCKET_SERVER="false"
 
 # set switch to enable autoreload feature of gunicorn
-export WEBSOCKET_SERVER_ENV=${WEBSOCKET_SERVER_ENV:-${FLASK_ENV:-production}}
+export WEBSOCKET_SERVER_ENV=${WEBSOCKET_SERVER_ENV:-${LIFEMONITOR_ENV:-production}}
 
 # wait for services
 wait-for-postgres.sh

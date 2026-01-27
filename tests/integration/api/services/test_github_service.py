@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024 CRS4
+# Copyright (c) 2020-2026 CRS4
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -34,7 +34,7 @@ logger = logging.getLogger()
 @pytest.mark.parametrize("client_auth_method", [
     ClientAuthenticationMethod.API_KEY,
 ], indirect=True)
-def test_github_service(app_client, client_auth_method,
+def test_github_service(app_client, client_auth_method, redis_cache,
                         user1, user1_auth, client_credentials_registry):
     wf = {
         'uuid': str(uuid.uuid4()),

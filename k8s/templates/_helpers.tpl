@@ -113,7 +113,7 @@ Define environment variables shared by some pods.
 {{- define "lifemonitor.common-env" -}}
 - name: HOME
   value: "/lm"
-- name: FLASK_ENV
+- name: LIFEMONITOR_ENV
   value: "{{ .Values.lifemonitor.environment }}"
 - name: POSTGRESQL_HOST
   value: {{ include "chart.fullname" . }}-postgresql
@@ -131,10 +131,6 @@ Define environment variables shared by some pods.
   value: "{{ .Values.redis.master.service.port }}"
 - name: REDIS_PASSWORD
   value: "{{ .Values.redis.auth.password }}"
-- name: WORKER_PROCESSES
-  value: "{{ .Values.worker.processes }}"
-- name: WORKER_THREADS
-  value: "{{ .Values.worker.threads }}"
 - name: GUNICORN_WORKERS
   value: "{{ .Values.lifemonitor.gunicorn.workers }}"
 - name: GUNICORN_THREADS

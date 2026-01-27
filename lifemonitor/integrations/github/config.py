@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024 CRS4
+# Copyright (c) 2020-2026 CRS4
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -25,5 +25,5 @@ from datetime import timedelta
 
 DEFAULT_BASE_URL = "https://api.github.com"
 DEFAULT_TIMEOUT = 15
-DEFAULT_PER_PAGE = 30
+DEFAULT_PER_PAGE = 100
 DEFAULT_TOKEN_EXPIRATION = timedelta(seconds=60)

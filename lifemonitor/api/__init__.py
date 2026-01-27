@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024 CRS4
+# Copyright (c) 2020-2026 CRS4
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -19,10 +19,12 @@
 # SOFTWARE.
 
 import logging
+import os
 import pathlib
 import re
 
 import connexion
+
 from lifemonitor.api import models
 
 from .serializers import ma
@@ -32,20 +34,43 @@ logger = logging.getLogger(__name__)
 
 def register_testing_services_credentials(conf):
     token_mgt = models.TestingServiceTokenManager.get_instance()
-    pattern = re.compile(r'(.+)_TESTING_SERVICE_URL')
-    for k in conf:
-        service_match = pattern.match(k)
-        if service_match:
-            try:
-                url = conf[k]
-                service_name = service_match.group(1)
-                service_type = conf[f"{service_name}_TESTING_SERVICE_TYPE"]
-                token = conf[f"{service_name}_TESTING_SERVICE_TOKEN"]
-                service_class = models.TestingService.get_service_class(service_type)
-                token_mgt.add_token(url, models.TestingServiceToken(service_class.token_type, token))
-                logger.info(f"System token configured for the service '{url}' (type: {service_type})")
-            except (KeyError, IndexError) as e:
-                logger.error(f"Error during token initialisation of testing service '{url}': {str(e)}")
+
+    # Compile regex pattern once to match keys ending with _TESTING_SERVICE_TOKEN or _TESTING_SERVICE_URL
+    pattern = re.compile(r'(.+)_TESTING_SERVICE_(TOKEN|URL)')
+
+    service_credentials = {}
+
+    if conf is None:
+        conf = {}
+
+    # Collect matching environment and conf variables into a nested dictionary keyed by service name
+    for source in (os.environ, conf):
+        for k, v in source.items():
+            if v:
+                match = pattern.match(k)
+                if match:
+                    service_name, key_type = match.group(1), match.group(2)
+                    if service_name not in service_credentials:
+                        service_credentials[service_name] = {}
+                    service_credentials[service_name][key_type] = v
+                    service_credentials[service_name]['TYPE'] = \
+                        conf.get(f"{service_name}_TESTING_SERVICE_TYPE", service_name.lower().split('_')[0])
+
+    # Initialize tokens for each service using the collected credentials
+    for service_name, creds in service_credentials.items():
+        try:
+            url = creds.get('URL')
+            token = creds.get('TOKEN')
+            service_type = creds.get('TYPE')
+
+            if not url or not token or not service_type:
+                raise KeyError("Missing one of URL, TOKEN or TYPE")
+
+            service_class = models.TestingService.get_service_class(service_type)
+            token_mgt.add_token(url, models.TestingServiceToken(service_class.token_type, token))
+            logger.info(f"System token configured for the service '{url}' (type: {service_type})")
+        except (KeyError, IndexError) as e:
+            logger.error(f"Error during token initialization of testing service '{url if 'url' in locals() else '?'}': {str(e)}")
 
 
 def register_api(app, specs_dir):

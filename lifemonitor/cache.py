@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024 CRS4
+# Copyright (c) 2020-2026 CRS4
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -67,15 +67,16 @@ def _log_key_value(key) -> str:
 class Timeout:
     # Set default timeouts
     NONE = 0
-    DEFAULT = _get_timeout(_get_timeout_key('DEFAULT'), default=300)
-    REQUEST = _get_timeout(_get_timeout_key('REQUEST'), default=30)
+    DEFAULT = _get_timeout(_get_timeout_key('DEFAULT'), default=15)
+    REQUEST = _get_timeout(_get_timeout_key('REQUEST'), default=15)
     SESSION = _get_timeout(_get_timeout_key('SESSION'), default=3600)
-    WORKFLOW = _get_timeout(_get_timeout_key('WORKFLOW'), default=1800)
-    BUILD = _get_timeout(_get_timeout_key('BUILD'), default=300)
+    WORKFLOW = _get_timeout(_get_timeout_key('WORKFLOW'), default=86400)
+    BUILD = _get_timeout(_get_timeout_key('BUILD'), default=86400)
+    BUILD_REFRESH = _get_timeout(_get_timeout_key('BUILD_REFRESH'), default=120)
 
     @classmethod
     def update(cls, config=None):
-        for t in ('DEFAULT', 'REQUEST', 'SESSION', 'BUILD', 'WORKFLOW'):
+        for t in ('DEFAULT', 'REQUEST', 'SESSION', 'BUILD', 'WORKFLOW', 'BUILD_REFRESH'):
             try:
                 key = _get_timeout_key(t)
                 setattr(cls, t, _get_timeout(key, config=config))
@@ -102,13 +103,14 @@ class CacheTransaction(object):
     def set_current_transaction(cls, t: CacheTransaction):
         cls._current_transaction.value = t
 
-    def __init__(self, cache: Cache, name=None):
+    def __init__(self, cache: Cache, name=None, force_update=False):
         self.__name = name or f"T-{id(self)}"
         self.__cache__ = cache
         self.__locks__ = {}
         self.__data__ = {}
         self.__started__ = False
         self.__closed__ = False
+        self.force_update = force_update
 
     def __repr__(self) -> str:
         return f"CacheTransaction#{self.name}"
@@ -310,12 +312,12 @@ class Cache(object):
         return CacheTransaction.get_current_transaction()
 
     @contextmanager
-    def transaction(self, name=None) -> CacheTransaction:
+    def transaction(self, name=None, force_update=False) -> CacheTransaction:
         new_transaction = False
         t = self.get_current_transaction()
         if t is None:
             logger.debug("Creating a new transaction...")
-            t = CacheTransaction(self, name=name)
+            t = CacheTransaction(self, name=name, force_update=force_update)
             self._set_current_transaction(t)
             new_transaction = True
         else:
@@ -508,7 +510,7 @@ def clear_cache(func=None, client_scope=True, prefix=CACHE_PREFIX, *args, **kwar
         logger.error("Error deleting cache: %r", e)
 
 
-def _process_cache_data(cache, transaction, key, unless, timeout,
+def _process_cache_data(cache, transaction, key, unless, skip, timeout,
                         read_from_cache, write_to_cache, function, args, kwargs):
     # check parameters
     assert read_from_cache or transaction, "Unable to read from transaction: transaction is None"
@@ -518,11 +520,18 @@ def _process_cache_data(cache, transaction, key, unless, timeout,
     writer = cache if write_to_cache else transaction
     # get/set data
     result = reader.get(key)
-    if result is None:
+    # flag
+    skip_cache_value = False
+    if result and skip is not None and (skip is True or callable(skip) and skip(*args, result, **kwargs)):
+        skip_cache_value = True
+        logger.info("Cache skip function marked as True or callable returned True: %r", skip)
+    # Process the cache value
+    logger.debug("Cache value found and not skipped: %r", result is not None)
+    if result is None or skip_cache_value:
         logger.debug(f"Value {key} not set in cache...")
         with cache.lock(key, timeout=Timeout.NONE):
             result = reader.get(key)
-            if not result:
+            if not result or skip_cache_value:
                 logger.debug("Cache empty: getting value from the actual function...")
                 result = function(*args, **kwargs)
                 logger.debug("Checking unless function: %r", unless)
@@ -539,15 +548,20 @@ def _process_cache_data(cache, transaction, key, unless, timeout,
 def cache_function(function: Callable, timeout=Timeout.REQUEST,
                    client_scope=True,
                    unless: Union[bool, Callable, None] = None,
+                   skip: Union[bool, Callable, None] = None,
                    transactional_update: Union[bool, Callable, None] = False,
                    force_cache_value: Union[bool, Callable, None] = False,
                    args=(), kwargs={}):
     logger.debug("Args: %r", args)
     logger.debug("KwArgs: %r", kwargs)
+    key = make_cache_key(function, client_scope, args=args, kwargs=kwargs)
+    logger.debug("Processing Cache key: %r", key)
     obj: CacheMixin = args[0] if len(args) > 0 and isinstance(args[0], CacheMixin) else None
     logger.debug("Wrapping a method of a CacheMixin instance: %r", obj is not None)
     hc = cache if obj is None else obj.cache
+
     result = None
+    logger.debug(f"Cache enabled: {hc.cache_enabled} (ignore values: {hc.ignore_cache_values})")
     if hc and hc.cache_enabled:
         # compute cache key
         key = make_cache_key(function, client_scope, args=args, kwargs=kwargs)
@@ -563,33 +577,36 @@ def cache_function(function: Callable, timeout=Timeout.REQUEST,
                 use_cache_value = force_cache_value(current_cache_value)
             else:
                 use_cache_value = False
+        else:
+            logger.debug("Not using force_cache_value callable: %r", force_cache_value)
         if use_cache_value:
-            logger.debug("Using current cache value: %r", current_cache_value)
+            logger.error("Using current cache value for key %r", key)
             result = current_cache_value
         else:
             # decide whether to skip the transactional update
+            logger.debug("Transactional update: %r", transactional_update)
             skip_transaction = transaction is None
+            logger.debug("Current transaction: %r", transaction)
             if transactional_update and callable(transactional_update):
                 current_value = transaction.get(key) if transaction else None or cache.get(key)
-                logger.debug("Transaction uodate callable: %r", transactional_update)
+                logger.debug("Transaction update callable: %r", transactional_update)
                 if current_value:
                     skip_transaction = not transactional_update(current_value)
-                    logger.debug("Computed callable skip_transacion: %r", skip_transaction)
+                    logger.debug("Computed callable skip_transaction: %r", skip_transaction)
             elif not transaction and isinstance(transactional_update, bool):
                 skip_transaction = not transactional_update
             logger.debug("Skipping transaction for %r: %r", key, skip_transaction)
             if not skip_transaction:  # transaction or transactional_update:  # skip_transaction:
-                read_from_cache = transaction is None
-                logger.debug("Read from cache: %r", read_from_cache)
-                with hc.transaction() as transaction:
-                    logger.debug("Getting value using transaction: new=%r", read_from_cache)
+                with hc.transaction(name=key) as transaction:
+                    # read_from_cache = transaction.name != key and not transaction.force_update
+                    # logger.debug("Getting value using transaction: new=%r", read_from_cache)
                     result = _process_cache_data(cache, transaction,
-                                                 key, unless, timeout,
-                                                 read_from_cache, False,
+                                                 key, unless, skip, timeout,
+                                                 False, False,
                                                  function, args, kwargs)
             else:
                 logger.debug("Getting value from cache")
-                result = _process_cache_data(cache, transaction, key, unless, timeout,
+                result = _process_cache_data(cache, transaction, key, unless, skip, timeout,
                                              True, True, function, args, kwargs)
     else:
         logger.debug("Cache disabled: getting value from the actual function...")
@@ -599,6 +616,7 @@ def cache_function(function: Callable, timeout=Timeout.REQUEST,
 
 def cached(timeout=Timeout.REQUEST, client_scope=True,
            unless: Union[bool, Callable, None] = None,
+           skip: Union[bool, Callable, None] = None,
            transactional_update: Union[bool, Callable, None] = False,
            force_cache_value: Union[bool, Callable, None] = False):
     def decorator(function):
@@ -606,7 +624,7 @@ def cached(timeout=Timeout.REQUEST, client_scope=True,
         @functools.wraps(function)
         def wrapper(*args, **kwargs):
             return cache_function(function, timeout=timeout,
-                                  client_scope=client_scope, unless=unless,
+                                  client_scope=client_scope, unless=unless, skip=skip,
                                   transactional_update=transactional_update,
                                   force_cache_value=force_cache_value,
                                   args=args, kwargs=kwargs)

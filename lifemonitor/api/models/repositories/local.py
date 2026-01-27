@@ -1,5 +1,5 @@
 
-# Copyright (c) 2020-2024 CRS4
+# Copyright (c) 2020-2026 CRS4
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -22,6 +22,7 @@
 from __future__ import annotations
 
 import base64
+import datetime
 import logging
 import os
 import re
@@ -166,11 +167,11 @@ class LocalWorkflowRepository(WorkflowRepository):
             else None
 
     def find_file_by_pattern(self, search: str, path: Optional[str] = None) -> Optional[RepositoryFile]:
-        logger.warning("Searching file: %r %r", search, path)
+        logger.debug("Searching file: %r %r", search, path)
         return next((f for f in self.files if re.search(search, f.name) and (not path or f.dir == path or f.dir == f"./{path}")), None)
 
     def find_file_by_name(self, name: str, path: Optional[str] = None) -> Optional[RepositoryFile]:
-        logger.warning("Searching file: %r %r", name, path)
+        logger.debug("Searching file: %r %r", name, path)
         return next((f for f in self.files if f.name == name and (not path or f.path == path or f.dir == f"./{path}")), None)
 
     def find_workflow(self) -> Optional[WorkflowFile]:
@@ -277,6 +278,66 @@ class Base64WorkflowRepository(TemporaryLocalWorkflowRepository):
         return self._base64
 
 
+class GitRepositoryReference():
+
+    def __init__(self, repository, raw_data: dict) -> None:
+        assert isinstance(raw_data, dict), raw_data
+        self._repository = repository
+        self._raw_data = raw_data
+
+    @property
+    def repository(self):
+        return self._repository
+
+    @property
+    def shorthand(self) -> str:
+        return self._raw_data.get('shorthand', None)
+
+    @property
+    def type(self) -> str:
+        return self._raw_data.get('type', None)
+
+    @property
+    def ref(self) -> str:
+        return self._raw_data.get('ref', None)
+
+
+class GitRepositoryRevision():
+
+    def __init__(self, repository, raw_data: dict):
+        assert isinstance(raw_data, dict), raw_data
+        self._repository = repository
+        self._raw_data = raw_data
+
+    @property
+    def repository(self):
+        return self._repository
+
+    @property
+    def sha(self) -> str:
+        return self._raw_data.get('sha', None)
+
+    @property
+    def created(self) -> datetime.datetime:
+        return self._raw_data.get('created', None)
+
+    @property
+    def main_ref(self) -> GitRepositoryReference:
+        return GitRepositoryReference(self._repository, self._raw_data.get("main_ref", None))
+
+    @property
+    def refs(self):
+        return map(lambda x: GitRepositoryReference(self._repository, x), self._raw_data.get('refs'))
+
+    def is_branch(self) -> bool:
+        # Return True if the revision is a branch
+        return self.main_ref.type == "branch"
+
+    def is_tag(self) -> bool:
+        # Return True if the revision is a tag
+        return self.main_ref.type == "tag"
+
+
 class LocalGitWorkflowRepository(LocalWorkflowRepository):
     """
     A LocalWorkflowRepository that is also a Git repository.
@@ -311,6 +372,65 @@ class LocalGitWorkflowRepository(LocalWorkflowRepository):
         return self._git_repo.active_branch.name
 
     @property
+    def ref(self) -> str:
+        if self._git_repo.head.is_valid():
+            if self._git_repo.head.is_detached:
+                # Check if this commit has a tag pointing to it
+                for tag in self._git_repo.tags:
+                    if tag.commit == self._git_repo.head.commit:
+                        return tag.name
+                return "HEAD"
+            return self._git_repo.head.ref.name
+        return "HEAD" @ property
+
+    @property
+    def revision(self) -> GitRepositoryRevision:
+        return self.get_revision()
+
+    def get_revision(self) -> GitRepositoryRevision:
+        ref_type = "branch"
+        shorthand = None
+
+        try:
+            # Check if HEAD is detached
+            if self._git_repo.head.is_detached:
+                # Find tags that point to the current commit
+                for tag in self._git_repo.tags:
+                    if tag.commit == self._git_repo.head.commit:
+                        ref_type = "tag"
+                        shorthand = tag.name
+                        break
+                if not shorthand:
+                    # Detached HEAD not pointing to a tag
+                    shorthand = "HEAD"
+            else:
+                # HEAD points to a branch
+                shorthand = self.main_branch
+        except Exception as e:
+            logger.warning(f"Error determining revision type: {str(e)}")
+            shorthand = "HEAD"
+
+        return GitRepositoryRevision(
+            self,
+            {
+                "sha": self._git_repo.head.commit.hexsha,
+                "created": self._git_repo.head.commit.committed_datetime,
+                "main_ref": {
+                    "shorthand": shorthand,
+                    "type": ref_type,
+                    "ref": self.ref
+                },
+                "refs": [
+                    {
+                        "shorthand": r.name if hasattr(r, 'name') else str(r).split('/')[-1],
+                        "type": "branch" if r.path.startswith("refs/heads") else "tag" if r.path.startswith("refs/tags") else "other",
+                        "ref": r.path if hasattr(r, 'path') else str(r)
+                    } for r in self._git_repo.refs
+                ]
+            }
+        )
+
+    @property
     def remotes(self) -> List[str]:
         return [r.name for r in self._git_repo.remotes]
 
@@ -341,3 +461,69 @@ class LocalGitWorkflowRepository(LocalWorkflowRepository):
     @property
     def remote_info(self) -> RemoteGitRepoInfo | None:
         return self._remote_repo_info
+
+
+class ZippedLocalGitWorkflowRepository(LocalGitWorkflowRepository, ZippedWorkflowRepository):
+    """
+    Combines ZIP extraction with Git repository functionality using multiple inheritance.
+    This class avoids double initialization of the shared base by explicitly
+    initializing TemporaryLocalWorkflowRepository and then applying both ZIP and Git steps.
+    """
+
+    def __init__(self,
+                 archive_path: str | Path,
+                 local_path: Optional[str] = None,
+                 remote_url: Optional[str] = None,
+                 owner: Optional[str] = None,
+                 name: Optional[str] = None,
+                 license: Optional[str] = None,
+                 exclude: Optional[List[str]] = None,
+                 auto_cleanup: bool = True) -> None:
+
+        # Initialize TemporaryLocalWorkflowRepository directly to avoid double init
+        local_path = local_path or tempfile.mkdtemp(dir=BaseConfig.BASE_TEMP_FOLDER)
+        TemporaryLocalWorkflowRepository.__init__(  # type: ignore[misc]
+            self,
+            local_path=local_path,
+            remote_url=remote_url,
+            owner=owner,
+            name=name,
+            license=license,
+            exclude=exclude,
+            auto_cleanup=auto_cleanup
+        )
+
+        # Extract the ZIP archive to the local path
+        try:
+            extract_zip(archive_path, self.local_path)
+            self.archive_path = archive_path
+            logger.debug("Local path: %r", self.local_path)
+        except FileNotFoundError as e:
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.exception(e)
+            raise LifeMonitorException('Unable to process the Workflow ROCrate locally',
+                                       detail=str(e), status=404)
+
+        # Initialize Git repository reference
+        self._git_repo = None
+        self._remote_repo_info: RemoteGitRepoInfo | None = None
+
+        try:
+            # Try opening an existing Git repository
+            self._git_repo = git.Repo(self.local_path)
+        except (git.exc.NoSuchPathError, git.exc.InvalidGitRepositoryError) as e:
+            # Raise an exception if no valid Git repository exists
+            error_msg = f"No valid Git repository found at {self.local_path}"
+            logger.error(error_msg)
+            raise IllegalStateException(error_msg, original_error=str(e), instance=self)
+
+        # Parse remote repository information
+        try:
+            origin = next((r for r in self._git_repo.remotes if r.name == "origin"), None)
+            selected_remote = origin or (self._git_repo.remotes[0] if self._git_repo.remotes else None)
+            if selected_remote is not None and getattr(selected_remote, "url", None):
+                self._remote_repo_info = RemoteGitRepoInfo.parse(selected_remote.url)
+        except (git.exc.GitCommandError, AttributeError, IndexError) as e:
+            logger.warning("Unable to parse remote repository info: %s", e)
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.exception(e)

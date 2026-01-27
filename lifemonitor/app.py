@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024 CRS4
+# Copyright (c) 2020-2026 CRS4
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -52,19 +52,24 @@ def create_app(
     settings=None,
     init_app=True,
     init_integrations=True,
+    maintenance_mode=False,
     worker=False,
     load_jobs=True,
     **kwargs,
 ):
     """
-    App factory method
-    :param env:
-    :param settings:
-    :param init_app:
-    :return:
+    App factory method to create and configure the Flask application instance.
+    :param env: The environment to run the app in (e.g., 'production', 'development').
+    :param settings: Additional settings to configure the app.
+    :param init_app: Flag to initialize the app.
+    :param init_integrations: Flag to initialize integrations.
+    :param worker: Flag to indicate if the app is running as a worker.
+    :param load_jobs: Flag to load background jobs.
+    :param kwargs: Additional keyword arguments for Flask app.
+    :return: Configured Flask app instance.
     """
     # set app env
-    app_env = env or os.environ.get("FLASK_ENV", "production")
+    app_env = env or os.environ.get("LIFEMONITOR_ENV", "production")
     if app_env != "production":
         # Set the DEBUG_METRICS env var to also enable the
         # prometheus metrics exporter when running in development mode
@@ -92,7 +97,8 @@ def create_app(
     if init_app:
         with app.app_context() as ctx:
             initialize_app(
-                app, ctx, load_jobs=load_jobs, load_integrations=init_integrations
+                app, ctx, load_jobs=load_jobs, load_integrations=init_integrations,
+                maintenance_mode=maintenance_mode
             )
 
     @app.route("/")
@@ -166,6 +172,7 @@ def initialize_app(
     prom_registry=None,
     load_jobs: bool = True,
     load_integrations: bool = True,
+    maintenance_mode: bool = False
 ):
     # init tmp folder
     os.makedirs(app.config.get("BASE_TEMP_FOLDER"), exist_ok=True)
@@ -174,9 +181,21 @@ def initialize_app(
     # configure logging
     config.configure_logging(app)
     # check if the app is running in maintenance mode
-    if app.config.get("MAINTENANCE_MODE", False):
+    if app.config.get("MAINTENANCE_MODE", maintenance_mode) or maintenance_mode:
         logger.warning("Application is running in maintenance mode")
+        # init Redis connection
+        redis.init(app)
+        # configure app DB
+        db.init_app(app)
+        # initialize Migration engine
+        Migrate(app, db)
+        # initialize cache
+        init_cache(app)
+        # register commands
+        commands.register_commands(app)
     else:
+        # log initialization start
+        logger.info("Initializing the application...")
         # register error handlers
         errors_controller.register_api(app)
         # init Redis connection
@@ -204,3 +223,19 @@ def initialize_app(
         commands.register_commands(app)
         # register the domain filter with Jinja
         app.jinja_env.filters["domain"] = get_domain
+        # initialize the profiler
+        if app.config.get("ENABLE_PROFILER", False):
+            from werkzeug.middleware.profiler import ProfilerMiddleware
+            profiler_default_dir = f"{app.config.get('BASE_TEMP_FOLDER', '/tmp')}/profiler"
+            profiler_dir = app.config.get("PROFILER_PATH", profiler_default_dir)
+            os.makedirs(profiler_dir, exist_ok=True)
+            app.config["PROFILE"] = True
+            if app.wsgi_app is None or not isinstance(app.wsgi_app, ProfilerMiddleware):
+                app.wsgi_app = ProfilerMiddleware(
+                    app.wsgi_app,
+                    restrictions=[30],
+                    profile_dir=profiler_dir,
+                    filename_format="{method}-{path}-{time:.0f}-{elapsed:.0f}ms.prof",
+                )
+        # log initialization end
+        logger.info("LifeMonitor App initialized!")

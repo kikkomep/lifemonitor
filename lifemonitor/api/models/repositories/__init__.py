@@ -1,5 +1,5 @@
 
-# Copyright (c) 2020-2024 CRS4
+# Copyright (c) 2020-2026 CRS4
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -29,7 +29,7 @@ from .github import (GithubWorkflowRepository,
                      InstallationGithubWorkflowRepository,
                      RepoCloneContextManager)
 from .local import (LocalGitWorkflowRepository, LocalWorkflowRepository,
-                    Base64WorkflowRepository, ZippedWorkflowRepository)
+                    Base64WorkflowRepository, ZippedWorkflowRepository, ZippedLocalGitWorkflowRepository)
 from .templates import WorkflowRepositoryTemplate
 
 __all__ = [
@@ -38,5 +38,5 @@ __all__ = [
     "LocalWorkflowRepository", "LocalGitWorkflowRepository",
     "Base64WorkflowRepository", "ZippedWorkflowRepository",
     "InstallationGithubWorkflowRepository", "GithubWorkflowRepository", "RepoCloneContextManager",
-    "WorkflowRepositoryTemplate"
+    "WorkflowRepositoryTemplate", "ZippedLocalGitWorkflowRepository"
 ]
