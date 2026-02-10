@@ -679,6 +679,7 @@ paths:
         - $ref: "#/components/parameters/wf_status"
         - $ref: "#/components/parameters/wf_versions"
         - $ref: "#/components/parameters/wf_subscriptions"
+        - $ref: "#/components/parameters/wf_subscriptions_only"
         - $ref: "#/components/parameters/statistics"
         - $ref: "#/components/parameters/suites"
         - $ref: "#/components/parameters/instances"
@@ -1883,6 +1884,14 @@ components:
         type: boolean
       description: |
         `true` to include subscribed workflows
+      example: "false"
+    wf_subscriptions_only:
+      name: "subscriptions_only"
+      in: query
+      schema:
+        type: boolean
+      description: |
+        `true` to include only subscribed workflows. Ignored if `subscriptions` is not `true`.
       example: "false"
     statistics:
       name: "stats"
