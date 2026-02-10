@@ -499,7 +499,7 @@ class TestInstanceSchema(ResourceMetadataSchema):
             builds = []
             for build in obj.get_test_builds(limit=self.builds_limit):
                 builds.append(BuildSummarySchema(
-                    exclude=('meta', 'links',
+                    exclude=('meta',
                              'suite_uuid', 'instance_uuid',
                              'instance')).dump(build))
             return builds
@@ -589,7 +589,7 @@ class WorkflowStatusSchema(WorkflowVersionSchema):
 
     def get_latest_builds(self, workflow_version):
         try:
-            return BuildSummarySchema(exclude=('meta', 'links', 'instance_uuid'), many=True).dump(
+            return BuildSummarySchema(exclude=('meta', 'instance_uuid'), many=True).dump(
                 workflow_version.status.latest_builds)
         except Exception as e:
             logger.debug(e)
@@ -695,7 +695,7 @@ class WorkflowVersionListItem(WorkflowSchema):
             latest_builds = workflow.latest_version.status.latest_builds
             builds = []
             if latest_builds and len(latest_builds) > 0:
-                builds.append(BuildSummarySchema(exclude=('meta', 'links', 'instance_uuid')).dump(latest_builds[0]))
+                builds.append(BuildSummarySchema(exclude=('meta', 'instance_uuid')).dump(latest_builds[0]))
             return builds
         except Exception as e:
             logger.debug(e)
@@ -841,7 +841,7 @@ class SuiteSchema(ResourceMetadataSchema):
         try:
             builds = []
             for build in obj.get_latest_builds(limit=self.builds_limit):
-                builds.append(BuildSummarySchema(exclude=('meta', 'links')).dump(build))
+                builds.append(BuildSummarySchema(exclude=('meta',)).dump(build))
             return builds
         except Exception as e:
             logger.warning("Unable to extract latest_builds for suite: %r", obj)

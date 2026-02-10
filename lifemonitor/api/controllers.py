@@ -63,7 +63,7 @@ def stats_workflows_get():
     workflows = None
     if current_user and not current_user.is_anonymous:
         workflows = lm.get_user_workflows(current_user, include_public=False,
-                                          include_subscriptions=True, only_subscriptions=True)
+                                          include_subscriptions=True, subscriptions_only=True)
     elif current_registry:
         workflows = lm.get_registry_workflows(current_registry)
     else:
@@ -81,7 +81,7 @@ def stats_workflows_status_get():
     workflows = None
     if current_user and not current_user.is_anonymous:
         workflows = lm.get_user_workflows(current_user, include_public=False,
-                                          include_subscriptions=True, only_subscriptions=True)
+                                          include_subscriptions=True, subscriptions_only=True)
     elif current_registry:
         workflows = lm.get_registry_workflows(current_registry)
     else:
@@ -154,7 +154,7 @@ def _get_workflows_list_(page: int = 1, per_page: Optional[int] = None, max_item
             current_user,
             include_subscriptions=subscriptions,
             include_public=True,
-            only_subscriptions=only_subscriptions,
+            subscriptions_only=only_subscriptions,
             page=page_info
         ))
     elif current_registry:
@@ -431,7 +431,8 @@ def registry_user_workflows_post(user_id, body):
 
 @authorized
 @cached(timeout=Timeout.REQUEST)
-def user_workflows_get(status=False, versions=False, subscriptions=False, only_subscriptions: bool = False,
+def user_workflows_get(status=False, versions=False,
+                       subscriptions=False, subscriptions_only: bool = False,
                        stats=False,
                        suites=False, instances=False,
                        builds=False, builds_limit=1,
@@ -443,7 +444,7 @@ def user_workflows_get(status=False, versions=False, subscriptions=False, only_s
     page_info = PaginationInfo(page=page, per_page=per_page, max_items=max_items)
     workflows = lm.get_user_workflows(current_user,
                                       include_subscriptions=subscriptions,
-                                      only_subscriptions=only_subscriptions,
+                                      subscriptions_only=subscriptions_only,
                                       include_public=False,
                                       page=page_info)
     workflows = __filter_workflows_list__(workflows, filter_by_string, filter_by_status)
