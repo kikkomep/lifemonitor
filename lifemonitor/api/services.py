@@ -584,13 +584,13 @@ class LifeMonitor:
     def get_user_workflows(user: User,
                            include_subscriptions: bool = False,
                            include_public: bool = True,
-                           only_subscriptions: bool = False,
+                           subscriptions_only: bool = False,
                            page: Optional[PaginationInfo] = None) -> List[models.Workflow]:
         # Reference to the list of workflows
         all_workflows = []
 
         # If only_subscriptions is False, we need to collect also workflows from registries
-        if not only_subscriptions:
+        if not subscriptions_only:
 
             # Build a single query combining local workflows and registry workflows
             workflows = models.Workflow.get_user_workflows(user, include_subscriptions=include_subscriptions)
