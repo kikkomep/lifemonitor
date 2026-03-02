@@ -27,7 +27,7 @@ from lifemonitor.api.models.repositories import WorkflowRepository
 from lifemonitor.integrations.validator.services import (
     ValidationResult, rocrate_validator_version, validate_workflow_version)
 
-from .repo_layout import RepositoryNotInitialised
+from .repo_layout import MissingROCrateFile, RepositoryNotInitialised
 
 # set module level logger
 logger = logging.getLogger(__name__)
@@ -54,7 +54,7 @@ class InvalidMetadataFile(WorkflowRepositoryIssue):
         "<br>Check the file and fix the issues reported by the validator."
     )
     labels = ['metadata']
-    depends_on = []
+    depends_on = [MissingROCrateFile]
 
     def check(self, repo: WorkflowRepository) -> bool:
         try:
