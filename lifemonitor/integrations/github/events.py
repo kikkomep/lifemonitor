@@ -49,6 +49,7 @@ class GithubEvent():
     def __init__(self, headers: dict, payload: dict) -> None:
         self._headers = headers
         self._repository_reference = None
+        self._installation = None
         self._sender = None
         assert isinstance(payload, dict), payload
         try:
@@ -137,9 +138,10 @@ class GithubEvent():
 
     @property
     def installation(self) -> LifeMonitorInstallation:
-        installation = self.application.get_installation(self.installation_id)
-        logger.debug("Loaded installation: %r", installation)
-        return installation
+        if not self._installation:
+            self._installation = self.application.get_installation(self.installation_id)
+            logger.debug("Loaded installation: %r", self._installation)
+        return self._installation
 
     @property
     def repository_reference(self) -> GithubRepositoryReference:
