@@ -21,10 +21,10 @@
 from __future__ import annotations
 
 import logging
-import os
 import uuid
 from tempfile import TemporaryDirectory
 from typing import Any, Callable, Dict, List, Optional, Union
+from urllib.parse import urljoin
 
 import requests
 from flask import (Blueprint, Flask, current_app, redirect, render_template,
@@ -324,35 +324,61 @@ def __forward_event__(event: GithubEvent) -> Optional[Dict]:
         logger.debug("No config file found")
         return None
 
-    logger.error("Workflow repository config: %r", config._raw_data)
+    logger.debug("Workflow repository config: %r", config._raw_data)
 
     ref = repo_info.branch or repo_info.tag
-    logger.error("Ref: %s", ref)
+    logger.debug("Ref: %s", ref)
 
-    ref_settings = repo.config.get_ref_settings(ref)
-    logger.warning("Repo ref settings: %r", ref_settings)
+    ref_settings = config.get_ref_settings(ref)
+    logger.debug("Repo ref settings: %r", ref_settings)
 
-    default_instance_info = current_app.config['PROXY_ENTRIES']['default']
+    proxy_entries = current_app.config.get('PROXY_ENTRIES', {})
+    default_instance_info = proxy_entries.get('default')
+    if not default_instance_info:
+        logger.warning("Missing default proxy entry in PROXY_ENTRIES")
+        return None
     logger.debug("Default LM instance: %r", default_instance_info)
 
     if ref_settings:
         lm_instance_name = ref_settings.get('lifemonitor_instance', None)
         if lm_instance_name:
-            lm_instance_info = current_app.config['PROXY_ENTRIES'][lm_instance_name]
-            assert lm_instance_info, "Undefined instance info"
-            if lm_instance_info['url'] != default_instance_info['url']:
+            lm_instance_name = str(lm_instance_name).strip().lower()
+            lm_instance_info = proxy_entries.get(lm_instance_name)
+            if not lm_instance_info:
+                logger.error(
+                    "Unable to forward event: unknown instance '%s' (available: %s)",
+                    lm_instance_name,
+                    sorted(proxy_entries.keys()),
+                )
+                raise RuntimeError(f"Unable to resolve instance '{lm_instance_name}'")
+
+            if lm_instance_info['url'].rstrip('/') != default_instance_info['url'].rstrip('/'):
                 logger.warning("Using LM instance: %r", lm_instance_info)
-                redirect_url = os.path.join(lm_instance_info['url'], 'integrations/github')
+                redirect_url = urljoin(f"{lm_instance_info['url'].rstrip('/')}/", 'integrations/github')
                 logger.warning("Redirecting to: %r", redirect_url)
                 response = requests.request(
                     method=request.method,
                     url=redirect_url,
                     headers={key: value for (key, value) in request.headers if key != 'Host'},
                     data=request.get_data(),
-                    cookies=request.cookies,
                     allow_redirects=False,
-                    stream=True)
-                logger.debug("Respose: %r", response.content)
+                    timeout=30,
+                )
+                if response.status_code >= 400:
+                    logger.error(
+                        "Forwarding failed to '%s' (%s): status=%s body=%s",
+                        lm_instance_name,
+                        redirect_url,
+                        response.status_code,
+                        response.text,
+                    )
+                    raise RuntimeError(f"Unable to forward event to {lm_instance_name}")
+                logger.info(
+                    "Forwarded event to '%s' (%s) with status %s",
+                    lm_instance_name,
+                    redirect_url,
+                    response.status_code,
+                )
                 return lm_instance_info
         else:
             logger.debug("No settings found for ref: %s", ref)
@@ -870,8 +896,8 @@ def handle_event():
         if forwarded_to:
             return f"Event forwarded to LifeMonitor instance '{forwarded_to['name']}' (url: {forwarded_to['url']})"
     except Exception as e:
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(e)
+        logger.exception("Unable to forward GitHub event: %s", e)
+        return "Unable to forward event", 502
 
     # Submit event to an async handler
     event_handler = __event_handlers__.get(event.type, None)
