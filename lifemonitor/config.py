@@ -226,6 +226,9 @@ def get_config_by_name(name, settings=None):
         if settings:
             for k, v in settings.items():
                 setattr(config, k, v)
+        csrf_secret = getattr(config, "WTF_CSRF_SECRET_KEY", None)
+        if getattr(config, "SECRET_KEY", None) and not csrf_secret:
+            setattr(config, "WTF_CSRF_SECRET_KEY", getattr(config, "SECRET_KEY"))
         return config
     except KeyError:
         logger.warning("Unable to load the configuration %s: using 'production'", name)

@@ -261,6 +261,7 @@ lifemonitor:
   log_level: INFO
 
   # secret_key: "<SECRET_KEY>"
+  # secretKey: "<SECRET_KEY>"  # backward-compatible alias
 
   # Warning message for maintenance mode
   warning_message:
