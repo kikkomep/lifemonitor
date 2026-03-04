@@ -343,7 +343,7 @@ def __forward_event__(event: GithubEvent) -> Optional[Dict]:
             if lm_instance_info['url'] != default_instance_info['url']:
                 logger.warning("Using LM instance: %r", lm_instance_info)
                 redirect_url = os.path.join(lm_instance_info['url'], 'integrations/github')
-                logger.debug("Redirecting to: %r", redirect_url)
+                logger.warning("Redirecting to: %r", redirect_url)
                 response = requests.request(
                     method=request.method,
                     url=redirect_url,
