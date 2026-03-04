@@ -142,6 +142,7 @@ class DevelopmentConfig(BaseConfig):
     CONFIG_NAME = "development"
     # Add a random secret (required to enable HTTP sessions)
     SECRET_KEY = os.getenv("DEV_SECRET_KEY", BaseConfig.SECRET_KEY)
+    WTF_CSRF_SECRET_KEY = SECRET_KEY
     DEBUG = True
     LOG_LEVEL = "DEBUG"
     TESTING = False
@@ -151,6 +152,7 @@ class DevelopmentConfig(BaseConfig):
 class ProductionConfig(BaseConfig):
     CONFIG_NAME = "production"
     SECRET_KEY = os.getenv("PROD_SECRET_KEY", BaseConfig.SECRET_KEY)
+    WTF_CSRF_SECRET_KEY = SECRET_KEY
     TESTING = False
     CACHE_TYPE = "flask_caching.backends.rediscache.RedisCache"
 
