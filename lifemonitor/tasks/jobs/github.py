@@ -56,15 +56,6 @@ def handle_event(event):
 
     event = e
     logger.debug("Push event: %r", event)
-    try:
-        logger.debug("Event ref: %r", event.repository_reference.branch or event.repository_reference.tag)
-        installation = event.installation
-        logger.debug("Installation: %r", installation)
-        repositories = installation.get_repos()
-        for r in repositories:
-            logger.debug("Processing repo: %r", r)
-    except Exception as e:
-        logger.debug(e)
 
     # Dispatch event to the proper handler
     event_handler = get_event_handler(event.type)
