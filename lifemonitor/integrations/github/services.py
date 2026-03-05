@@ -103,9 +103,7 @@ def __get_registries_map__(w: Workflow, registries: List[str]):
     return registries_map
 
 
-def find_workflow_version(repository_reference: GithubRepositoryReference) -> Tuple[Workflow, WorkflowVersion]:
-    # get a reference to the github workflow registry for this installation
-    github_registry: GithubWorkflowRegistry = repository_reference.event.installation.github_registry
+def find_workflow_version(repository_reference: GithubRepositoryReference) -> Tuple[Optional[Workflow], Optional[WorkflowVersion]]:
     # find the workflow
     workflow_version = None
     workflow = github_registry.find_workflow(repository_reference.repository.full_name)
@@ -116,7 +114,7 @@ def find_workflow_version(repository_reference: GithubRepositoryReference) -> Tu
     return workflow, workflow_version
 
 
-def identify_workflow_version_submitter(repository_reference: GithubRepositoryReference) -> User:
+def identify_workflow_version_submitter(repository_reference: GithubRepositoryReference) -> Optional[User]:
     """ Identify the submitter of the workflow version.
     The submitter is the user who trigger a github event on the repository.
     If the "sender" of the event is not a LifeMonitor user, the submitter is the user who triggered the event
@@ -144,7 +142,7 @@ def identify_workflow_version_submitter(repository_reference: GithubRepositoryRe
     return submitter
 
 
-def register_repository_workflow(repository_reference: GithubRepositoryReference, registries: List[str] = None) -> WorkflowVersion:
+def register_repository_workflow(repository_reference: GithubRepositoryReference, registries: Optional[List[str]] = None) -> WorkflowVersion:
     logger.debug("Repository ref: %r", repository_reference)
     # set a reference to LifeMonitorService
     lm = LifeMonitor.get_instance()
