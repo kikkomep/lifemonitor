@@ -214,8 +214,30 @@ def installation_repositories(event: GithubEvent):
             installation = event.installation
             logger.debug("App Installation: %r", installation)
 
-            repositories = event.repositories_removed
-            logger.debug("App installed on Repositories: %r", repositories)
+            repositories_payload = event.payload.get('repositories') or event.payload.get('repositories_removed') or []
+            logger.debug("Repositories removed from installation: %r", repositories_payload)
+
+            for repo in repositories_payload:
+                repo_full_name = repo.get('full_name', None)
+                if not repo_full_name:
+                    logger.warning("Skipping repository without full_name in installation.deleted payload: %r", repo)
+                    continue
+
+                repo_refs = services.get_repository_refs_for_full_name(event, repo_full_name)
+                logger.debug("Found refs for '%s': %r", repo_full_name, repo_refs)
+                if not repo_refs:
+                    logger.warning("No tracked refs found for repository '%s' in installation %r", repo_full_name, event.installation_id)
+                    continue
+
+                for ref in repo_refs:
+                    repo_event_payload = dict(event.payload)
+                    repo_event_payload.pop('repositories', None)
+                    repo_event_payload.pop('repositories_added', None)
+                    repo_event_payload.pop('repositories_removed', None)
+                    repo_event_payload['repository'] = repo
+                    repo_event_payload['ref'] = ref
+                    repo_event = GithubEvent(event.headers, repo_event_payload)
+                    __delete_repository_reference__(repo_event.repository_reference)
 
     except Exception as e:
         logger.error(str(e))
@@ -227,41 +249,83 @@ def __notify_workflow_version_event__(repo_reference: GithubRepositoryReference,
                                       workflow_version: Union[WorkflowVersion, Dict],
                                       action: str):
     try:
+        def _build_repository_data() -> Dict[str, Any]:
+            repository_data = dict(repo_reference.event.payload.get('repository', {}))
+            repository_data['full_name'] = repository_data.get('full_name', repo_reference.full_name)
+            repository_data['ref'] = repo_reference.ref
+            repository_data['html_url'] = repository_data.get(
+                'html_url',
+                f"https://github.com/{repository_data['full_name']}",
+            )
+            return repository_data
+
+        def _resolve_submitter() -> Optional[User]:
+            if isinstance(workflow_version, WorkflowVersion):
+                return workflow_version.submitter
+            submitter = None
+            submitter_data = workflow_version.get('submitter', {}) if isinstance(workflow_version, dict) else {}
+            submitter_id = submitter_data.get('id', None)
+            if submitter_id is not None:
+                submitter = User.find_by_id(submitter_id)
+            if submitter is None:
+                try:
+                    sender = repo_reference.event.sender
+                    submitter = sender.user if sender else None
+                except Exception as e:
+                    if logger.isEnabledFor(logging.DEBUG):
+                        logger.exception(e)
+            return submitter
+
         notification_enabled = True
-        repo: GithubWorkflowRepository = repo_reference.repository
         pattern = None
-        ref_type = 'branches' if repo_reference.branch else 'tags'
-        try:
-            if hasattr(repo.config, ref_type):
-                ref_list = getattr(repo.config, ref_type)
-                ref = repo_reference.branch or repo_reference.tag
-                _, pattern = match_ref(ref, ref_list)
-                if pattern:
-                    notification_enabled = ref_list[pattern].get('enable_notifications', True)
-                    logger.debug("Notifications enabled for '%s': %r", pattern, notification_enabled)
-                else:
-                    logger.debug("No notification setting found for repo %s (ref: %s)", repo.full_name, ref)
-        except AttributeError as e:
-            if logger.isEnabledFor(logging.DEBUG):
-                logger.exception(e)
+        if action == 'deleted':
+            if isinstance(workflow_version, dict):
+                notification_enabled = workflow_version.get('_notification_enabled', True)
+                if notification_enabled is None:
+                    notification_enabled = True
+            else:
+                notification_enabled = services.get_repository_ref_notifications_enabled(
+                    repo_reference.event,
+                    repo_reference.full_name,
+                    repo_reference.ref,
+                    default=True,
+                )
+        else:
+            repo: GithubWorkflowRepository = repo_reference.repository
+            ref_type = 'branches' if repo_reference.branch else 'tags'
+            try:
+                if hasattr(repo.config, ref_type):
+                    ref_list = getattr(repo.config, ref_type)
+                    ref = repo_reference.branch or repo_reference.tag
+                    _, pattern = match_ref(ref, ref_list)
+                    if pattern:
+                        notification_enabled = ref_list[pattern].get('enable_notifications', True)
+                        logger.debug("Notifications enabled for '%s': %r", pattern, notification_enabled)
+                    else:
+                        logger.debug("No notification setting found for repo %s (ref: %s)", repo.full_name, ref)
+            except AttributeError as e:
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.exception(e)
+            services.update_repository_ref_notifications(
+                repo_reference.event,
+                repo_reference.full_name,
+                repo_reference.ref,
+                notification_enabled,
+            )
         logger.debug("Notifications enabled: %r", notification_enabled)
         if notification_enabled:
-            logger.debug(f"Setting notification for action '{action}' on repo '{repo.full_name}' (ref: {repo.ref})")
-            submitter = None
-            if isinstance(workflow_version, WorkflowVersion):
-                submitter = workflow_version.submitter
-            else:
-                sender = repo_reference.event.sender
-                submitter = sender.user if sender else None
+            logger.debug("Setting notification for action '%s' on repo '%s' (ref: %s)",
+                         action, repo_reference.full_name, repo_reference.ref)
+            submitter = _resolve_submitter()
             if submitter:
                 version = workflow_version if isinstance(workflow_version, dict) else serializers.WorkflowVersionSchema(exclude=('meta', 'links')).dump(workflow_version)
-                repo_data = repo.raw_data
-                repo_data['ref'] = repo.ref
+                repo_data = _build_repository_data()
                 n = GithubWorkflowVersionNotification(workflow_version=version, repository=repo_data, action=action, users=[submitter])
                 n.save()
-                logger.debug(f"Setting notification for action '{action}' on repo '{repo.full_name}' (ref: {repo.ref})")
+                logger.debug("Setting notification for action '%s' on repo '%s' (ref: %s)",
+                             action, repo_reference.full_name, repo_reference.ref)
             else:
-                logger.warning("Unable to find user identity associated to repo: %r", repo)
+                logger.warning("Unable to find user identity associated to repo '%s'", repo_reference.full_name)
         else:
             logger.warning("Notification disabled for %r (ref %r)", repo_reference.full_name, pattern)
     except Exception as e:
@@ -313,7 +377,11 @@ def __skip_branch_or_tag__(repo_info: GithubRepositoryReference,
 
 
 def __forward_event__(event: GithubEvent) -> Optional[Dict]:
-    repo_info = event.repository_reference
+    try:
+        repo_info = event.repository_reference
+    except ValueError as e:
+        logger.debug("Skipping event forwarding for event '%s': %s", event.type, str(e))
+        return None
     logger.debug("Repo reference: %r", repo_info)
 
     repo: GithubWorkflowRepository = repo_info.repository
@@ -478,19 +546,14 @@ def delete(event: GithubEvent):
     repo_info = event.repository_reference
     logger.debug("Repo reference: %r", repo_info)
 
-    repo: GithubWorkflowRepository = repo_info.repository
-    logger.debug("Repository: %r", repo)
+    return __delete_repository_reference__(repo_info)
 
-    logger.debug("Ref: %r", repo.ref)
-    logger.debug("Refs: %r", repo.git_refs_url)
-    logger.debug("Tree: %r", repo.trees_url)
-    logger.debug("Commit: %r", repo.rev)
 
-    logger.warning("Is Tag: %s", repo_info.tag)
-    logger.warning("Is Branch: %s", repo_info.branch)
+def __delete_repository_reference__(repo_info: GithubRepositoryReference):
+    logger.debug("Deleting repository reference: %s (ref=%s)", repo_info.full_name, repo_info.ref)
 
     # workflow submitter
-    submitter = services.identify_workflow_version_submitter(event.repository_reference)
+    submitter = services.identify_workflow_version_submitter(repo_info)
     if not submitter:
         logger.warning("Unable to identify the submitter of the workflow version")
         return

@@ -146,9 +146,10 @@ class GithubEvent():
     @property
     def repository_reference(self) -> GithubRepositoryReference:
         if not self._repository_reference:
-            if 'repositories' in self._raw_data or 'repositories_added' in self._raw_data:
-                raise ValueError("Multiple repositories associated to this event")
-            self._repository_reference = GithubRepositoryReference(event=self)
+            if 'repository' not in self._raw_data and (
+                    'repositories' not in self._raw_data or 'repositories_added' not in self._raw_data):
+                raise ValueError("No single repository associated to this event")
+            self._repository_reference = GithubRepositoryReference(self)
         return self._repository_reference
 
     @property
@@ -370,11 +371,14 @@ class GithubRepositoryReference(object):
                 ref = f"refs/heads/{self.branch}"
             elif self.tag:
                 ref = f"refs/tags/{self.tag}"
-            repo = self.event.installation.get_repo(self.full_name, ref=ref)
+            installation = self.event.installation
+            if installation is None:
+                raise RuntimeError(f"Installation not available for repository {self.full_name}")
+            repo = installation.get_repo(self.full_name, ref=ref)
             repo.rev = self.rev
             self._repo = repo
         return self._repo
 
     def clone(self, local_path: str = None) -> RepoCloneContextManager:
-        assert local_path is None or isinstance(str, local_path), local_path
+        assert local_path is None or isinstance(local_path, str), local_path
         return RepoCloneContextManager(self.clone_url, repo_branch=self.branch, local_path=local_path)
