@@ -104,9 +104,13 @@ def __get_registries_map__(w: Workflow, registries: List[str]):
 
 
 def find_workflow_version(repository_reference: GithubRepositoryReference) -> Tuple[Optional[Workflow], Optional[WorkflowVersion]]:
+    github_registry = get_event_github_registry(repository_reference.event)
+    if not github_registry:
+        logger.warning("Unable to load github registry for installation %r", repository_reference.event.installation_id)
+        return None, None
     # find the workflow
     workflow_version = None
-    workflow = github_registry.find_workflow(repository_reference.repository.full_name)
+    workflow = github_registry.find_workflow(repository_reference.full_name)
     if workflow:
         # get the workflow version (the one associated with the branch or tag of the repository)
         workflow_version = workflow.versions.get(repository_reference.branch or repository_reference.tag, None)
