@@ -21,7 +21,7 @@
 from __future__ import annotations
 
 import logging
-from typing import List
+from typing import List, Optional
 
 from lifemonitor.api.models.workflows import Workflow, WorkflowVersion
 from lifemonitor.auth.models import User
@@ -38,6 +38,7 @@ class GithubWorkflowVersion(db.Model, ModelMixin):
     workflow_version_id = db.Column(db.ForeignKey('workflow_version.id'), nullable=False)
     repo_identifier = db.Column(db.String, nullable=False)
     repo_ref = db.Column(db.String, nullable=True)
+    notifications_enabled = db.Column(db.Boolean, nullable=True, default=True)
     workflow_version: WorkflowVersion = db.relationship(
         "WorkflowVersion", uselist=False,
         backref=db.backref("github_versions", cascade="all, delete-orphan"))
@@ -56,6 +57,7 @@ class GithubWorkflowVersion(db.Model, ModelMixin):
         self.workflow_version = version
         self.repo_identifier = repo
         self.repo_ref = ref
+        self.notifications_enabled = True
 
 
 class GithubWorkflowRegistry(db.Model, ModelMixin):
@@ -90,7 +92,14 @@ class GithubWorkflowRegistry(db.Model, ModelMixin):
         version = self.get_workflow_version(v)
         if not version:
             return GithubWorkflowVersion(self, v, repo, ref)
+        version.repo_ref = ref
+        if version.notifications_enabled is None:
+            version.notifications_enabled = True
         return version
+
+    def find_workflow_version_by_repo(self, repo: str, ref: Optional[str] = None) -> Optional[GithubWorkflowVersion]:
+        return next((w for w in self.workflow_versions
+                     if w.repo_identifier == repo and (ref is None or w.repo_ref == ref)), None)
 
     def remove_workflow_version(self, v: GithubWorkflowVersion):
         if v and v in self._workflow_versions:
