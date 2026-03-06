@@ -375,9 +375,8 @@ def delete_repository_workflow_version(repository_reference: GithubRepositoryRef
     repo_link = f"{hosting_service.uri}/{repo_full_name}.git"
     logger.debug("RepoLink: %s", repo_link)
 
-    # Try to delete the workflow from registries only if it has only one version.
-    # Deletion of a single workflow version is not supported at the moment
-    # due to the limitation of the supported registry API (i.e., Seek)
+    # Registry deletion is workflow-level (not version-level):
+    # only delete remotely when this is the last local version.
     w = github_registry.find_workflow(repo_full_name)
     if not w:
         logger.warning(f"No workflow associated with '{repo_full_name}' found")
@@ -406,14 +405,13 @@ def delete_repository_workflow_version(repository_reference: GithubRepositoryRef
         registry_workflows_map = __get_registries_map__(w, registries=registries)
         logger.debug("List of registries for wf %r: %r", w, registry_workflows_map)
 
-        # filter workflows with only one version
-        filtered_registries = [_ for _ in registry_workflows_map if len(_[2]) == 1]
-        logger.debug("Filtered registry workflows: %r", filtered_registries)
-
-        # delete workflow from registries
-        logger.debug("Removing version '%r' of worlflow %r from registries %r....", workflow_version, w, filtered_registries)
-        delete_workflow_from_registries(github_registry, submitter, w, filtered_registries)
-        logger.debug("Removing version '%r' of worlflow %r from registries %r.... DONE", workflow_version, w, filtered_registries)
+        delete_registry_workflow = len(w.versions) == 1
+        if delete_registry_workflow:
+            logger.debug("Deleting workflow %r from registries %r", w, registry_workflows_map)
+            delete_workflow_from_registries(github_registry, submitter, w, registry_workflows_map)
+            logger.debug("Deleting workflow %r from registries %r... DONE", w, registry_workflows_map)
+        else:
+            logger.debug("Skipping registry deletion for workflow %r: multiple versions still present", w)
 
         # delete workflow version from LifeMonitor
         logger.debug("Removing version '%r' of worlflow %r from LifeMonitor....", workflow_version, w)

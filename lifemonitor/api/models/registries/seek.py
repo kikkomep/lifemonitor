@@ -224,4 +224,12 @@ class SeekWorkflowRegistryClient(WorkflowRegistryClient):
         response = self._delete(user, f"{self.registry.uri}/workflows/{external_id}")
         logger.debug(response.content)
         response.raise_for_status()
-        return response.json()['status'] == 'ok'
+        if response.status_code in (200, 202, 204):
+            if response.status_code == 204:
+                return True
+            try:
+                payload = response.json()
+            except ValueError:
+                return True
+            return payload.get('status', 'ok') == 'ok'
+        return False
