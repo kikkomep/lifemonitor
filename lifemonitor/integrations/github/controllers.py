@@ -938,9 +938,7 @@ def handle_event():
             logger.debug(msg)
             return msg, 204
     except ValueError as e:
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.exception(e)
-        logger.debug(str(e))
+        logger.debug(f"No branch reference found on the event payload: {str(e)}")
 
     # check the author of the current pull_request
     if event.pusher_name == event.application.bot:
