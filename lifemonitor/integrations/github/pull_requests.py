@@ -95,12 +95,25 @@ def __prepare_pr_head__(repo: InstallationGithubWorkflowRepository,
         branch_exists = False
         try:
             branch = repo.get_branch(head)
-            if branch and not allow_update:
-                delete_branch(repo, head)
-            branch_ref = repo.get_git_ref(f'head/{head}')
-            branch_exists = True
+            branch_exists = branch is not None
         except GithubException as e:
             logger.debug("Branch not found: %r", str(e))
+
+        if branch_exists and not allow_update:
+            logger.debug("Branch %r already exists and updates are disabled: deleting before PR creation", head)
+            existing_branches = get_existing_branches_for_deletion(
+                repo,
+                [head],
+                prefetch_threshold=1,
+            )
+            if not delete_branch(repo, head, existing_branches=existing_branches):
+                raise IllegalStateException("Unable to delete pre-existing support branch for PR %r" % head)
+            branch_exists = False
+            branch = None
+
+        if branch_exists:
+            branch_ref = repo.get_git_ref(f'heads/{head}')
+
         try:
             if not branch:
                 branch_ref = crate_branch(repo, head)
