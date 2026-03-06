@@ -133,6 +133,42 @@ class GithubWorkflowRegistry(db.Model, ModelMixin):
         except Exception as e:
             logger.debug(e)
             return None
+
+    @classmethod
+    def unregister_github_installation(cls, application_id: str, installation_id: str, safe: bool = True) -> int:
+        """"
+        Remove all the workflow versions and registries associated to the given installation.
+        If `safe` is True, the method will not raise any exception and will return 0 in case of error. Otherwise, the exception will be raised.
+        """
+        try:
+            registries = GithubWorkflowRegistry.query \
+                .filter(GithubWorkflowRegistry.application_id == application_id) \
+                .filter(GithubWorkflowRegistry.installation_id == installation_id) \
+                .all()
+            if not registries:
+                logger.warning("No github registries found for installation %r", installation_id)
+                return 0
+
+            deleted_count = 0
+            for registry in registries:
+                for workflow_version in list(registry.workflow_versions):
+                    workflow_version.delete(commit=False, flush=False)
+                registry.delete(commit=False, flush=False)
+                deleted_count += 1
+
+            db.session.commit()
+            db.session.flush()
+            logger.info("Deleted %d github registries for installation %r", deleted_count, installation_id)
+            return deleted_count
+        except Exception as e:
+            logger.error(e)
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.exception(e)
+            db.session.rollback()
+            if not safe:
+                raise e
+            return 0
+
     @classmethod
     def cleanup_registries(cls, installation_ids: List[str], safe: bool = True) -> int:
         """"
