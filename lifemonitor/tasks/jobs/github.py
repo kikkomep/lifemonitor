@@ -86,3 +86,45 @@ def check_installations():
             else:
                 logger.debug(f"Installation {installation_id} still alive")
         u.save()
+
+
+def cleanup_github_workflow_registries() -> int:
+    gh_app = LifeMonitorGithubApp.get_instance()
+    installation_ids = {int(_.id) for _ in gh_app.installations}
+    logger.debug("Current Github App installations: %r", installation_ids)
+
+    removed = 0
+    registries = GithubWorkflowRegistry.query.all()
+    logger.debug("Found %d github workflow registries", len(registries))
+
+    for registry in registries:
+        has_missing_installation = registry.installation_id not in installation_ids
+        has_missing_workflow_version = any(
+            db.session.get(WorkflowVersion, version.workflow_version_id) is None
+            for version in registry.workflow_versions
+        )
+
+        if has_missing_installation or has_missing_workflow_version:
+            reason = "missing installation" if has_missing_installation else "missing workflow version"
+            logger.warning(
+                "Removing github workflow registry %r (installation=%r): %s",
+                registry.id,
+                registry.installation_id,
+                reason,
+            )
+            for version in list(registry.workflow_versions):
+                version.delete(commit=False, flush=False)
+            registry.delete(commit=False, flush=False)
+            removed += 1
+
+    if removed:
+        db.session.commit()
+        db.session.flush()
+    logger.info("Removed %d github workflow registries", removed)
+    return removed
+
+
+@schedule(trigger=CronTrigger(minute=30, hour=4),
+          queue_name='github', options={'max_retries': 0, 'max_age': TASK_EXPIRATION_TIME})
+def check_github_workflow_registries():
+    return cleanup_github_workflow_registries()
