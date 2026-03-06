@@ -990,7 +990,12 @@ def handle_event():
         logger.debug("Current app: %r", app)
         scheduler: Scheduler = app.scheduler
         logger.debug("Current app scheduler: %r", scheduler)
-        scheduler.run_job('githubEventHandler', event.to_json())
+        scheduler.run_job(
+            'githubEventHandler',
+            event.to_json(),
+            job_id=f"githubEventHandler-{uuid.uuid4()}",
+            replace_existing=False,
+        )
         return "OK", 200
 
 
