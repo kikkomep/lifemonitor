@@ -376,7 +376,7 @@ class WorkflowVersionSchema(ResourceSchema):
 
     def get_status(self, obj: models.WorkflowVersion):
         try:
-            logger.error("Getting status for workflow version %s %r", obj, self.status)
+            logger.debug("Getting status for workflow version %s %r", obj, self.status)
             if self.status:
                 return WorkflowStatusSchema(only=('aggregate_test_status', 'latest_builds', 'reason')).dump(obj)
             return None
