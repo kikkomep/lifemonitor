@@ -780,6 +780,9 @@ def issue_comment(event: GithubEvent):
     if wizard:
         step = wizard.current_step
         logger.debug("The current step: %r (wizard: %r)", step, step.wizard if step else None)
+        if not step:
+            logger.debug("No active step found for wizard %r", wizard.title)
+            return f"No active step found for wizard {wizard.title}", 204
 
         if isinstance(step, QuestionStep):
             answer = step.get_answer()
