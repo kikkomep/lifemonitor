@@ -211,8 +211,7 @@ def installation_repositories(event: GithubEvent):
                                                           event.sender.user.registry_settings, True)
 
         elif event.action == 'deleted':
-            installation = event.installation
-            logger.debug("App Installation: %r", installation)
+            logger.debug("Deleting installation data for installation %r", event.installation_id)
 
             repositories_payload = event.payload.get('repositories') or event.payload.get('repositories_removed') or []
             logger.debug("Repositories removed from installation: %r", repositories_payload)
@@ -238,6 +237,9 @@ def installation_repositories(event: GithubEvent):
                     repo_event_payload['ref'] = ref
                     repo_event = GithubEvent(event.headers, repo_event_payload)
                     __delete_repository_reference__(repo_event.repository_reference)
+
+            deleted_registries = services.delete_event_github_registries(event)
+            logger.debug("Deleted %d github registries for installation %r", deleted_registries, event.installation_id)
 
     except Exception as e:
         logger.error(str(e))

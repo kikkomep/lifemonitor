@@ -121,7 +121,13 @@ def find_workflow_version(repository_reference: GithubRepositoryReference) -> Tu
 
 
 def get_event_github_registry(event: GithubEvent) -> Optional[GithubWorkflowRegistry]:
-    installation = event.installation
+    installation = None
+    try:
+        installation = event.installation
+    except Exception as e:
+        logger.warning("Unable to resolve installation %r", event.installation_id)
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.exception(e)
     if installation and installation.github_registry:
         return installation.github_registry
 
@@ -155,6 +161,30 @@ def get_event_github_registry(event: GithubEvent) -> Optional[GithubWorkflowRegi
         return None
 
     return GithubWorkflowRegistry.find(identity.user, app.id, installation_id)
+
+
+def delete_event_github_registries(event: GithubEvent) -> int:
+    try:
+        app = event.application
+    except Exception as e:
+        logger.warning("Unable to resolve application for event %r", event.type)
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.exception(e)
+        return 0
+
+    try:
+        installation_id = int(event.installation_id) if event.installation_id is not None else None
+    except ValueError:
+        logger.warning("Invalid installation id: %r", event.installation_id)
+        return 0
+
+    if installation_id is None:
+        logger.warning("Missing installation id for event %r", event.type)
+        return 0
+
+    deleted_count = GithubWorkflowRegistry.unregister_github_installation(app.id, installation_id, safe=True)
+    logger.info("Deleted %d github registries for installation %r", deleted_count, installation_id)
+    return deleted_count
 
 
 def get_repository_refs_for_full_name(event: GithubEvent, repository_full_name: str) -> List[str]:
