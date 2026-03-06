@@ -133,3 +133,52 @@ class GithubWorkflowRegistry(db.Model, ModelMixin):
         except Exception as e:
             logger.debug(e)
             return None
+    @classmethod
+    def cleanup_registries(cls, installation_ids: List[str], safe: bool = True) -> int:
+        """"
+        Remove all the workflow versions and registries with missing installation or workflow version.
+
+        :param installation_ids: The list of valid installation ids.
+            All the registries with installation id not in this list will be removed.
+        :return: The number of removed registries.
+        """
+
+        removed = 0
+
+        try:
+            registries = cls.all()
+            logger.debug("Found %d github workflow registries", len(registries))
+
+            for registry in registries:
+                has_missing_installation = registry.installation_id not in installation_ids
+                has_missing_workflow_version = any(
+                    db.session.get(WorkflowVersion, version.workflow_version_id) is None
+                    for version in registry.workflow_versions
+                )
+
+                if has_missing_installation or has_missing_workflow_version:
+                    reason = "missing installation" if has_missing_installation else "missing workflow version"
+                    logger.warning(
+                        "Removing github workflow registry %r (installation=%r): %s",
+                        registry.id,
+                        registry.installation_id,
+                        reason,
+                    )
+                    for version in list(registry.workflow_versions):
+                        version.delete(commit=False, flush=False)
+                    registry.delete(commit=False, flush=False)
+                    removed += 1
+
+            if removed:
+                db.session.commit()
+                db.session.flush()
+            logger.info("Removed %d github workflow registries", removed)
+            return removed
+        except Exception as e:
+            logger.error(e)
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.exception(e)
+            db.session.rollback()
+            if not safe:
+                raise e
+            return 0

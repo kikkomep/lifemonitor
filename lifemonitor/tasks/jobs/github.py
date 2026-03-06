@@ -26,6 +26,7 @@ from lifemonitor.auth.models import User
 from lifemonitor.integrations.github import LifeMonitorGithubApp
 from lifemonitor.integrations.github.controllers import get_event_handler
 from lifemonitor.integrations.github.events import GithubEvent
+from lifemonitor.integrations.github.registry import GithubWorkflowRegistry
 
 from ..scheduler import TASK_EXPIRATION_TIME, schedule
 
@@ -93,33 +94,7 @@ def cleanup_github_workflow_registries() -> int:
     installation_ids = {int(_.id) for _ in gh_app.installations}
     logger.debug("Current Github App installations: %r", installation_ids)
 
-    removed = 0
-    registries = GithubWorkflowRegistry.query.all()
-    logger.debug("Found %d github workflow registries", len(registries))
-
-    for registry in registries:
-        has_missing_installation = registry.installation_id not in installation_ids
-        has_missing_workflow_version = any(
-            db.session.get(WorkflowVersion, version.workflow_version_id) is None
-            for version in registry.workflow_versions
-        )
-
-        if has_missing_installation or has_missing_workflow_version:
-            reason = "missing installation" if has_missing_installation else "missing workflow version"
-            logger.warning(
-                "Removing github workflow registry %r (installation=%r): %s",
-                registry.id,
-                registry.installation_id,
-                reason,
-            )
-            for version in list(registry.workflow_versions):
-                version.delete(commit=False, flush=False)
-            registry.delete(commit=False, flush=False)
-            removed += 1
-
-    if removed:
-        db.session.commit()
-        db.session.flush()
+    removed = GithubWorkflowRegistry.cleanup_registries(installation_ids)
     logger.info("Removed %d github workflow registries", removed)
     return removed
 
