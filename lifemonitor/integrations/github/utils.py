@@ -22,8 +22,8 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import (Any, Callable, Dict, List, Optional, OrderedDict, Tuple,
-                    Type, Union)
+from typing import (Any, Callable, Dict, List, Optional, OrderedDict, Set,
+                    Tuple, Type, Union)
 
 import github
 from github.GithubException import GithubException
@@ -70,10 +70,42 @@ def crate_branch(repo: Repository, branch_name: str, rev: str = None) -> GitRef:
     return repo.create_git_ref(ref=f'refs/heads/{branch_name}'.format(**locals()), sha=head.sha)
 
 
-def delete_branch(repo: Repository, branch_name: str) -> bool:
+def list_branch_names(repo: Repository) -> Optional[Set[str]]:
+    try:
+        branches = set(branch.name for branch in repo.get_branches())
+        logger.debug("Fetched %d branch names from repository", len(branches))
+        return branches
+    except GithubException as e:
+        logger.debug("Unable to fetch repository branches: %s", str(e))
+    except Exception as e:
+        logger.debug("Unexpected error while fetching repository branches: %s", str(e))
+    return None
+
+
+def get_existing_branches_for_deletion(repo: Repository,
+                                       candidate_branches: List[str],
+                                       prefetch_threshold: int = 2) -> Optional[Set[str]]:
+    unique_candidates = set(candidate_branches)
+    if len(unique_candidates) < prefetch_threshold:
+        logger.debug(
+            "Skip branch prefetch for %d candidate(s); threshold is %d",
+            len(unique_candidates),
+            prefetch_threshold,
+        )
+        return None
+    return list_branch_names(repo)
+
+
+def delete_branch(repo: Repository, branch_name: str,
+                  existing_branches: Optional[Set[str]] = None) -> bool:
+    if existing_branches is not None and branch_name not in existing_branches:
+        logger.debug("Skipping delete for branch '%s': branch not found in prefetched list", branch_name)
+        return False
     try:
         ref = repo.get_git_ref(f"heads/{branch_name}".format(**locals()))
         ref.delete()
+        if existing_branches is not None:
+            existing_branches.discard(branch_name)
         return True
     except GithubException as e:
         logger.debug("Unable to delete branch '%s': %s", branch_name, str(e))

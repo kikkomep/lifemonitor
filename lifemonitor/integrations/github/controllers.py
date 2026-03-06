@@ -50,7 +50,8 @@ from lifemonitor.integrations.github.issues import GithubIssue
 from lifemonitor.integrations.github.notifications import \
     GithubWorkflowVersionNotification
 from lifemonitor.integrations.github.settings import GithubUserSettings
-from lifemonitor.integrations.github.utils import delete_branch
+from lifemonitor.integrations.github.utils import (
+    delete_branch, get_existing_branches_for_deletion)
 from lifemonitor.integrations.github.wizards import GithubWizard
 from lifemonitor.tasks import Scheduler
 from lifemonitor.utils import (bool_from_string, get_git_repo_revision,
@@ -636,13 +637,25 @@ def __delete_support_branches__(event: GithubEvent):
         if current_step:
             support_branches.append(current_step.id)
 
+    existing_branches = get_existing_branches_for_deletion(
+        event.repository_reference.repository,
+        support_branches,
+    )
+
     # delete support branches
     logger.warning("Support branches to delete: %r", support_branches)
     for support_branch in support_branches:
         try:
             logger.debug("Trying to delete support branch: %s ...", support_branch)
-            delete_branch(event.repository_reference.repository, support_branch)
-            logger.debug("Support branch %s deleted", support_branch)
+            deleted = delete_branch(
+                event.repository_reference.repository,
+                support_branch,
+                existing_branches=existing_branches,
+            )
+            if deleted:
+                logger.debug("Support branch %s deleted", support_branch)
+            else:
+                logger.debug("Support branch %s not deleted", support_branch)
         except Exception as e:
             if logger.isEnabledFor(logging.DEBUG):
                 logger.exception(e)

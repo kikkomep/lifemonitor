@@ -25,13 +25,6 @@ import os
 from base64 import b64encode
 from typing import List, Union
 
-from lifemonitor.api.models.issues import WorkflowRepositoryIssue
-from lifemonitor.api.models.repositories.files import RepositoryFile
-from lifemonitor.api.models.repositories.github import \
-    InstallationGithubWorkflowRepository
-from lifemonitor.exceptions import IllegalStateException
-from lifemonitor.integrations.github.app import LifeMonitorGithubApp
-
 from github.GithubException import GithubException
 from github.GithubObject import NotSet
 from github.GitRef import GitRef
@@ -40,8 +33,16 @@ from github.Issue import Issue
 from github.PullRequest import PullRequest
 from github.Repository import Repository
 
+from lifemonitor.api.models.issues import WorkflowRepositoryIssue
+from lifemonitor.api.models.repositories.files import RepositoryFile
+from lifemonitor.api.models.repositories.github import \
+    InstallationGithubWorkflowRepository
+from lifemonitor.exceptions import IllegalStateException
+from lifemonitor.integrations.github.app import LifeMonitorGithubApp
+
 from . import issues
-from .utils import crate_branch, delete_branch
+from .utils import (crate_branch, delete_branch,
+                    get_existing_branches_for_deletion)
 
 # Config a module level logger
 logger = logging.getLogger(__name__)
@@ -222,4 +223,9 @@ def delete_pull_request(repo: Repository, identifier: str, title: str):
         if pr.user.login == lm.bot and pr.title == title:
             pr.edit(state='closed')
     # delete PR branch
-    delete_branch(repo, identifier)
+    existing_branches = get_existing_branches_for_deletion(
+        repo,
+        [identifier],
+        prefetch_threshold=1,
+    )
+    delete_branch(repo, identifier, existing_branches=existing_branches)

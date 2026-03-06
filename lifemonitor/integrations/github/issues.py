@@ -24,16 +24,17 @@ import logging
 import re
 from typing import List, Union
 
-from lifemonitor.api.models import issues
-from lifemonitor.integrations.github.app import LifeMonitorGithubApp
-
 from github.GithubObject import NotSet
 from github.Issue import Issue
 from github.IssueComment import IssueComment
 from github.Repository import Repository
 
+from lifemonitor.api.models import issues
+from lifemonitor.integrations.github.app import LifeMonitorGithubApp
+
 from . import pull_requests
-from .utils import delete_branch, get_labels_from_strings
+from .utils import (delete_branch, get_existing_branches_for_deletion,
+                    get_labels_from_strings)
 
 # Config a module level logger
 logger = logging.getLogger(__name__)
@@ -124,7 +125,7 @@ def create_issue(repo: Repository, issue: Union[str, issues.WorkflowRepositoryIs
         return repo.create_issue(
             title=issue.name,
             body=f"""<b>Issue ID:</b> <code>{issue.get_identifier()}</code><br><br>"""
-                 f"""<b>Description:</b><br>{issue.description}""",
+            f"""<b>Description:</b><br>{issue.description}""",
             labels=get_labels_from_strings(repo, issue.labels)
         )
     except KeyError as e:
@@ -141,7 +142,12 @@ def close_issue(repo: Repository, issue: Union[str, issues.WorkflowRepositoryIss
     if open_issue:
         open_issue.edit(state='closed')
     # delete PR branch
-    delete_branch(repo, issue.id)
+    existing_branches = get_existing_branches_for_deletion(
+        repo,
+        [issue.id],
+        prefetch_threshold=1,
+    )
+    delete_branch(repo, issue.id, existing_branches=existing_branches)
 
 
 def find_issue(repo: Repository, issue: Union[str, issues.WorkflowRepositoryIssue]) -> Issue:
