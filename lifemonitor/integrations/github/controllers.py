@@ -821,7 +821,14 @@ def issue_comment(event: GithubEvent):
             else:
                 # Unable to understand user answer
                 logger.debug("Unable to understand user answer")
-                event.comment.create_reaction("confused")
+                try:
+                    event.comment.create_reaction("confused")
+                except GithubException as e:
+                    logger.warning(
+                        "Unable to create reaction on issue comment (status=%s): %s",
+                        getattr(e, "status", None),
+                        e,
+                    )
                 wizard.io_handler.write(step, append_help=True)
 
         return f"Processed step {step.title} of wizard {wizard.title}", 204

@@ -163,16 +163,42 @@ class GithubIOHandler(IOHandler):
         for ca in reversed(candidates):
             cbody = self.parse_answer(ca)
             logger.debug("Checking candidate: %r -- options: %r", cbody, question.options)
-            logger.debug("Check condition: %r", cbody in question.options)
-            if question.options is None or len(question.options) == 0 or cbody in question.options:
+            logger.debug("Check condition: %r", self._check_option(cbody, question.options))
+            if self._check_option(cbody, question.options):
                 return ca
         return None
 
-    def parse_answer(self, answer: object) -> str:
-        return re.sub(r'(@%s)\s+' % self.app.bot.strip("[bot]"), '',
-                      answer.body) if answer else None
+    def _check_option(self, answer: Optional[str], options: Optional[List[str]]) -> bool:
+        if answer is None:
+            return False
+        if not options:
+            return True
+        normalized_answer = answer.strip().casefold()
+        return any(
+            normalized_answer == option.strip().casefold()
+            for option in options
+        )
 
-    def get_input_as_text(self, question: QuestionStep) -> object:
+    def parse_answer(self, answer: object) -> str:
+        if not answer:
+            return ""
+        parsed_answer = str(getattr(answer, "body", "")).strip()
+        bot_name = (self.app.bot or "").strip()
+        if bot_name:
+            aliases = [bot_name]
+            if bot_name.endswith("[bot]"):
+                aliases.append(bot_name[:-5])
+            aliases_pattern = "|".join(re.escape(alias) for alias in aliases if alias)
+            if aliases_pattern:
+                parsed_answer = re.sub(
+                    rf"^@(?:{aliases_pattern})(?:\s+|\s*[:;,-]\s*)",
+                    "",
+                    parsed_answer,
+                    flags=re.IGNORECASE,
+                )
+        return parsed_answer.strip()
+
+    def get_input_as_text(self, question: QuestionStep) -> str:
         return self.parse_answer(self.get_input(question))
 
     def as_string(self, step: Step, append_help: bool = False) -> str:
