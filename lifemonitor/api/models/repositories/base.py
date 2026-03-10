@@ -84,6 +84,12 @@ class WorkflowRepository():
                 return None
         return self._metadata
 
+    def has_metadata(self) -> bool:
+        for f in self.files:
+            if f.name == WorkflowRepositoryMetadata.DEFAULT_METADATA_FILENAME:
+                return True
+        return False
+
     @property
     def name(self) -> str:
         return self._name

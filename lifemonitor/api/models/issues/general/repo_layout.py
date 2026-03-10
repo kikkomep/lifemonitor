@@ -76,7 +76,7 @@ class MissingROCrateFile(WorkflowRepositoryIssue):
     depends_on = [MissingWorkflowFile]
 
     def check(self, repo: WorkflowRepository) -> bool:
-        if repo.metadata is None:
+        if not repo.has_metadata():
             metadata = repo.generate_metadata()
             self.add_change(metadata.repository_file)
             return True
