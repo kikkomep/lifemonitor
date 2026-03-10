@@ -94,6 +94,7 @@ def __prepare_pr_head__(repo: InstallationGithubWorkflowRepository,
         branch = None
         branch_ref: GitRef = None
         branch_exists = False
+        branch_preexisted = False
 
         def _is_gh_not_found(err: GithubException) -> bool:
             return getattr(err, "status", None) == 404
@@ -119,6 +120,7 @@ def __prepare_pr_head__(repo: InstallationGithubWorkflowRepository,
         try:
             branch = repo.get_branch(head)
             branch_exists = branch is not None
+            branch_preexisted = branch_exists
         except GithubException as e:
             if _is_gh_not_found(e):
                 logger.debug("Branch not found: %r", str(e))
@@ -138,6 +140,7 @@ def __prepare_pr_head__(repo: InstallationGithubWorkflowRepository,
             if not delete_branch(repo, head, existing_branches=existing_branches):
                 raise IllegalStateException("Unable to delete pre-existing support branch for PR %r" % head)
             branch_exists = False
+            branch_preexisted = False
             branch = None
 
         if branch_exists:
@@ -164,7 +167,7 @@ def __prepare_pr_head__(repo: InstallationGithubWorkflowRepository,
 
         git_elements = []
         for change in files:
-            if not branch_exists:
+            if not branch_preexisted:
                 try:
                     logger.debug("Processing file: %s...", change.name)
                     is_binary = change.is_binary
@@ -184,7 +187,7 @@ def __prepare_pr_head__(repo: InstallationGithubWorkflowRepository,
                 except Exception as e:
                     logger.exception(e)
             # TODO: update existing files if updates are allowed
-            if branch_exists and allow_update:
+            if branch_preexisted and allow_update:
                 current_file_version = repo.find_remote_file_by_name(change.name, ref=head)
                 logger.debug("Found a previous version of the file: %r", current_file_version)
                 if current_file_version:
@@ -219,7 +222,7 @@ def create_pull_request_from_github_issue(repo: InstallationGithubWorkflowReposi
     assert isinstance(repo, Repository), repo
     assert isinstance(issue, Issue), issue
     try:
-        pr = find_pull_request_by_title(repo, issue.id)
+        pr = find_pull_request_by_title(repo, issue.title)
         if pr and update_comment:
             issue.create_comment(update_comment)
         head = __prepare_pr_head__(repo, identifier, files, allow_update=allow_update,
