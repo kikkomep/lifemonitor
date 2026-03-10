@@ -212,16 +212,31 @@ def installation_repositories(event: GithubEvent):
                         __check_for_issues_and_register__(repo_info, settings,
                                                           event.sender.user.registry_settings, True)
 
-        elif event.action == 'deleted':
-            logger.debug("Deleting installation data for installation %r", event.installation_id)
+        elif event.action in ['deleted', 'removed']:
+            logger.debug("Deleting installation data for installation %r (action=%s)", event.installation_id, event.action)
 
-            repositories_payload = event.payload.get('repositories') or event.payload.get('repositories_removed') or []
+            repositories_payload = event.payload.get('repositories_removed') or event.payload.get('repositories') or []
             logger.debug("Repositories removed from installation: %r", repositories_payload)
+
+            if not repositories_payload and event.action == 'deleted':
+                tracked_refs = services.get_tracked_repository_refs(event)
+                logger.debug("Falling back to tracked repositories from local registry: %r", tracked_refs)
+                repositories_payload = [
+                    {
+                        'id': 0,
+                        'name': repo_full_name.split('/')[-1],
+                        'full_name': repo_full_name,
+                        'url': f"https://api.github.com/repos/{repo_full_name}",
+                        'clone_url': f"https://github.com/{repo_full_name}.git",
+                        'owner': {'id': 0, 'login': repo_full_name.split('/')[0]},
+                    }
+                    for repo_full_name in tracked_refs
+                ]
 
             for repo in repositories_payload:
                 repo_full_name = repo.get('full_name', None)
                 if not repo_full_name:
-                    logger.warning("Skipping repository without full_name in installation.deleted payload: %r", repo)
+                    logger.warning("Skipping repository without full_name in installation.%s payload: %r", event.action, repo)
                     continue
 
                 repo_refs = services.get_repository_refs_for_full_name(event, repo_full_name)
@@ -240,8 +255,9 @@ def installation_repositories(event: GithubEvent):
                     repo_event = GithubEvent(event.headers, repo_event_payload)
                     __delete_repository_reference__(repo_event.repository_reference)
 
-            deleted_registries = services.delete_event_github_registries(event)
-            logger.debug("Deleted %d github registries for installation %r", deleted_registries, event.installation_id)
+            if event.action == 'deleted':
+                deleted_registries = services.delete_event_github_registries(event)
+                logger.debug("Deleted %d github registries for installation %r", deleted_registries, event.installation_id)
 
     except Exception as e:
         logger.error(str(e))

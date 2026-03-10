@@ -21,7 +21,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Set, Tuple, Union
 
 from lifemonitor.api import serializers
 from lifemonitor.api.models.registries.registry import WorkflowRegistry
@@ -198,6 +198,22 @@ def get_repository_refs_for_full_name(event: GithubEvent, repository_full_name: 
         return []
     return sorted({_.repo_ref for _ in registry.workflow_versions
                    if _.repo_identifier == repository_full_name and _.repo_ref})
+
+
+def get_tracked_repository_refs(event: GithubEvent) -> Dict[str, List[str]]:
+    registry = get_event_github_registry(event)
+    if not registry:
+        return {}
+
+    refs_map: Dict[str, Set[str]] = {}
+    for workflow_version in registry.workflow_versions:
+        if not workflow_version.repo_identifier:
+            continue
+        refs = refs_map.setdefault(workflow_version.repo_identifier, set())
+        if workflow_version.repo_ref:
+            refs.add(workflow_version.repo_ref)
+
+    return {repo_full_name: sorted(refs) for repo_full_name, refs in refs_map.items()}
 
 
 def get_repository_ref_settings(event: GithubEvent, repository_full_name: str,
@@ -393,30 +409,83 @@ def delete_repository_workflow_version(repository_reference: GithubRepositoryRef
             logger.warning(f"Unable to find the version {workflow_version} of workflow {w.uuid}")
             return None
         else:
-            # serialize the workflow version object before deletion
-            wv = serializers.WorkflowVersionSchema(exclude=('meta', 'links')).dump(wv)
-            wv['_notification_enabled'] = get_repository_ref_notifications_enabled(
+            workflow_version_data = serializers.WorkflowVersionSchema(exclude=('meta', 'links')).dump(wv)
+            workflow_version_data['_notification_enabled'] = get_repository_ref_notifications_enabled(
                 repository_reference.event,
                 repo_full_name,
                 repo_ref,
                 default=True,
             )
 
-        # normalize the list of registries
-        registries = __normalize_registry_identitiers__(registries, as_strings=True)
-        logger.debug("Normalized list of registries: %r", registries)
+        normalized_registries = __normalize_registry_identitiers__(registries, as_strings=True)
+        logger.debug("Normalized list of registries from settings: %r", normalized_registries)
 
-        # initialize registries map
-        registry_workflows_map = __get_registries_map__(w, registries=registries)
-        logger.debug("List of registries for wf %r: %r", w, registry_workflows_map)
+        tracked_registries = sorted((wv.registry_workflow_versions or {}).keys())
+        if tracked_registries:
+            logger.debug(
+                "Using registry associations from workflow version %s: %r",
+                wv.version,
+                tracked_registries,
+            )
+            candidate_registries = tracked_registries
+        else:
+            logger.warning(
+                "No registry associations found on workflow version %s, falling back to settings: %r",
+                wv.version,
+                normalized_registries,
+            )
+            candidate_registries = normalized_registries
 
-        delete_registry_workflow = len(w.versions) == 1
-        if delete_registry_workflow:
-            logger.debug("Deleting workflow %r from registries %r", w, registry_workflows_map)
+        registry_workflows_map = []
+        for registry_name in candidate_registries:
+            workflow_identifier = None
+            versions = []
+
+            r_wv = (wv.registry_workflow_versions or {}).get(registry_name, None)
+            if r_wv:
+                workflow_identifier = r_wv.identifier
+                versions = [r_wv]
+            elif normalized_registries:
+                map_item = __get_registries_map__(w, registries=[registry_name])
+                if map_item:
+                    _, workflow_identifier, versions = map_item[0]
+
+            if not workflow_identifier:
+                logger.debug(
+                    "Skipping registry deletion for %s@%s on '%s': missing workflow identifier",
+                    repo_full_name,
+                    repo_ref,
+                    registry_name,
+                )
+                continue
+
+            has_registry_versions_after_delete = any(
+                version.version != wv.version and registry_name in (version.registry_workflow_versions or {})
+                for version in w.versions.values()
+            )
+            if has_registry_versions_after_delete:
+                logger.debug(
+                    "Skipping registry deletion for %s@%s on '%s': other versions are still registered",
+                    repo_full_name,
+                    repo_ref,
+                    registry_name,
+                )
+                continue
+
+            logger.debug(
+                "Deleting workflow '%s' from registry '%s' for %s@%s: no versions left after deletion",
+                workflow_identifier,
+                registry_name,
+                repo_full_name,
+                repo_ref,
+            )
+            registry_workflows_map.append((registry_name, workflow_identifier, versions))
+
+        if registry_workflows_map:
             delete_workflow_from_registries(github_registry, submitter, w, registry_workflows_map)
             logger.debug("Deleting workflow %r from registries %r... DONE", w, registry_workflows_map)
         else:
-            logger.debug("Skipping registry deletion for workflow %r: multiple versions still present", w)
+            logger.debug("No remote registry workflow deletions required for %s@%s", repo_full_name, repo_ref)
 
         # delete workflow version from LifeMonitor
         logger.debug("Removing version '%r' of worlflow %r from LifeMonitor....", workflow_version, w)
@@ -425,7 +494,7 @@ def delete_repository_workflow_version(repository_reference: GithubRepositoryRef
         logger.debug("Removing version '%r' of worlflow %r from LifeMonitor.... DONE", workflow_version, w)
 
         # return the deleted workflow version (serialized)
-        return wv
+        return workflow_version_data
 
     return None
 
