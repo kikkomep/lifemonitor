@@ -49,6 +49,7 @@ class MissingWorkflowName(WorkflowRepositoryIssue):
 
 class InvalidMetadataFile(WorkflowRepositoryIssue):
     name = "Invalid metadata file"
+    enable_message_updates = True
     description = (
         "The validation of the metadata file `ro-crate-metadata.yaml` failed. "
         "<br>Check the file and fix the issues reported by the validator."
