@@ -24,10 +24,10 @@ push:
     #   enable_notifications: true          # Enable to notify LifeMonitor and possibly also workflow registries
     #                                       # such as WorkflowHub (wfhub) and dev.WorkflowHub (wfhubdev).
     #                                       #   Default: true
-    #   lifemonitor_instance: "production"  # Specify the LifeMonitor instance to notify.
-    #                                       # Available options: "production" (the default) and "development"
-    #                                       # The "development" instance is only for testing.
-    #                                       #   Default: "production"
+    #   lifemonitor_instance: "default"     # Specify the LifeMonitor instance to notify.
+    #                                       # The value must match a configured proxy entry name.
+    #                                       # Available instances on this system:
+    #                                       #   [{{ lifemonitor_instances|join(', ') }}]
     #   update_registries: []               # Workflow registries to be notified. Options are listed
     #                                       # by the endpoint `<lifemonitor_url>/registries`
     #                                       #   Default: []
@@ -40,10 +40,10 @@ push:
     #   lifemonitor_instance: development
     #   update_registries: []
 {% if main_branch %}
-    # Monitor {{main_branch}}. Notify only LifeMonitor (production instance) of changes.
+    # Monitor {{main_branch}}. Notify only LifeMonitor (default instance) of changes.
     - name: "{{main_branch}}"
       enable_notifications: true
-      lifemonitor_instance: production
+      lifemonitor_instance: default
       update_registries: []
 {% endif %}
 
@@ -58,15 +58,15 @@ push:
     #   update_registries: []
 
     # Recognize tags with names matching "v*.*.*" as new releases.
-    # Notify LifeMonitor (production instance) and the
+    # Notify LifeMonitor (default instance) and the
     # workflow registries [{{registries|join(', ')}}]
     - name: "v*.*.*"
       enable_notifications: true
-      lifemonitor_instance: production
+      lifemonitor_instance: default
       update_registries: [{{registries|join(', ')}}]
 
     # Also recognize the tag names matching "*.*.*". For the rest, same rules as above.
     - name: "*.*.*"
       enable_notifications: true
       update_registries: [{{registries|join(', ')}}]
-      lifemonitor_instance: production
+      lifemonitor_instance: default

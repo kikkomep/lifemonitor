@@ -30,6 +30,7 @@ import requests
 from flask import (Blueprint, Flask, current_app, redirect, render_template,
                    request)
 from flask_login import login_required
+from github import GithubException
 from github.PullRequest import PullRequest
 
 from lifemonitor import cache
@@ -416,12 +417,13 @@ def __forward_event__(event: GithubEvent) -> Optional[Dict]:
             lm_instance_name = str(lm_instance_name).strip().lower()
             lm_instance_info = proxy_entries.get(lm_instance_name)
             if not lm_instance_info:
-                logger.error(
-                    "Unable to forward event: unknown instance '%s' (available: %s)",
+                logger.warning(
+                    "Unknown LifeMonitor instance '%s' in repository configuration (available: %s). "
+                    "Falling back to default instance.",
                     lm_instance_name,
                     sorted(proxy_entries.keys()),
                 )
-                raise RuntimeError(f"Unable to resolve instance '{lm_instance_name}'")
+                return None
 
             if lm_instance_info['url'].rstrip('/') != default_instance_info['url'].rstrip('/'):
                 logger.warning("Using LM instance: %r", lm_instance_info)
