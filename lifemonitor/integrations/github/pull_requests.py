@@ -23,6 +23,7 @@ from __future__ import annotations
 import logging
 import os
 from base64 import b64encode
+from time import sleep
 from typing import List, Union
 
 from github.GithubException import GithubException
@@ -93,11 +94,39 @@ def __prepare_pr_head__(repo: InstallationGithubWorkflowRepository,
         branch = None
         branch_ref: GitRef = None
         branch_exists = False
+
+        def _is_gh_not_found(err: GithubException) -> bool:
+            return getattr(err, "status", None) == 404
+
+        def _is_ref_already_exists(err: GithubException) -> bool:
+            return getattr(err, "status", None) == 422 and "Reference already exists" in str(err)
+
+        def _load_branch_with_retry():
+            last_error = None
+            for delay in (0.0, 0.2, 0.6, 1.2):
+                if delay:
+                    sleep(delay)
+                try:
+                    return repo.get_branch(head)
+                except GithubException as e:
+                    last_error = e
+                    if not _is_gh_not_found(e):
+                        break
+            if last_error:
+                raise last_error
+            raise IllegalStateException(f"Unable to load branch {head!r}")
+
         try:
             branch = repo.get_branch(head)
             branch_exists = branch is not None
         except GithubException as e:
-            logger.debug("Branch not found: %r", str(e))
+            if _is_gh_not_found(e):
+                logger.debug("Branch not found: %r", str(e))
+            else:
+                raise IllegalStateException(
+                    "Unable to inspect support branch for PR %r: %r" % (head, str(e)),
+                    status=getattr(e, "status", 500),
+                )
 
         if branch_exists and not allow_update:
             logger.debug("Branch %r already exists and updates are disabled: deleting before PR creation", head)
@@ -116,10 +145,22 @@ def __prepare_pr_head__(repo: InstallationGithubWorkflowRepository,
 
         try:
             if not branch:
-                branch_ref = crate_branch(repo, head)
-                branch = repo.get_branch(head)
+                try:
+                    branch_ref = crate_branch(repo, head)
+                except GithubException as e:
+                    if not _is_ref_already_exists(e):
+                        raise
+                    logger.debug("Branch ref already exists for %r, reusing it", head)
+                branch = _load_branch_with_retry()
+                branch_exists = branch is not None
+
+            if not branch_ref:
+                branch_ref = repo.get_git_ref(f'heads/{head}')
         except Exception as e:
-            raise IllegalStateException("Unable to prepare support branch for PR %r: %r" % (head, str(e)))
+            raise IllegalStateException(
+                "Unable to prepare support branch for PR %r: %r" % (head, str(e)),
+                status=getattr(e, "status", 500),
+            )
 
         git_elements = []
         for change in files:
@@ -167,7 +208,7 @@ def __prepare_pr_head__(repo: InstallationGithubWorkflowRepository,
         raise ValueError(f"Issue not valid: {str(e)}")
     except Exception as e:
         logger.exception(e)
-        raise RuntimeError(e)
+        raise
 
 
 def create_pull_request_from_github_issue(repo: InstallationGithubWorkflowRepository,
@@ -192,7 +233,7 @@ def create_pull_request_from_github_issue(repo: InstallationGithubWorkflowReposi
         return pr
     except Exception as e:
         logger.exception(e)
-        raise RuntimeError(str(e))
+        raise
 
 
 def create_pull_request_from_lm_issue(repo: InstallationGithubWorkflowRepository,
@@ -221,7 +262,7 @@ def create_pull_request(repo: InstallationGithubWorkflowRepository,
         return pr
     except Exception as e:
         logger.exception(e)
-        raise RuntimeError(e)
+        raise
 
 
 def delete_pull_request_by_issue(repo: Repository,
