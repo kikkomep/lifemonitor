@@ -24,7 +24,7 @@ import os
 import re
 from base64 import b64encode
 from logging.config import dictConfig
-from typing import List, Type
+from typing import Any, Iterable, List, Mapping, Type
 
 import dotenv
 from flask import current_app
@@ -34,6 +34,18 @@ from .db import db_uri
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 logger = logging.getLogger(__name__)
+
+
+def _iter_config_keys(config: Any) -> Iterable[str]:
+    if isinstance(config, Mapping):
+        return config.keys()
+    return (_ for _ in dir(config) if _.isupper())
+
+
+def _get_config_value(config: Any, key: str, default=None):
+    if isinstance(config, Mapping):
+        return config.get(key, default)
+    return getattr(config, key, default)
 
 
 def load_settings(config=None):
@@ -66,12 +78,14 @@ def load_proxy_entries(config=None):
         result['default'] = {'name': 'default', 'url': get_external_server_url()}
     except KeyError:
         pass
-    for k in config:
+    for k in _iter_config_keys(config):
         service_match = pattern.match(k)
         if service_match:
             try:
                 service_name = service_match.group(1)
-                service_url = config[f"PROXY_{service_name}_URL"]
+                service_url = _get_config_value(config, f"PROXY_{service_name}_URL")
+                if not service_url:
+                    continue
                 logger.info(f"Read proxy entry '{service_name.lower()}': {service_url}")
                 result[service_name.lower()] = {
                     'name': service_name.lower(),
@@ -80,6 +94,10 @@ def load_proxy_entries(config=None):
             except (KeyError, IndexError) as e:
                 logger.error(f"Error when reading entry '{service_match}': {str(e)}")
     return result
+
+
+def get_proxy_instance_names(config=None) -> List[str]:
+    return sorted(load_proxy_entries(config).keys())
 
 
 class BaseConfig:
