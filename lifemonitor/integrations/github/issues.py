@@ -24,6 +24,7 @@ import logging
 import re
 from typing import List, Union
 
+from github.GithubException import GithubException
 from github.GithubObject import NotSet
 from github.Issue import Issue
 from github.IssueComment import IssueComment
@@ -38,6 +39,10 @@ from .utils import (delete_branch, get_existing_branches_for_deletion,
 
 # Config a module level logger
 logger = logging.getLogger(__name__)
+
+
+def _is_transient_github_exception(error: GithubException) -> bool:
+    return error.status in {500, 502, 503, 504}
 
 
 class GithubIssue(Issue):
@@ -140,7 +145,13 @@ def close_issue(repo: Repository, issue: Union[str, issues.WorkflowRepositoryIss
         raise ValueError(f"Issue '{issue}' not found")
     open_issue = find_issue(repo, issue)
     if open_issue:
-        open_issue.edit(state='closed')
+        try:
+            open_issue.edit(state='closed')
+        except GithubException as e:
+            if _is_transient_github_exception(e):
+                logger.warning("Temporary GitHub error while closing issue '%s': %s", issue.name, e)
+            else:
+                raise
     # delete PR branch
     existing_branches = get_existing_branches_for_deletion(
         repo,
@@ -156,9 +167,15 @@ def find_issue(repo: Repository, issue: Union[str, issues.WorkflowRepositoryIssu
     if not issue:
         raise ValueError(f"Issue '{issue}' not found")
     lm = LifeMonitorGithubApp.get_instance()
-    for i in repo.get_issues():
-        logger.debug("Checking issue: %r - %r - %r", issue.name, i.user.login, lm.bot)
-        if i.user.login == lm.bot and i.title == issue.name:
-            logger.debug("Issue '%r' found", issue)
-            return i
+    try:
+        for i in repo.get_issues():
+            logger.debug("Checking issue: %r - %r - %r", issue.name, i.user.login, lm.bot)
+            if i.user.login == lm.bot and i.title == issue.name:
+                logger.debug("Issue '%r' found", issue)
+                return i
+    except GithubException as e:
+        if _is_transient_github_exception(e):
+            logger.warning("Temporary GitHub error while retrieving issues for '%s': %s", issue.name, e)
+            return None
+        raise
     return None

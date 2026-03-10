@@ -73,6 +73,7 @@ class WorkflowRepositoryIssue():
     description: str = ""
     labels: List[str] = []
     depends_on = []
+    enable_message_updates = False
 
     def __init__(self):
         self._changes = []
