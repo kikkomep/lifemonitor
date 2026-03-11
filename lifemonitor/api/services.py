@@ -25,6 +25,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Union
 
+from flask import current_app
+
 import lifemonitor.exceptions as lm_exceptions
 from lifemonitor.api import models
 from lifemonitor.api.models.status import AggregateTestStatus
@@ -925,7 +927,13 @@ class LifeMonitor:
 
     @classmethod
     def clear_workflows_stats_cache(cls):
+        if not cls._is_stats_cache_available():
+            return
         cache.delete_keys("*", prefix=cls.WORKFLOW_STATS_CACHE_PREFIX)
+
+    @classmethod
+    def _is_stats_cache_available(cls) -> bool:
+        return bool(getattr(cache, "cache_enabled", False))
 
     @classmethod
     def refresh_workflows_stats_cache(cls):
@@ -935,3 +943,15 @@ class LifeMonitor:
         public_workflows = models.Workflow.get_public_workflows()
         cls.get_workflows_stats(public_workflows, status=True)
         cls.get_workflows_status_stats(public_workflows)
+
+    @classmethod
+    def enqueue_workflows_stats_cache_refresh(cls):
+        try:
+            app = current_app._get_current_object()
+            scheduler = getattr(app, "scheduler", None)
+            if scheduler:
+                scheduler.run_job("refresh_workflow_stats_cache", replace_existing=True)
+                return
+        except Exception as e:
+            logger.debug("Unable to schedule async workflow stats refresh: %s", e)
+        cls.refresh_workflows_stats_cache()
