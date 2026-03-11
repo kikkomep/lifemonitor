@@ -222,7 +222,6 @@ class LifeMonitor:
             except KeyError as e:
                 raise lm_exceptions.SpecificationNotValidException(f"Missing property: {e}")
             w.save()
-            cls.refresh_workflows_stats_cache()
             if job:
                 job.update_status('workflow registered', save=True)
             return wv
@@ -305,7 +304,6 @@ class LifeMonitor:
             w.public = public
         # store the new version
         w.save()
-        cls.refresh_workflows_stats_cache()
 
         try:
             logger.debug("Notifying workflow version update...")
@@ -329,7 +327,6 @@ class LifeMonitor:
         if workflow.submitter != user:
             raise lm_exceptions.NotAuthorizedException("Only the workflow submitter can delete the workflow")
         workflow.delete()
-        cls.refresh_workflows_stats_cache()
         logger.debug("Deleted workflow wf_uuid: %r - version: %r", workflow_uuid, workflow_version)
         return workflow_uuid, workflow_version
 
@@ -343,7 +340,6 @@ class LifeMonitor:
         if len(workflow.get_user_versions(user)) == 0:
             raise lm_exceptions.NotAuthorizedException("Only the workflow submitter can delete the workflow")
         workflow.delete()
-        cls.refresh_workflows_stats_cache()
         logger.debug("Deleted workflow: %r", workflow)
         return workflow_uuid
 
@@ -359,7 +355,6 @@ class LifeMonitor:
             if not workflow_version:
                 raise lm_exceptions.EntityNotFoundException(models.WorkflowVersion, (workflow_uuid, workflow_version))
             workflow_version.delete()
-            LifeMonitor.refresh_workflows_stats_cache()
             logger.debug("Deleted workflow wf_uuid: %r - version: %r", workflow_uuid, workflow_version)
             return workflow_uuid, workflow_version
         except KeyError:
@@ -373,7 +368,6 @@ class LifeMonitor:
         try:
             logger.debug("Workflow to delete: %r", workflow)
             workflow.delete()
-            LifeMonitor.refresh_workflows_stats_cache()
             logger.debug("Deleted workflow wf_uuid: %r", workflow_uuid)
             return workflow_uuid
         except KeyError:
@@ -839,6 +833,8 @@ class LifeMonitor:
     def get_workflows_stats(cls, workflows: Optional[List[models.Workflow]] = None,
                             status: bool = True) -> Dict[str, Any]:
         workflows = workflows if workflows is not None else models.Workflow.all()
+        if not cls._is_stats_cache_available():
+            return cls._compute_workflows_stats(workflows=workflows, status=status)
         cache_key = cls._make_workflows_stats_cache_key(workflows, status=status)
         stats = cache.get(cache_key, prefix=cls.WORKFLOW_STATS_CACHE_PREFIX)
         if stats is None:
@@ -875,6 +871,8 @@ class LifeMonitor:
     @classmethod
     def get_workflows_status_stats(cls, workflows: Optional[List[models.Workflow]] = None):
         workflows = workflows if workflows is not None else models.Workflow.all()
+        if not cls._is_stats_cache_available():
+            return cls._compute_workflows_status_stats(workflows)
         cache_key = cls._make_workflows_status_cache_key(workflows)
         stats = cache.get(cache_key, prefix=cls.WORKFLOW_STATS_CACHE_PREFIX)
         if stats is None:

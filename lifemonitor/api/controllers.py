@@ -679,6 +679,7 @@ def process_workflows_post(body, _registry=None, _submitter_id=None,
         )
         logger.debug("workflows_post. Created workflow '%s' (ver.%s)", w.uuid, w.version)
         clear_cache()
+        lm.enqueue_workflows_stats_cache_refresh()
         notify_workflow_version_updates([w], type='sync', delay=2)
         if job:
             job.update_status('completed', save=True)
@@ -726,7 +727,7 @@ def workflows_put(wf_uuid, body):
     # workflow_version.workflow.save()
     workflow_version.save()
     clear_cache()
-    lm.refresh_workflows_stats_cache()
+    lm.enqueue_workflows_stats_cache_refresh()
     notify_workflow_version_updates([workflow_version], type='sync', delay=2)
     return {
         'meta':
@@ -761,6 +762,7 @@ def workflows_version_put(wf_uuid, wf_version, body):
             authorization=body.get('authorization', None)
         )
         clear_cache()
+        lm.enqueue_workflows_stats_cache_refresh()
         if updated_workflow_version.uuid != workflow_version.uuid:
             return {
                 'uuid': str(updated_workflow_version.workflow.uuid),
@@ -807,6 +809,7 @@ def workflows_delete_version(wf_uuid, wf_version):
             return lm_exceptions.report_problem(403, "Forbidden",
                                                 detail=messages.no_user_in_session)
         clear_cache()
+        lm.enqueue_workflows_stats_cache_refresh()
         notify_workflow_version_updates([workflow_version], type='delete')
         return connexion.NoContent, 204
     except OAuthIdentityNotFoundException as e:
@@ -835,6 +838,7 @@ def workflows_delete(wf_uuid):
             return lm_exceptions.report_problem(403, "Forbidden",
                                                 detail=messages.no_user_in_session)
         clear_cache()
+        lm.enqueue_workflows_stats_cache_refresh()
         notify_updates(versions, type='delete')
         return connexion.NoContent, 204
     except OAuthIdentityNotFoundException as e:
