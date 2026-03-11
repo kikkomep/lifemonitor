@@ -30,6 +30,7 @@ import dotenv
 from flask import current_app
 
 from .db import db_uri
+from .utils import boolean_value
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 
@@ -78,6 +79,7 @@ def load_proxy_entries(config=None):
         result['default'] = {'name': 'default', 'url': get_external_server_url()}
     except KeyError:
         pass
+
     for k in _iter_config_keys(config):
         service_match = pattern.match(k)
         if service_match:
@@ -85,6 +87,8 @@ def load_proxy_entries(config=None):
                 service_name = service_match.group(1)
                 service_url = _get_config_value(config, f"PROXY_{service_name}_URL")
                 service_ssl_verify = _get_config_value(config, f"PROXY_{service_name}_SSL_VERIFY", True)
+                if isinstance(service_ssl_verify, str):
+                    service_ssl_verify = boolean_value(service_ssl_verify.strip())
                 if not service_url:
                     continue
                 logger.info(f"Read proxy entry '{service_name.lower()}': {service_url}")
@@ -93,7 +97,7 @@ def load_proxy_entries(config=None):
                     'url': service_url,
                     'ssl_verify': service_ssl_verify
                 }
-            except (KeyError, IndexError) as e:
+            except (KeyError, IndexError, ValueError) as e:
                 logger.error(f"Error when reading entry '{service_match}': {str(e)}")
     return result
 
