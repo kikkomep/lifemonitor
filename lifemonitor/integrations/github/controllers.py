@@ -428,6 +428,15 @@ def __forward_event__(event: GithubEvent) -> Optional[Dict]:
     logger.debug("Default LM instance: %r", default_instance_info)
 
     if ref_settings:
+        if 'lifemonitor_instance' in ref_settings:
+            lm_instance_name = ref_settings.get('lifemonitor_instance')
+            if lm_instance_name is not None and not str(lm_instance_name).strip():
+                logger.warning(
+                    "Skipping event handling for ref '%s': empty 'lifemonitor_instance' in repository configuration",
+                    ref,
+                )
+                return {'skip': True}
+
         lm_instance_name = ref_settings.get('lifemonitor_instance', None)
         if lm_instance_name:
             lm_instance_name = str(lm_instance_name).strip().lower()
@@ -999,6 +1008,8 @@ def handle_event():
     try:
         forwarded_to = __forward_event__(event)
         if forwarded_to:
+            if forwarded_to.get('skip') is True:
+                return "Event skipped by repository configuration", 204
             return f"Event forwarded to LifeMonitor instance '{forwarded_to['name']}' (url: {forwarded_to['url']})"
     except Exception as e:
         logger.exception("Unable to forward GitHub event: %s", e)

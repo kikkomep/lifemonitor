@@ -40,10 +40,11 @@ push:
     #   lifemonitor_instance: development
     #   update_registries: []
 {% if main_branch %}
-    # Monitor {{main_branch}}. Notify only LifeMonitor (default instance) of changes.
+    # Monitor {{main_branch}}.
+    # If `lifemonitor_instance` is set to an empty string, event handling will be skipped.
     - name: "{{main_branch}}"
       enable_notifications: true
-      lifemonitor_instance: default
+      lifemonitor_instance: ""
       update_registries: []
 {% endif %}
 
@@ -58,15 +59,14 @@ push:
     #   update_registries: []
 
     # Recognize tags with names matching "v*.*.*" as new releases.
-    # Notify LifeMonitor (default instance) and the
-    # workflow registries [{{registries|join(', ')}}]
+    # If `lifemonitor_instance` is set to an empty string, event handling will be skipped and only workflow registries will be updated [{{registries|join(', ')}}]
     - name: "v*.*.*"
       enable_notifications: true
-      lifemonitor_instance: default
+      lifemonitor_instance: ""
       update_registries: [{{registries|join(', ')}}]
 
     # Also recognize the tag names matching "*.*.*". For the rest, same rules as above.
     - name: "*.*.*"
       enable_notifications: true
       update_registries: [{{registries|join(', ')}}]
-      lifemonitor_instance: default
+      lifemonitor_instance: ""
