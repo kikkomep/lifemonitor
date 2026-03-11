@@ -127,7 +127,7 @@ class WorkflowRepositoryConfig(RepositoryFile):
     def _get_refs_list(self, refs="branches,tags") -> List[Dict[str, Any]]:
         on_push = self._raw_data.get('push', None)
         if on_push and refs:
-            return [_ for ref in refs.split(",") for _ in on_push.get(ref, [])]
+            return [_ for ref in refs.split(",") for _ in (on_push.get(ref) or [])]
         return []
 
     def _get_ref_settings(self, ref: str, ref_type: str) -> Optional[Dict]:
@@ -140,7 +140,8 @@ class WorkflowRepositoryConfig(RepositoryFile):
         if not ref_pattern:
             return None
         logger.debug(f"ref {ref} matched with pattern {ref_pattern}")
-        return next((r for r in self._raw_data['push']['branches' if ref_type == 'branch' else 'tags'] if r["name"] == ref_pattern[1]), None)
+        refs = self._raw_data.get('push', {}).get('branches' if ref_type == 'branch' else 'tags') or []
+        return next((r for r in refs if r["name"] == ref_pattern[1]), None)
 
     def get_ref_settings(self, ref: str) -> Optional[Dict]:
         return self._get_ref_settings(ref, 'branch') or self._get_ref_settings(ref, 'tag') or None
