@@ -84,12 +84,14 @@ def load_proxy_entries(config=None):
             try:
                 service_name = service_match.group(1)
                 service_url = _get_config_value(config, f"PROXY_{service_name}_URL")
+                service_ssl_verify = _get_config_value(config, f"PROXY_{service_name}_SSL_VERIFY", True)
                 if not service_url:
                     continue
                 logger.info(f"Read proxy entry '{service_name.lower()}': {service_url}")
                 result[service_name.lower()] = {
                     'name': service_name.lower(),
-                    'url': service_url
+                    'url': service_url,
+                    'ssl_verify': service_ssl_verify
                 }
             except (KeyError, IndexError) as e:
                 logger.error(f"Error when reading entry '{service_match}': {str(e)}")
