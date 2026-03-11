@@ -24,7 +24,7 @@ push:
     #   enable_notifications: true          # Enable to notify LifeMonitor and possibly also workflow registries
     #                                       # such as WorkflowHub (wfhub) and dev.WorkflowHub (wfhubdev).
     #                                       #   Default: true
-    #   lifemonitor_instance: "default"     # Specify the LifeMonitor instance to notify.
+    #   lifemonitor_instance:               # Specify the LifeMonitor instance to notify.
     #                                       # The value must match a configured proxy entry name.
     #                                       # Available instances on this system:
     #                                       #   [{{ lifemonitor_instances|join(', ') }}]
@@ -41,10 +41,10 @@ push:
     #   update_registries: []
 {% if main_branch %}
     # Monitor {{main_branch}}.
-    # - name: "{{main_branch}}"
-    #   enable_notifications: true
-    #   lifemonitor_instance: "default"
-    #   update_registries: []
+    - name: "{{main_branch}}"
+      enable_notifications: true
+      lifemonitor_instance: "my-lifemonitor-instance"
+      update_registries: []
 {% endif %}
 
   tags:
@@ -58,13 +58,13 @@ push:
     #   update_registries: []
 
     # Recognize tags with names matching "v*.*.*" as new releases.
-    # - name: "v*.*.*"
-    #   enable_notifications: true
-    #   lifemonitor_instance: "default"
-    #   update_registries: [{{registries|join(', ')}}]
+    - name: "v*.*.*"
+      enable_notifications: true
+      lifemonitor_instance: "my-lifemonitor-instance"
+      update_registries: [{{registries|join(', ')}}]
 
     # Also recognize the tag names matching "*.*.*". For the rest, same rules as above.
-    # - name: "*.*.*"
-    #   enable_notifications: true
-    #   lifemonitor_instance: "default"
-    #   update_registries: [{{registries|join(', ')}}]
+    - name: "*.*.*"
+      enable_notifications: true
+      lifemonitor_instance: "my-lifemonitor-instance"
+      update_registries: [{{registries|join(', ')}}]
