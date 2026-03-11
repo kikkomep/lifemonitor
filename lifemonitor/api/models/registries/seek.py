@@ -185,8 +185,9 @@ class SeekWorkflowRegistryClient(WorkflowRegistryClient):
                     }
                     logger.debug("Payload: %r", payload)
                     r = self._requester(user, 'post', url, files=payload)
-                    logger.error("Response: %r", r.content)
+                    logger.debug("Response: %r", r.content)
                     r.raise_for_status()
+                    logger.info(f"Workflow version {external_id if external_id else 'NEW'} registered on {self.registry.uri}: {r.status_code}")
                     wf_data = r.json()["data"]
                     logger.debug("Workflow RO-Crate @ %r registered: %r", crate_path, wf_data)
                     # TODO: allow to configure visibility
