@@ -452,6 +452,7 @@ def __forward_event__(event: GithubEvent) -> Optional[Dict]:
                     data=request.get_data(),
                     allow_redirects=False,
                     timeout=30,
+                    verify=lm_instance_info.get('ssl_verify', True)
                 )
                 if response.status_code >= 400:
                     logger.error(

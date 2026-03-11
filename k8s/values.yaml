@@ -147,8 +147,10 @@ proxy:
   instances: []
   # - name: production
   #   url: https://api.lifemonitor.eu
+  #.  ssl_verify: true
   # - name: development
   #   url: https://api.dev.lifemonitor.eu
+  #   ssl_verify: true
 
 # Settings for the LifeMonitor Web Socket Server
 wss:
