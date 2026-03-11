@@ -726,6 +726,7 @@ def workflows_put(wf_uuid, body):
     # workflow_version.workflow.save()
     workflow_version.save()
     clear_cache()
+    lm.refresh_workflows_stats_cache()
     notify_workflow_version_updates([workflow_version], type='sync', delay=2)
     return {
         'meta':
