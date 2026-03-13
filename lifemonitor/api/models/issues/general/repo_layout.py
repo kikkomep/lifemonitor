@@ -74,6 +74,7 @@ class MissingROCrateFile(WorkflowRepositoryIssue):
         "The <code>ro-crate-metadata.json</code> should be placed on the root of this repository."
     labels = ['metadata']
     depends_on = [MissingWorkflowFile]
+    enable_change_update = True
 
     def check(self, repo: WorkflowRepository) -> bool:
         if not repo.has_metadata():
