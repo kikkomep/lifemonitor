@@ -27,8 +27,8 @@ from typing import Any, Callable, Dict, List, Optional, Union
 from urllib.parse import urljoin
 
 import requests
-from flask import (Blueprint, Flask, current_app, redirect, render_template,
-                   request)
+from flask import (Blueprint, Flask, current_app, has_app_context,
+                   has_request_context, redirect, render_template, request)
 from flask_login import login_required
 from github import GithubException
 from github.PullRequest import PullRequest
@@ -62,6 +62,7 @@ from . import services
 
 # Config a module level logger
 logger = logging.getLogger(__name__)
+FORWARDED_BY_HEADER = "X-LM-Forwarded-By"
 
 
 def ping(event: GithubEvent):
@@ -396,12 +397,11 @@ def __skip_branch_or_tag__(repo_info: GithubRepositoryReference,
     return True
 
 
-def __forward_event__(event: GithubEvent) -> Optional[Dict]:
+def __resolve_event_forwarding_target__(event: GithubEvent, proxy_entries: Dict[str, Dict[str, Any]]) -> Optional[Dict]:
     try:
         repo_info = event.repository_reference
     except ValueError as e:
-        logger.debug("Skipping event forwarding for event '%s': %s", event.type, str(e))
-        return None
+        raise e
     logger.debug("Repo reference: %r", repo_info)
 
     repo: GithubWorkflowRepository = repo_info.repository
@@ -420,7 +420,6 @@ def __forward_event__(event: GithubEvent) -> Optional[Dict]:
     ref_settings = config.get_ref_settings(ref)
     logger.debug("Repo ref settings: %r", ref_settings)
 
-    proxy_entries = current_app.config.get('PROXY_ENTRIES', {})
     default_instance_info = proxy_entries.get('default')
     if not default_instance_info:
         logger.warning("Missing default proxy entry in PROXY_ENTRIES")
@@ -451,33 +450,6 @@ def __forward_event__(event: GithubEvent) -> Optional[Dict]:
                 return None
 
             if lm_instance_info['url'].rstrip('/') != default_instance_info['url'].rstrip('/'):
-                logger.warning("Using LM instance: %r", lm_instance_info)
-                redirect_url = urljoin(f"{lm_instance_info['url'].rstrip('/')}/", 'integrations/github')
-                logger.warning("Redirecting to: %r", redirect_url)
-                response = requests.request(
-                    method=request.method,
-                    url=redirect_url,
-                    headers={key: value for (key, value) in request.headers if key != 'Host'},
-                    data=request.get_data(),
-                    allow_redirects=False,
-                    timeout=30,
-                    verify=lm_instance_info.get('ssl_verify', True)
-                )
-                if response.status_code >= 400:
-                    logger.error(
-                        "Forwarding failed to '%s' (%s): status=%s body=%s",
-                        lm_instance_name,
-                        redirect_url,
-                        response.status_code,
-                        response.text,
-                    )
-                    raise RuntimeError(f"Unable to forward event to {lm_instance_name}")
-                logger.info(
-                    "Forwarded event to '%s' (%s) with status %s",
-                    lm_instance_name,
-                    redirect_url,
-                    response.status_code,
-                )
                 return lm_instance_info
         else:
             logger.debug("No settings found for ref: %s", ref)
@@ -485,6 +457,124 @@ def __forward_event__(event: GithubEvent) -> Optional[Dict]:
     # Fall back to the default/current LifeMonitor instance
     logger.warning("Using default lifemonitor: %s", default_instance_info)
     return None
+
+
+def __resolve_multi_repo_forwarding_target__(event: GithubEvent,
+                                             proxy_entries: Dict[str, Dict[str, Any]]) -> Optional[Dict]:
+    payload = event.payload if isinstance(event.payload, dict) else {}
+    repositories = payload.get('repositories') or payload.get('repositories_added') or payload.get('repositories_removed') or []
+    if not repositories:
+        return None
+
+    target_ids = set()
+    forward_target = None
+    for repo in repositories:
+        repo_payload = dict(payload)
+        repo_payload.pop('repositories', None)
+        repo_payload.pop('repositories_added', None)
+        repo_payload.pop('repositories_removed', None)
+        repo_payload['repository'] = repo
+
+        if not repo_payload.get('ref'):
+            default_branch = repo.get('default_branch') if isinstance(repo, dict) else None
+            if default_branch:
+                repo_payload['ref'] = f"refs/heads/{default_branch}"
+
+        repo_event = GithubEvent(event.headers, repo_payload)
+        target = __resolve_event_forwarding_target__(repo_event, proxy_entries)
+        if target and target.get('skip') is True:
+            return target
+
+        if target is None:
+            target_ids.add('default')
+            continue
+
+        target_url = target.get('url', '').rstrip('/')
+        target_ids.add(target_url)
+        forward_target = target
+
+    if len(target_ids) > 1:
+        logger.warning("Multiple LM forwarding targets for event '%s': %r. Keeping event on current instance.",
+                       event.type, sorted(target_ids))
+        return None
+
+    if target_ids == {'default'}:
+        return None
+
+    return forward_target
+
+
+def __forward_payload_to_instance__(instance_info: Dict[str, Any]) -> Dict[str, Any]:
+    redirect_url = urljoin(f"{instance_info['url'].rstrip('/')}/", 'integrations/github')
+    logger.warning("Redirecting to: %r", redirect_url)
+    headers = {key: value for (key, value) in request.headers if key != 'Host'}
+    headers[FORWARDED_BY_HEADER] = current_app.config.get('NAME', 'lifemonitor')
+    response = requests.request(
+        method=request.method,
+        url=redirect_url,
+        headers=headers,
+        data=request.get_data(),
+        allow_redirects=False,
+        timeout=30,
+        verify=instance_info.get('ssl_verify', True)
+    )
+    if response.status_code >= 400:
+        logger.error(
+            "Forwarding failed to '%s' (%s): status=%s body=%s",
+            instance_info.get('name', 'unknown'),
+            redirect_url,
+            response.status_code,
+            response.text,
+        )
+        raise RuntimeError(f"Unable to forward event to {instance_info.get('name', 'unknown')}")
+    logger.info(
+        "Forwarded event to '%s' (%s) with status %s",
+        instance_info.get('name', 'unknown'),
+        redirect_url,
+        response.status_code,
+    )
+    return instance_info
+
+
+def __forward_event__(event: GithubEvent) -> Optional[Dict]:
+    if has_request_context() and request.headers.get(FORWARDED_BY_HEADER):
+        logger.debug("Skipping forwarding for event '%s': request already forwarded by '%s'",
+                     event.type, request.headers.get(FORWARDED_BY_HEADER))
+        return None
+
+    if not has_app_context():
+        logger.debug("Skipping forwarding for event '%s': no app context", event.type)
+        return None
+
+    proxy_entries = current_app.config.get('PROXY_ENTRIES', {})
+    default_instance_info = proxy_entries.get('default')
+    if not default_instance_info:
+        logger.warning("Missing default proxy entry in PROXY_ENTRIES")
+        return None
+
+    payload = event.payload if isinstance(event.payload, dict) else {}
+    is_multi_repo_event = any(k in payload for k in ('repositories', 'repositories_added', 'repositories_removed')) \
+        and 'repository' not in payload
+
+    try:
+        if is_multi_repo_event:
+            lm_instance_info = __resolve_multi_repo_forwarding_target__(event, proxy_entries)
+        else:
+            lm_instance_info = __resolve_event_forwarding_target__(event, proxy_entries)
+    except ValueError as e:
+        logger.debug("Skipping event forwarding for event '%s': %s", event.type, str(e))
+        return None
+
+    if not lm_instance_info:
+        return None
+    if lm_instance_info.get('skip') is True:
+        return lm_instance_info
+
+    if lm_instance_info['url'].rstrip('/') == default_instance_info['url'].rstrip('/'):
+        return None
+
+    logger.warning("Using LM instance: %r", lm_instance_info)
+    return __forward_payload_to_instance__(lm_instance_info)
 
 
 def __check_for_issues_and_register__(repo_info: GithubRepositoryReference,
