@@ -74,6 +74,7 @@ class WorkflowRepositoryIssue():
     labels: List[str] = []
     depends_on = []
     enable_message_updates = False
+    enable_change_update = False
 
     def __init__(self):
         self._changes = []

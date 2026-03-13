@@ -70,8 +70,17 @@ def map_issues(check_result: IssueCheckResult):
                 _post_issue_messages(gh_issue, issue)
                 if issue.has_changes():
                     pull_requests.create_pull_request_from_github_issue(repo, issue.id, gh_issue, issue.get_changes(repo), allow_update=False)
-            elif issue.enable_message_updates:
-                _post_issue_messages(gh_issue, issue)
+            else:
+                if issue.has_changes() and issue.enable_change_update:
+                    pull_requests.create_pull_request_from_github_issue(
+                        repo,
+                        issue.id,
+                        gh_issue,
+                        issue.get_changes(repo),
+                        allow_update=True,
+                    )
+                if issue.enable_message_updates:
+                    _post_issue_messages(gh_issue, issue)
         else:
             logger.debug(f"Closing issue: {issue}")
             issues.close_issue(repo, issue)
