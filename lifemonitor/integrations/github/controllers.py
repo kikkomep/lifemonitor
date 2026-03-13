@@ -404,7 +404,24 @@ def __resolve_event_forwarding_target__(event: GithubEvent, proxy_entries: Dict[
         raise e
     logger.debug("Repo reference: %r", repo_info)
 
-    repo: GithubWorkflowRepository = repo_info.repository
+    try:
+        repo: GithubWorkflowRepository = repo_info.repository
+    except GithubException as e:
+        logger.warning(
+            "Unable to resolve repository for event '%s' while computing forwarding target: %s. "
+            "Falling back to default instance.",
+            event.type,
+            str(e),
+        )
+        return None
+    except Exception as e:
+        logger.warning(
+            "Unable to resolve repository for event '%s' while computing forwarding target: %s. "
+            "Falling back to default instance.",
+            event.type,
+            str(e),
+        )
+        return None
     logger.debug("Repository: %r", repo)
 
     config: WorkflowRepositoryConfig = repo.config
@@ -519,14 +536,23 @@ def __forward_payload_to_instance__(instance_info: Dict[str, Any]) -> Dict[str, 
         verify=instance_info.get('ssl_verify', True)
     )
     if response.status_code >= 400:
+        response_text = response.text if response.text is not None else ""
+        response_excerpt = response_text[:500]
         logger.error(
             "Forwarding failed to '%s' (%s): status=%s body=%s",
             instance_info.get('name', 'unknown'),
             redirect_url,
             response.status_code,
-            response.text,
+            response_excerpt,
         )
-        raise RuntimeError(f"Unable to forward event to {instance_info.get('name', 'unknown')}")
+        raise RuntimeError(
+            "Unable to forward event to {name}: status={status} url={url} body={body}".format(
+                name=instance_info.get('name', 'unknown'),
+                status=response.status_code,
+                url=redirect_url,
+                body=response_excerpt,
+            )
+        )
     logger.info(
         "Forwarded event to '%s' (%s) with status %s",
         instance_info.get('name', 'unknown'),
@@ -563,6 +589,15 @@ def __forward_event__(event: GithubEvent) -> Optional[Dict]:
             lm_instance_info = __resolve_event_forwarding_target__(event, proxy_entries)
     except ValueError as e:
         logger.debug("Skipping event forwarding for event '%s': %s", event.type, str(e))
+        return None
+    except Exception as e:
+        logger.warning(
+            "Skipping forwarding for event '%s' because target resolution failed: %s",
+            event.type,
+            str(e),
+        )
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.exception(e)
         return None
 
     if not lm_instance_info:
