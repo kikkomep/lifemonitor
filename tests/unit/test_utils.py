@@ -23,7 +23,6 @@ import os
 import tempfile
 from typing import Dict
 
-import pygit2
 import pytest
 
 import lifemonitor.exceptions as lm_exceptions
@@ -181,30 +180,20 @@ def test_get_git_repo_revision_uses_requested_commit_refs(simple_local_wf_repo):
     git_repo = simple_local_wf_repo._git_repo
     local_path = simple_local_wf_repo.local_path
 
-    tagged_commit = git_repo.head.target
-    git_repo.references.create("refs/tags/0.1.0", tagged_commit)
+    tagged_commit = git_repo.head.commit
+    git_repo.create_tag("0.1.0", ref=tagged_commit)
 
     readme_path = os.path.join(local_path, "README.md")
     with open(readme_path, "a", encoding="utf-8") as readme_file:
         readme_file.write("\nrevision test\n")
 
     git_repo.index.add("README.md")
-    git_repo.index.write()
-    tree = git_repo.index.write_tree()
-    signature = pygit2.Signature("LifeMonitor Tests", "tests@lifemonitor.local")
-    git_repo.create_commit(
-        "HEAD",
-        signature,
-        signature,
-        "Create a new HEAD commit",
-        tree,
-        [tagged_commit],
-    )
+    git_repo.index.commit("Create a new HEAD commit")
 
-    revision = utils.get_git_repo_revision(local_path, commit=str(tagged_commit))
+    revision = utils.get_git_repo_revision(local_path, commit=tagged_commit.hexsha)
     refs = {ref_data["ref"] for ref_data in revision["refs"]}
 
-    assert revision["sha"] == tagged_commit
+    assert str(revision["sha"]) == tagged_commit.hexsha
     assert "refs/tags/0.1.0" in refs
 
 
