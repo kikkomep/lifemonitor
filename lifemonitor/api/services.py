@@ -616,8 +616,10 @@ class LifeMonitor:
                     continue
                 if svc.get_user(user.id):
                     try:
-                        registry_workflows.extend([w for w in svc.get_user_workflows(user)
-                                                   if w not in workflows and w.public])
+                        registry_workflows.extend([
+                            w for w in svc.get_user_workflows(user)
+                            if w not in workflows and (include_public or not w.public)
+                        ])
                     except lm_exceptions.NotAuthorizedException as e:
                         logger.debug(e)
             # Combine and paginate results if needed
