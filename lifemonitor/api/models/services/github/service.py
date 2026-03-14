@@ -436,7 +436,7 @@ class GithubTestingService(TestingService):
                                          run["id"], instance.uuid)
                             continue
                     # Try to match the test instance with the workflow run
-                    params = (run["head_branch"], run["head_branch"], run["created_at"])
+                    params = (run.get("head_branch"), run.get("head_sha"), run.get("created_at"))
                     match = match_test_instance_params(instance, params)
                     if match:
                         logger.debug("Found matching test instance %r: %r", instance.uuid, params)

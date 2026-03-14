@@ -887,7 +887,14 @@ def find_refs_by_commit(repo: pygit2.Repository, commit: str):
     refs = []
     for ref_name in repo.references:
         ref = repo.lookup_reference(ref_name)
-        if ref.target == commit:
+        ref_target = ref.target
+        try:
+            peeled_commit = ref.peel(pygit2.Commit)
+            if peeled_commit is not None:
+                ref_target = peeled_commit.id
+        except Exception:
+            pass
+        if ref_target == commit or str(ref_target) == str(commit):
             refs.append({
                 'shorthand': ref.shorthand,
                 'ref': ref.name,

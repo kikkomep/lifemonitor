@@ -182,6 +182,14 @@ def match_test_instance_params(test_instance: TestInstance, params: tuple) -> bo
         if i_tag == tag:
             logger.debug("Tag match found: %s", tag)
             return True
+        try:
+            revision = test_instance.test_suite.workflow_version.repository.revision
+            expected_sha = getattr(revision, "sha", None)
+        except Exception:
+            expected_sha = None
+        if expected_sha and expected_sha == tag:
+            logger.debug("Tag commit match found: %s", tag)
+            return True
         logger.debug("Tag mismatch: %s != %s", i_tag, tag)
         return False
 
