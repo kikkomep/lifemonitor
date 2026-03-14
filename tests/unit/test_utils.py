@@ -23,6 +23,7 @@ import os
 import tempfile
 from typing import Dict
 
+import pygit2
 import pytest
 
 import lifemonitor.exceptions as lm_exceptions
@@ -174,6 +175,37 @@ def test_active_branch_detection_against_no_git_folder():
         logger.debug("Testing active branch detection... (repo: %r)", tmpdir)
         with pytest.raises(ValueError):
             assert utils.get_current_active_branch(tmpdir) is None, "active branch detection failed"
+
+
+def test_get_git_repo_revision_uses_requested_commit_refs(simple_local_wf_repo):
+    git_repo = simple_local_wf_repo._git_repo
+    local_path = simple_local_wf_repo.local_path
+
+    tagged_commit = git_repo.head.target
+    git_repo.references.create("refs/tags/0.1.0", tagged_commit)
+
+    readme_path = os.path.join(local_path, "README.md")
+    with open(readme_path, "a", encoding="utf-8") as readme_file:
+        readme_file.write("\nrevision test\n")
+
+    git_repo.index.add("README.md")
+    git_repo.index.write()
+    tree = git_repo.index.write_tree()
+    signature = pygit2.Signature("LifeMonitor Tests", "tests@lifemonitor.local")
+    git_repo.create_commit(
+        "HEAD",
+        signature,
+        signature,
+        "Create a new HEAD commit",
+        tree,
+        [tagged_commit],
+    )
+
+    revision = utils.get_git_repo_revision(local_path, commit=str(tagged_commit))
+    refs = {ref_data["ref"] for ref_data in revision["refs"]}
+
+    assert revision["sha"] == tagged_commit
+    assert "refs/tags/0.1.0" in refs
 
 
 def __git_remote_urls__() -> Dict[str, str]:
