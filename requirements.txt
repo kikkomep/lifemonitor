@@ -45,7 +45,7 @@ pytest-xdist~=3.6.1
 python-dotenv~=1.0.1
 python-jenkins==1.8.3
 python-redis-lock~=4.0.0
-PyGithub==1.55
+PyGithub==1.56
 PyYAML~=6.0.1
 redis~=6.4.0
 repo2rocrate~=0.1.2
