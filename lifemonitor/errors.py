@@ -117,7 +117,7 @@ def handle_405(e: Exception = None):
     logger.debug(f"Method not allowed for resource {resource}")
     from lifemonitor.utils import validate_url
     if not validate_url(resource):
-        return handle_400(decription="Invalid URL")
+        return handle_400(description="Invalid URL")
     return __handle_error__(
         {
             "title": getattr(e, 'title', None) or "LifeMonitor: Method not allowed",

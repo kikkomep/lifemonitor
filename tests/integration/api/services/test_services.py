@@ -51,7 +51,7 @@ def test_workflow_registration(app_client, user1, valid_workflow):
     assert len(models.Workflow.find_by_uuid(w['uuid']).versions) == 1, "Unexpected number of workflow_versions"
     # assert workflow.external_id is not None, "External ID must be computed if not provided"
     # assert workflow.external_id == w["external_id"], "Invalid external ID"
-    assert workflow.submitter == user1["user"], "Inavalid submitter user"
+    assert workflow.submitter == user1["user"], "Invalid submitter user"
     # inspect the suite/test type
     assert len(workflow.test_suites) == 1, "Expected number of test suites 1"
     suite = workflow.test_suites[0]
@@ -82,7 +82,7 @@ def test_workflow_registration_same_workflow_by_different_users(app_client, user
         # assert (str(workflow.uuid), workflow.version) == (w['uuid'], w['version']), "Unexpected workflow ID"
         # assert workflow.external_id is not None, "External ID must be computed if not provided"
         # assert workflow.external_id == w["external_id"], "Invalid external ID"
-        assert workflow.submitter == user["user"], "Inavalid submitter user"
+        assert workflow.submitter == user["user"], "Invalid submitter user"
         assert str(workflow.workflow.uuid) == w['uuid'], "Invalid workflow UUID"
         # inspect the suite/test type
         assert len(workflow.test_suites) == 1, "Expected number of test suites 1"

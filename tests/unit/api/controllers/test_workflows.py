@@ -250,10 +250,10 @@ def test_post_workflow_by_registry_error_submitter_not_found(m, request_context,
 
 @patch("lifemonitor.api.controllers.notify_workflow_version_updates")
 @patch("lifemonitor.api.controllers.lm")
-def test_post_workflow_by_registry(m, notify_udpates, request_context, mock_registry):
+def test_post_workflow_by_registry(m, notify_updates, request_context, mock_registry):
     assert auth.current_user.is_anonymous, "Unexpected user in session"
     assert auth.current_registry, "Unexpected registry in session"
-    notify_udpates.return_value = None
+    notify_updates.return_value = None
     # add one fake workflow
     data = {
         "uuid": "1212121212121212",

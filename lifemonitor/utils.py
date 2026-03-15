@@ -281,7 +281,7 @@ def get_last_update(path: str):
 
 def match_ref(candidate: str, refs: Iterable[str]) -> Optional[Tuple[str, str]]:
     """
-    Checks the patterns in `refs` to see if any elements match the canditate string
+    Checks the patterns in `refs` to see if any elements match the candidate string
     according to Unix filename pattern matching (fnmatch.fnmatchcase).
     For instance:
         * candidate = "v1.0.1"; refs = ['v*.*.*'] -> Match

@@ -76,7 +76,7 @@ def test_default_for_public_property(data, schema):
     assert result.input_data == data, "Unexpected input data"
     assert 'public' not in result.input_data, "Public property should not be set on data"
     print("Output data: %r" % result.output_data)
-    assert result.output_data['public'] == schema['properties']['public']['default'], "Public property should be initialized with the defaul value"
+    assert result.output_data['public'] == schema['properties']['public']['default'], "Public property should be initialized with the default value"
 
 
 def test_default_update_registries_of_branch(data, schema):

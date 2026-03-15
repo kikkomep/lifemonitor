@@ -46,7 +46,7 @@ def test_workflow_subscription(user1: dict, valid_workflow: str):
     assert len(s.events) == 0, "Invalid number of events"
     s.save()
 
-    # check event udpate
+    # check event update
     s.events = [EventType.BUILD_FAILED, EventType.BUILD_RECOVERED]
     s.save()
     assert len(s.events) == 2, "Invalid number of events"

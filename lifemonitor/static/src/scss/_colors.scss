@@ -42,7 +42,7 @@
   @include background-gradient-variant($name, $color);
 }
 
-// Backgrund Color Disabled
+// Background Color Disabled
 [class^="bg-"].disabled {
   opacity: .65;
 }

@@ -157,7 +157,7 @@ def test_get_last_test_build(travis_service: models.TravisTestingService, test_i
     last_build = builds[0]  # builds are always ordered from the latest executed
     build = travis_service.get_last_test_build(test_instance)
     logger.debug("First build from the build list: %r", last_build.id)
-    logger.debug("ID of the lastest build: %r", build.id)
+    logger.debug("ID of the latest build: %r", build.id)
     assert last_build.id == build.id, "Invalid build ID"
 
 

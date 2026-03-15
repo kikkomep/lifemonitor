@@ -63,7 +63,7 @@ def test_unconfigured_email_notification(mail, app_settings, app_context, user1)
     assert len(notifications) == 1, "No additional notification should be generated"
 
     # try to send notifications via email
-    # no email should be sent beacause the user has no configured email
+    # no email should be sent because the user has no configured email
     sent_notifications = send_email_notifications()
     assert sent_notifications == 0, "Unexpected number of sent notifications"
 

@@ -721,7 +721,7 @@ def workflows_put(wf_uuid, body):
     logger.debug(f"PUT called for workflow {wf_uuid} (basic info)")
     # get a reference to the workflow version to be updated
     workflow_version = __get_workflow_version__(wf_uuid)
-    # update basic information aboud the specified workflow
+    # update basic information about the specified workflow
     workflow_version.workflow.name = body.get('name', workflow_version.workflow.name)
     workflow_version.workflow.public = body.get('public', workflow_version.workflow.public)
     # workflow_version.workflow.save()

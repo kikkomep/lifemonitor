@@ -107,7 +107,7 @@ def refresh_workflow_builds(event: GithubEvent):
             for i in instances:
                 workflow_version = i.test_suite.workflow_version
                 if workflow_version.version in refs or (not workflow_version.has_revision() and not workflow_version.next_version):
-                    logger.warning("Version %r to uodate", workflow_version)
+                    logger.warning("Version %r to update", workflow_version)
                     i.get_test_build(f"{github_workflow_run.id}_{github_workflow_run.raw_data['run_attempt']}")
                     i.test_suite.workflow_version.status
                 else:

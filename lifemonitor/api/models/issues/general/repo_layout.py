@@ -48,7 +48,7 @@ class GitRepositoryWithoutMainBranch(WorkflowRepositoryIssue):
 
 
 class RepositoryNotInitialised(WorkflowRepositoryIssue):
-    name = "Repository not intialised"
+    name = "Repository not initialised"
     description = "No workflow and crate metadata found on this repository."
     labels = ['best-practices']
     depends_on = [GitRepositoryWithoutMainBranch]
