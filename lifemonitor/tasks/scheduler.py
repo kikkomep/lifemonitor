@@ -71,11 +71,20 @@ class Scheduler(APScheduler):
     def get_deferred_jobs(self) -> Dict[str, dramatiq.Actor]:
         return self._not_scheduled_jobs.copy()
 
-    def run_job(self, job_name: str, *args, trigger=None, **kwargs):
+    def run_job(self, job_name: str, *args, trigger=None,
+                job_id: str = None, replace_existing: bool = True,
+                **kwargs):
         actor = self.get_deferred_job(job_name)
         assert actor, f"Job '{job_name}' not found"
-        self.add_job(id=job_name, name=job_name, func=actor.send, args=args, kwargs=kwargs,
-                     trigger=trigger or DateTrigger(run_date=datetime.datetime.now()), replace_existing=True)
+        self.add_job(
+            id=job_id or job_name,
+            name=job_name,
+            func=actor.send,
+            args=args,
+            kwargs=kwargs,
+            trigger=trigger or DateTrigger(run_date=datetime.datetime.now()),
+            replace_existing=replace_existing,
+        )
 
 
 def schedule(trigger=None, name=None, priority=0, queue_name: str = "default",

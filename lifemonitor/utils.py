@@ -281,7 +281,7 @@ def get_last_update(path: str):
 
 def match_ref(candidate: str, refs: Iterable[str]) -> Optional[Tuple[str, str]]:
     """
-    Checks the patterns in `refs` to see if any elements match the canditate string
+    Checks the patterns in `refs` to see if any elements match the candidate string
     according to Unix filename pattern matching (fnmatch.fnmatchcase).
     For instance:
         * candidate = "v1.0.1"; refs = ['v*.*.*'] -> Match
@@ -835,6 +835,7 @@ class RemoteGitRepoInfo(giturlparse.result.GitUrlParsed):
         if 'protocols' in parsed_info:
             del parsed_info['protocols']
         super().__init__(parsed_info)
+        self._license = None
 
     @property
     def fullname(self):
@@ -854,9 +855,9 @@ class RemoteGitRepoInfo(giturlparse.result.GitUrlParsed):
     @property
     def license(self) -> Optional[str]:
         try:
-            if self.host == 'github.com':
+            if self.host == 'github.com' and not self._license:
                 l_info = requests.get(f"https://api.github.com/repos/{self.fullname}/license")
-                self._license = l_info.json()['license']['spdx_id']
+                self._license = l_info.json().get('license', {}).get('spdx_id')
         except Exception as e:
             if logger.isEnabledFor(logging.DEBUG):
                 logger.error(e)

@@ -337,7 +337,7 @@ class GithubRestService():
         return workflow
 
     def __get_gh_workflow_runs__(self,
-                                 workflow: github.Worflow.Workflow,
+                                 workflow: github.Workflow.Workflow,
                                  branch=github.GithubObject.NotSet,
                                  status=github.GithubObject.NotSet,
                                  created=github.GithubObject.NotSet,

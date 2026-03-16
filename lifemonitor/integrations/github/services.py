@@ -21,7 +21,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Set, Tuple, Union
 
 from lifemonitor.api import serializers
 from lifemonitor.api.models.registries.registry import WorkflowRegistry
@@ -32,8 +32,10 @@ from lifemonitor.api.services import LifeMonitor
 from lifemonitor.auth.models import HostingService, User
 from lifemonitor.auth.oauth2.client.models import (
     OAuthIdentity, OAuthIdentityNotFoundException)
-from lifemonitor.integrations.github.events import GithubRepositoryReference
-from lifemonitor.integrations.github.registry import GithubWorkflowRegistry
+from lifemonitor.integrations.github.events import (GithubEvent,
+                                                    GithubRepositoryReference)
+from lifemonitor.integrations.github.registry import (GithubWorkflowRegistry,
+                                                      GithubWorkflowVersion)
 
 from . import issues, pull_requests
 
@@ -47,6 +49,11 @@ def ping(event: object):
 
 
 def map_issues(check_result: IssueCheckResult):
+    def _post_issue_messages(gh_issue, issue):
+        for message in issue.get_messages():
+            gh_issue.create_comment(f"<b>{message.type.name}:</b> {message.text}")
+            logger.debug("Added issue message: %r", message)
+
     repo = check_result.repo
     for issue in check_result.checked:
         if issue in check_result.issues:
@@ -60,11 +67,20 @@ def map_issues(check_result: IssueCheckResult):
             if not gh_issue:
                 gh_issue = issues.create_issue(repo, issue)
                 logger.debug("Created a new GitHub issue: %r", gh_issue)
-                for message in issue.get_messages():
-                    gh_issue.create_comment(f"<b>{message.type.name}:</b> {message.text}")
-                    logger.debug("Added issue message: %r", message)
+                _post_issue_messages(gh_issue, issue)
                 if issue.has_changes():
                     pull_requests.create_pull_request_from_github_issue(repo, issue.id, gh_issue, issue.get_changes(repo), allow_update=False)
+            else:
+                if issue.has_changes() and issue.enable_change_update:
+                    pull_requests.create_pull_request_from_github_issue(
+                        repo,
+                        issue.id,
+                        gh_issue,
+                        issue.get_changes(repo),
+                        allow_update=True,
+                    )
+                if issue.enable_message_updates:
+                    _post_issue_messages(gh_issue, issue)
         else:
             logger.debug(f"Closing issue: {issue}")
             issues.close_issue(repo, issue)
@@ -103,12 +119,14 @@ def __get_registries_map__(w: Workflow, registries: List[str]):
     return registries_map
 
 
-def find_workflow_version(repository_reference: GithubRepositoryReference) -> Tuple[Workflow, WorkflowVersion]:
-    # get a reference to the github workflow registry for this installation
-    github_registry: GithubWorkflowRegistry = repository_reference.event.installation.github_registry
+def find_workflow_version(repository_reference: GithubRepositoryReference) -> Tuple[Optional[Workflow], Optional[WorkflowVersion]]:
+    github_registry = get_event_github_registry(repository_reference.event)
+    if not github_registry:
+        logger.warning("Unable to load github registry for installation %r", repository_reference.event.installation_id)
+        return None, None
     # find the workflow
     workflow_version = None
-    workflow = github_registry.find_workflow(repository_reference.repository.full_name)
+    workflow = github_registry.find_workflow(repository_reference.full_name)
     if workflow:
         # get the workflow version (the one associated with the branch or tag of the repository)
         workflow_version = workflow.versions.get(repository_reference.branch or repository_reference.tag, None)
@@ -116,7 +134,127 @@ def find_workflow_version(repository_reference: GithubRepositoryReference) -> Tu
     return workflow, workflow_version
 
 
-def identify_workflow_version_submitter(repository_reference: GithubRepositoryReference) -> User:
+def get_event_github_registry(event: GithubEvent) -> Optional[GithubWorkflowRegistry]:
+    installation = None
+    try:
+        installation = event.installation
+    except Exception as e:
+        logger.warning("Unable to resolve installation %r", event.installation_id)
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.exception(e)
+    if installation and installation.github_registry:
+        return installation.github_registry
+
+    try:
+        app = event.application
+    except Exception as e:
+        logger.warning("Unable to resolve application for event %r", event.type)
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.exception(e)
+        return None
+    if not app or not app.owner:
+        logger.warning("Unable to resolve app owner for event %r", event.type)
+        return None
+
+    try:
+        identity: OAuthIdentity = OAuthIdentity.find_by_provider_user_id(str(app.owner.id), "github")
+    except OAuthIdentityNotFoundException as e:
+        logger.warning("Github identity of app owner '%r' not found", app.owner.id)
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.exception(e)
+        return None
+
+    try:
+        installation_id = int(event.installation_id) if event.installation_id is not None else None
+    except ValueError:
+        logger.warning("Invalid installation id: %r", event.installation_id)
+        return None
+
+    if installation_id is None:
+        logger.warning("Missing installation id for event %r", event.type)
+        return None
+
+    return GithubWorkflowRegistry.find(identity.user, app.id, installation_id)
+
+
+def delete_event_github_registries(event: GithubEvent) -> int:
+    try:
+        app = event.application
+    except Exception as e:
+        logger.warning("Unable to resolve application for event %r", event.type)
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.exception(e)
+        return 0
+
+    try:
+        installation_id = int(event.installation_id) if event.installation_id is not None else None
+    except ValueError:
+        logger.warning("Invalid installation id: %r", event.installation_id)
+        return 0
+
+    if installation_id is None:
+        logger.warning("Missing installation id for event %r", event.type)
+        return 0
+
+    deleted_count = GithubWorkflowRegistry.unregister_github_installation(app.id, installation_id, safe=True)
+    logger.info("Deleted %d github registries for installation %r", deleted_count, installation_id)
+    return deleted_count
+
+
+def get_repository_refs_for_full_name(event: GithubEvent, repository_full_name: str) -> List[str]:
+    registry = get_event_github_registry(event)
+    if not registry:
+        return []
+    return sorted({_.repo_ref for _ in registry.workflow_versions
+                   if _.repo_identifier == repository_full_name and _.repo_ref})
+
+
+def get_tracked_repository_refs(event: GithubEvent) -> Dict[str, List[str]]:
+    registry = get_event_github_registry(event)
+    if not registry:
+        return {}
+
+    refs_map: Dict[str, Set[str]] = {}
+    for workflow_version in registry.workflow_versions:
+        if not workflow_version.repo_identifier:
+            continue
+        refs = refs_map.setdefault(workflow_version.repo_identifier, set())
+        if workflow_version.repo_ref:
+            refs.add(workflow_version.repo_ref)
+
+    return {repo_full_name: sorted(refs) for repo_full_name, refs in refs_map.items()}
+
+
+def get_repository_ref_settings(event: GithubEvent, repository_full_name: str,
+                                repo_ref: Optional[str]) -> Optional[GithubWorkflowVersion]:
+    registry = get_event_github_registry(event)
+    if not registry:
+        return None
+    setting = registry.find_workflow_version_by_repo(repository_full_name, ref=repo_ref)
+    if setting:
+        return setting
+    return registry.find_workflow_version_by_repo(repository_full_name)
+
+
+def update_repository_ref_notifications(event: GithubEvent, repository_full_name: str,
+                                        repo_ref: Optional[str], enabled: bool) -> None:
+    setting = get_repository_ref_settings(event, repository_full_name, repo_ref)
+    if not setting:
+        logger.debug("No repository settings found for %s@%s", repository_full_name, repo_ref)
+        return
+    setting.notifications_enabled = enabled
+    setting.save()
+
+
+def get_repository_ref_notifications_enabled(event: GithubEvent, repository_full_name: str,
+                                             repo_ref: Optional[str], default: bool = True) -> bool:
+    setting = get_repository_ref_settings(event, repository_full_name, repo_ref)
+    if not setting or setting.notifications_enabled is None:
+        return default
+    return setting.notifications_enabled
+
+
+def identify_workflow_version_submitter(repository_reference: GithubRepositoryReference) -> Optional[User]:
     """ Identify the submitter of the workflow version.
     The submitter is the user who trigger a github event on the repository.
     If the "sender" of the event is not a LifeMonitor user, the submitter is the user who triggered the event
@@ -144,7 +282,7 @@ def identify_workflow_version_submitter(repository_reference: GithubRepositoryRe
     return submitter
 
 
-def register_repository_workflow(repository_reference: GithubRepositoryReference, registries: List[str] = None) -> WorkflowVersion:
+def register_repository_workflow(repository_reference: GithubRepositoryReference, registries: Optional[List[str]] = None) -> WorkflowVersion:
     logger.debug("Repository ref: %r", repository_reference)
     # set a reference to LifeMonitorService
     lm = LifeMonitor.get_instance()
@@ -230,23 +368,27 @@ def register_repository_workflow(repository_reference: GithubRepositoryReference
 
     # register workflow version on github registry
     if registered_workflow:
-        github_registry.add_workflow_version(registered_workflow, repo.full_name, repo.ref)
+        version_settings = github_registry.add_workflow_version(registered_workflow, repo.full_name, repo.ref)
+        if version_settings.notifications_enabled is None:
+            version_settings.notifications_enabled = True
         github_registry.save()
 
     return registered_workflow
 
 
 def delete_repository_workflow_version(repository_reference: GithubRepositoryReference,
-                                       registries: List[str] = None) -> Dict:
+                                       registries: Optional[List[str]] = None) -> Optional[Dict]:
     logger.debug("Deleting Repository ref: %r", repository_reference)
     # set a reference to LifeMonitorService
     lm = LifeMonitor.get_instance()
-    # set a reference to the github repo
-    repo: GithubWorkflowRepository = repository_reference.repository
-    logger.debug("Repository: %r", repo)
-
     # set reference to the github workflow registry
-    github_registry: GithubWorkflowRegistry = repository_reference.event.installation.github_registry
+    github_registry = get_event_github_registry(repository_reference.event)
+    if not github_registry:
+        logger.warning("Unable to load github registry for installation %r", repository_reference.event.installation_id)
+        return None
+
+    repo_full_name = repository_reference.full_name
+    logger.debug("Repository: %r", repo_full_name)
 
     # set a reference to the Github hosting service instance
     hosting_service: HostingService = repository_reference.hosting_service
@@ -254,20 +396,20 @@ def delete_repository_workflow_version(repository_reference: GithubRepositoryRef
 
     # set the workflow version name
     workflow_version = repository_reference.branch or repository_reference.tag
+    repo_ref = repository_reference.ref
 
     # search user identity
     submitter = identify_workflow_version_submitter(repository_reference)
 
     # set the repo link
-    repo_link = f"{hosting_service.uri}/{repo.full_name}.git"
+    repo_link = f"{hosting_service.uri}/{repo_full_name}.git"
     logger.debug("RepoLink: %s", repo_link)
 
-    # Try to delete the workflow from registries only if it has only one version.
-    # Deletion of a single workflow version is not supported at the moment
-    # due to the limitation of the supported registry API (i.e., Seek)
-    w = github_registry.find_workflow(repo.full_name)
+    # Registry deletion is workflow-level (not version-level):
+    # only delete remotely when this is the last local version.
+    w = github_registry.find_workflow(repo_full_name)
     if not w:
-        logger.warning(f"No workflow associated with '{repo.full_name}' found")
+        logger.warning(f"No workflow associated with '{repo_full_name}' found")
     else:
 
         # try to find the workflow version
@@ -276,25 +418,83 @@ def delete_repository_workflow_version(repository_reference: GithubRepositoryRef
             logger.warning(f"Unable to find the version {workflow_version} of workflow {w.uuid}")
             return None
         else:
-            # serialize the workflow version object before deletion
-            wv = serializers.WorkflowVersionSchema(exclude=('meta', 'links')).dump(wv)
+            workflow_version_data = serializers.WorkflowVersionSchema(exclude=('meta', 'links')).dump(wv)
+            workflow_version_data['_notification_enabled'] = get_repository_ref_notifications_enabled(
+                repository_reference.event,
+                repo_full_name,
+                repo_ref,
+                default=True,
+            )
 
-        # normalize the list of registries
-        registries = __normalize_registry_identitiers__(registries, as_strings=True)
-        logger.debug("Normalized list of registries: %r", registries)
+        normalized_registries = __normalize_registry_identitiers__(registries, as_strings=True)
+        logger.debug("Normalized list of registries from settings: %r", normalized_registries)
 
-        # initialize registries map
-        registry_workflows_map = __get_registries_map__(w, registries=registries)
-        logger.debug("List of registries for wf %r: %r", w, registry_workflows_map)
+        tracked_registries = sorted((wv.registry_workflow_versions or {}).keys())
+        if tracked_registries:
+            logger.debug(
+                "Using registry associations from workflow version %s: %r",
+                wv.version,
+                tracked_registries,
+            )
+            candidate_registries = tracked_registries
+        else:
+            logger.warning(
+                "No registry associations found on workflow version %s, falling back to settings: %r",
+                wv.version,
+                normalized_registries,
+            )
+            candidate_registries = normalized_registries
 
-        # filter workflows with only one version
-        filtered_registries = [_ for _ in registry_workflows_map if len(_[2]) == 1]
-        logger.debug("Filtered registry workflows: %r", filtered_registries)
+        registry_workflows_map = []
+        for registry_name in candidate_registries:
+            workflow_identifier = None
+            versions = []
 
-        # delete workflow from registries
-        logger.debug("Removing version '%r' of worlflow %r from registries %r....", workflow_version, w, filtered_registries)
-        delete_workflow_from_registries(github_registry, submitter, w, filtered_registries)
-        logger.debug("Removing version '%r' of worlflow %r from registries %r.... DONE", workflow_version, w, filtered_registries)
+            r_wv = (wv.registry_workflow_versions or {}).get(registry_name, None)
+            if r_wv:
+                workflow_identifier = r_wv.identifier
+                versions = [r_wv]
+            elif normalized_registries:
+                map_item = __get_registries_map__(w, registries=[registry_name])
+                if map_item:
+                    _, workflow_identifier, versions = map_item[0]
+
+            if not workflow_identifier:
+                logger.debug(
+                    "Skipping registry deletion for %s@%s on '%s': missing workflow identifier",
+                    repo_full_name,
+                    repo_ref,
+                    registry_name,
+                )
+                continue
+
+            has_registry_versions_after_delete = any(
+                version.version != wv.version and registry_name in (version.registry_workflow_versions or {})
+                for version in w.versions.values()
+            )
+            if has_registry_versions_after_delete:
+                logger.debug(
+                    "Skipping registry deletion for %s@%s on '%s': other versions are still registered",
+                    repo_full_name,
+                    repo_ref,
+                    registry_name,
+                )
+                continue
+
+            logger.debug(
+                "Deleting workflow '%s' from registry '%s' for %s@%s: no versions left after deletion",
+                workflow_identifier,
+                registry_name,
+                repo_full_name,
+                repo_ref,
+            )
+            registry_workflows_map.append((registry_name, workflow_identifier, versions))
+
+        if registry_workflows_map:
+            delete_workflow_from_registries(github_registry, submitter, w, registry_workflows_map)
+            logger.debug("Deleting workflow %r from registries %r... DONE", w, registry_workflows_map)
+        else:
+            logger.debug("No remote registry workflow deletions required for %s@%s", repo_full_name, repo_ref)
 
         # delete workflow version from LifeMonitor
         logger.debug("Removing version '%r' of worlflow %r from LifeMonitor....", workflow_version, w)
@@ -303,7 +503,7 @@ def delete_repository_workflow_version(repository_reference: GithubRepositoryRef
         logger.debug("Removing version '%r' of worlflow %r from LifeMonitor.... DONE", workflow_version, w)
 
         # return the deleted workflow version (serialized)
-        return wv
+        return workflow_version_data
 
     return None
 

@@ -332,7 +332,7 @@ def drop(snapshot):
 
     A snapshot is specified by a datetime formatted as yyyymmdd_hhmmss: e.g., 20220324_100137.
 
-    If no snaphot is provided the current app database will be removed.
+    If no snapshot is provided the current app database will be removed.
     """
     from lifemonitor.db import db_connection_params, drop_db
     db_name = db_connection_params()['dbname']

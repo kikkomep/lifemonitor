@@ -449,7 +449,7 @@ def cache_transaction(transaction, index, name, results):
     with cache.transaction(f"T-{index}") as t:
         current_transaction = cache.get_current_transaction()
         logger.debug("Current transaction: %r", current_transaction)
-        assert current_transaction != transaction, "Unexpected transaction: transaction should be defferent from that on the main process"
+        assert current_transaction != transaction, "Unexpected transaction: transaction should be different from that on the main process"
         assert t == current_transaction, "Unexpected transaction"
 
         with cache.transaction() as tx:

@@ -21,7 +21,7 @@
 from __future__ import annotations
 
 import logging
-from typing import List
+from typing import List, Optional
 
 from lifemonitor.api.models.workflows import Workflow, WorkflowVersion
 from lifemonitor.auth.models import User
@@ -38,6 +38,7 @@ class GithubWorkflowVersion(db.Model, ModelMixin):
     workflow_version_id = db.Column(db.ForeignKey('workflow_version.id'), nullable=False)
     repo_identifier = db.Column(db.String, nullable=False)
     repo_ref = db.Column(db.String, nullable=True)
+    notifications_enabled = db.Column(db.Boolean, nullable=True, default=True)
     workflow_version: WorkflowVersion = db.relationship(
         "WorkflowVersion", uselist=False,
         backref=db.backref("github_versions", cascade="all, delete-orphan"))
@@ -56,6 +57,7 @@ class GithubWorkflowVersion(db.Model, ModelMixin):
         self.workflow_version = version
         self.repo_identifier = repo
         self.repo_ref = ref
+        self.notifications_enabled = True
 
 
 class GithubWorkflowRegistry(db.Model, ModelMixin):
@@ -90,7 +92,14 @@ class GithubWorkflowRegistry(db.Model, ModelMixin):
         version = self.get_workflow_version(v)
         if not version:
             return GithubWorkflowVersion(self, v, repo, ref)
+        version.repo_ref = ref
+        if version.notifications_enabled is None:
+            version.notifications_enabled = True
         return version
+
+    def find_workflow_version_by_repo(self, repo: str, ref: Optional[str] = None) -> Optional[GithubWorkflowVersion]:
+        return next((w for w in self.workflow_versions
+                     if w.repo_identifier == repo and (ref is None or w.repo_ref == ref)), None)
 
     def remove_workflow_version(self, v: GithubWorkflowVersion):
         if v and v in self._workflow_versions:
@@ -124,3 +133,88 @@ class GithubWorkflowRegistry(db.Model, ModelMixin):
         except Exception as e:
             logger.debug(e)
             return None
+
+    @classmethod
+    def unregister_github_installation(cls, application_id: str, installation_id: str, safe: bool = True) -> int:
+        """"
+        Remove all the workflow versions and registries associated to the given installation.
+        If `safe` is True, the method will not raise any exception and will return 0 in case of error. Otherwise, the exception will be raised.
+        """
+        try:
+            registries = GithubWorkflowRegistry.query \
+                .filter(GithubWorkflowRegistry.application_id == application_id) \
+                .filter(GithubWorkflowRegistry.installation_id == installation_id) \
+                .all()
+            if not registries:
+                logger.warning("No github registries found for installation %r", installation_id)
+                return 0
+
+            deleted_count = 0
+            for registry in registries:
+                for workflow_version in list(registry.workflow_versions):
+                    workflow_version.delete(commit=False, flush=False)
+                registry.delete(commit=False, flush=False)
+                deleted_count += 1
+
+            db.session.commit()
+            db.session.flush()
+            logger.info("Deleted %d github registries for installation %r", deleted_count, installation_id)
+            return deleted_count
+        except Exception as e:
+            logger.error(e)
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.exception(e)
+            db.session.rollback()
+            if not safe:
+                raise e
+            return 0
+
+    @classmethod
+    def cleanup_registries(cls, installation_ids: List[str], safe: bool = True) -> int:
+        """"
+        Remove all the workflow versions and registries with missing installation or workflow version.
+
+        :param installation_ids: The list of valid installation ids.
+            All the registries with installation id not in this list will be removed.
+        :return: The number of removed registries.
+        """
+
+        removed = 0
+
+        try:
+            registries = cls.all()
+            logger.debug("Found %d github workflow registries", len(registries))
+
+            for registry in registries:
+                has_missing_installation = registry.installation_id not in installation_ids
+                has_missing_workflow_version = any(
+                    db.session.get(WorkflowVersion, version.workflow_version_id) is None
+                    for version in registry.workflow_versions
+                )
+
+                if has_missing_installation or has_missing_workflow_version:
+                    reason = "missing installation" if has_missing_installation else "missing workflow version"
+                    logger.warning(
+                        "Removing github workflow registry %r (installation=%r): %s",
+                        registry.id,
+                        registry.installation_id,
+                        reason,
+                    )
+                    for version in list(registry.workflow_versions):
+                        version.delete(commit=False, flush=False)
+                    registry.delete(commit=False, flush=False)
+                    removed += 1
+
+            if removed:
+                db.session.commit()
+                db.session.flush()
+            logger.info("Removed %d github workflow registries", removed)
+            return removed
+        except Exception as e:
+            logger.error(e)
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.exception(e)
+            db.session.rollback()
+            if not safe:
+                raise e
+            return 0

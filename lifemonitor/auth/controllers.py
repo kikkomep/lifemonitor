@@ -520,7 +520,7 @@ def merge():
     provider = request.args.get("provider")
 
     # Uncomment to disable the merge feature
-    # flash(f"Your <b>{p>rovider}</b> identity is already linked to the username "
+    # flash(f"Your <b>{provider}</b> identity is already linked to the username "
     #       f"<b>{username}</b> and cannot be merged to <b>{current_user.username}</b>",
     #       category="warning")
     # return redirect(url_for('auth.profile'))
@@ -612,7 +612,7 @@ def save_generic_code_flow_client():
                                               data['scopes'],
                                               split_by_crlf(data["redirect_uris"]),
                                               data['auth_method'])
-                logger.debug("lient created: %r", client)
+                logger.debug("client created: %r", client)
                 flash("App Created", category="success")
                 clear_cache()
             else:

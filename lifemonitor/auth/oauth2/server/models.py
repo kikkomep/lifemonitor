@@ -233,7 +233,7 @@ class AuthorizationServer(OAuth2AuthorizationServer):
 
     @staticmethod
     def request_authorization(client: Client, user: User) -> bool:
-        # We want to skip request for permssion when the client is a workflow registry.
+        # We want to skip request for permission when the client is a workflow registry.
         # The current implementation supports only workflow registries as
         # client_credentials clients. Thus, we can simple check if the grant 'client_credentials'
         # has been assigned to the client

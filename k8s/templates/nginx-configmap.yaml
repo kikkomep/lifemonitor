@@ -71,7 +71,7 @@ data:
             proxy_set_header        Host $http_host;
             proxy_set_header        Cookie $http_cookie;
 
-            # set uppstream
+            # set upstream
             proxy_pass              https://lm_app;
         }
 
@@ -97,7 +97,7 @@ data:
             proxy_set_header        Host $http_host;
             proxy_set_header        Cookie $http_cookie;
 
-            # set uppstream
+            # set upstream
             proxy_pass              https://lm_app;
 
             {{ include "lifemonitor.api.rateLimiting" . | indent 12 }}

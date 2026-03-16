@@ -167,7 +167,7 @@ def test_fetch_token_multi_threaded(app_context, redis_cache, user_identity: OAu
     db.session.refresh(user_identity)
     updated_token = user_identity._tokens
     assert updated_token != token, "The token should be refreshed"
-    logger.debug("Intial token: %r", token)
+    logger.debug("Initial token: %r", token)
     logger.debug("Updated token: %r", updated_token)
     # Check tokens read by threads
     update_thread = None

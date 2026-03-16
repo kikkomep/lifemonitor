@@ -61,6 +61,16 @@ def register_workflow(job_id: str, registration_data: object):
         job.update_data({'result': result})
 
 
+@schedule(name='refresh_workflow_stats_cache', queue_name="workflows", options={
+    'max_retries': JobSettings.MAX_RETRIES, 'max_age': JobSettings.MAX_AGE})
+def refresh_workflow_stats_cache():
+    from lifemonitor.api.services import LifeMonitor
+
+    logger.info("Refreshing workflow stats cache asynchronously...")
+    LifeMonitor.refresh_workflows_stats_cache()
+    logger.info("Refreshing workflow stats cache asynchronously... DONE")
+
+
 @schedule(trigger=IntervalTrigger(seconds=Timeout.WORKFLOW),
           queue_name='workflows', options={
               'max_retries': JobSettings.MAX_RETRIES,

@@ -69,7 +69,7 @@ def test_get_suite_by_registry_without_auth_access_to_workflow(m, request_contex
     logger.debug("Current registry: %r", auth.current_registry)
     assert auth.current_registry, "Unexpected registry in session"
     # add one fake workflow
-    mock_registry.name = "MockRegsitry"
+    mock_registry.name = "MockRegistry"
     workflow = MagicMock()
     workflow.uuid = "1111-222"
     workflow.version = "1"
@@ -77,7 +77,7 @@ def test_get_suite_by_registry_without_auth_access_to_workflow(m, request_contex
     suite.uuid = '111111'
     suite.workflow = workflow
     m.get_suite.return_value = suite
-    # the worklow exists but it is not linked to the registry
+    # the workflow exists but it is not linked to the registry
     m.get_public_workflow_version.return_value = None
     m.get_registry_workflow_version.side_effect = lm_exceptions.NotAuthorizedException
     with pytest.raises(lm_exceptions.Forbidden):
@@ -113,7 +113,7 @@ def test_get_suite_by_registry(m, request_context, mock_registry):
     logger.debug("Current registry: %r", auth.current_registry)
     assert auth.current_registry, "Unexpected registry in session"
     # add one fake workflow
-    mock_registry.name = "MockRegsitry"
+    mock_registry.name = "MockRegistry"
     workflow = MagicMock()
     workflow.uuid = "1111-222"
     workflow.version = "1"

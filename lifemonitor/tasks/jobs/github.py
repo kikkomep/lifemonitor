@@ -26,6 +26,7 @@ from lifemonitor.auth.models import User
 from lifemonitor.integrations.github import LifeMonitorGithubApp
 from lifemonitor.integrations.github.controllers import get_event_handler
 from lifemonitor.integrations.github.events import GithubEvent
+from lifemonitor.integrations.github.registry import GithubWorkflowRegistry
 
 from ..scheduler import TASK_EXPIRATION_TIME, schedule
 
@@ -56,15 +57,6 @@ def handle_event(event):
 
     event = e
     logger.debug("Push event: %r", event)
-    try:
-        logger.debug("Event ref: %r", event.repository_reference.branch or event.repository_reference.tag)
-        installation = event.installation
-        logger.debug("Installation: %r", installation)
-        repositories = installation.get_repos()
-        for r in repositories:
-            logger.debug("Processing repo: %r", r)
-    except Exception as e:
-        logger.debug(e)
 
     # Dispatch event to the proper handler
     event_handler = get_event_handler(event.type)
@@ -95,3 +87,19 @@ def check_installations():
             else:
                 logger.debug(f"Installation {installation_id} still alive")
         u.save()
+
+
+def cleanup_github_workflow_registries() -> int:
+    gh_app = LifeMonitorGithubApp.get_instance()
+    installation_ids = {int(_.id) for _ in gh_app.installations}
+    logger.debug("Current Github App installations: %r", installation_ids)
+
+    removed = GithubWorkflowRegistry.cleanup_registries(installation_ids)
+    logger.info("Removed %d github workflow registries", removed)
+    return removed
+
+
+@schedule(trigger=CronTrigger(minute=30, hour=4),
+          queue_name='github', options={'max_retries': 0, 'max_age': TASK_EXPIRATION_TIME})
+def check_github_workflow_registries():
+    return cleanup_github_workflow_registries()

@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 
 
 def create_blueprint(merge_identity_view):
-    authorization_handler = AuthorizatonHandler(merge_identity_view)
+    authorization_handler = AuthorizationHandler(merge_identity_view)
 
     def _handle_authorize(provider: FlaskRemoteApp, token, user_info):
         return authorization_handler\
@@ -154,7 +154,7 @@ def create_blueprint(merge_identity_view):
     return blueprint
 
 
-class AuthorizatonHandler:
+class AuthorizationHandler:
 
     def __init__(self, merge_view="auth.merge") -> None:
         self.merge_view = merge_view

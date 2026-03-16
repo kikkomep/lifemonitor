@@ -24,19 +24,25 @@ import logging
 import re
 from typing import List, Union
 
-from lifemonitor.api.models import issues
-from lifemonitor.integrations.github.app import LifeMonitorGithubApp
-
+from github.GithubException import GithubException
 from github.GithubObject import NotSet
 from github.Issue import Issue
 from github.IssueComment import IssueComment
 from github.Repository import Repository
 
+from lifemonitor.api.models import issues
+from lifemonitor.integrations.github.app import LifeMonitorGithubApp
+
 from . import pull_requests
-from .utils import delete_branch, get_labels_from_strings
+from .utils import (delete_branch, get_existing_branches_for_deletion,
+                    get_labels_from_strings)
 
 # Config a module level logger
 logger = logging.getLogger(__name__)
+
+
+def _is_transient_github_exception(error: GithubException) -> bool:
+    return error.status in {500, 502, 503, 504}
 
 
 class GithubIssue(Issue):
@@ -124,7 +130,7 @@ def create_issue(repo: Repository, issue: Union[str, issues.WorkflowRepositoryIs
         return repo.create_issue(
             title=issue.name,
             body=f"""<b>Issue ID:</b> <code>{issue.get_identifier()}</code><br><br>"""
-                 f"""<b>Description:</b><br>{issue.description}""",
+            f"""<b>Description:</b><br>{issue.description}""",
             labels=get_labels_from_strings(repo, issue.labels)
         )
     except KeyError as e:
@@ -139,9 +145,20 @@ def close_issue(repo: Repository, issue: Union[str, issues.WorkflowRepositoryIss
         raise ValueError(f"Issue '{issue}' not found")
     open_issue = find_issue(repo, issue)
     if open_issue:
-        open_issue.edit(state='closed')
+        try:
+            open_issue.edit(state='closed')
+        except GithubException as e:
+            if _is_transient_github_exception(e):
+                logger.warning("Temporary GitHub error while closing issue '%s': %s", issue.name, e)
+            else:
+                raise
     # delete PR branch
-    delete_branch(repo, issue.id)
+    existing_branches = get_existing_branches_for_deletion(
+        repo,
+        [issue.id],
+        prefetch_threshold=1,
+    )
+    delete_branch(repo, issue.id, existing_branches=existing_branches)
 
 
 def find_issue(repo: Repository, issue: Union[str, issues.WorkflowRepositoryIssue]) -> Issue:
@@ -150,9 +167,15 @@ def find_issue(repo: Repository, issue: Union[str, issues.WorkflowRepositoryIssu
     if not issue:
         raise ValueError(f"Issue '{issue}' not found")
     lm = LifeMonitorGithubApp.get_instance()
-    for i in repo.get_issues():
-        logger.debug("Checking issue: %r - %r - %r", issue.name, i.user.login, lm.bot)
-        if i.user.login == lm.bot and i.title == issue.name:
-            logger.debug("Issue '%r' found", issue)
-            return i
+    try:
+        for i in repo.get_issues():
+            logger.debug("Checking issue: %r - %r - %r", issue.name, i.user.login, lm.bot)
+            if i.user.login == lm.bot and i.title == issue.name:
+                logger.debug("Issue '%r' found", issue)
+                return i
+    except GithubException as e:
+        if _is_transient_github_exception(e):
+            logger.warning("Temporary GitHub error while retrieving issues for '%s': %s", issue.name, e)
+            return None
+        raise
     return None

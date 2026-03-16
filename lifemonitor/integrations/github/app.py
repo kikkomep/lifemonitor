@@ -81,7 +81,7 @@ class LifeMonitorGithubApp(GithubApp):
     @classmethod
     def get_instance(cls) -> LifeMonitorGithubApp:
         if not cls.check_initialization():
-            raise IllegalStateException(detail="Github App not initializaed")
+            raise IllegalStateException(detail="Github App not initialized")
         return cls.__instance__
 
     @classmethod
