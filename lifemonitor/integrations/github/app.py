@@ -301,12 +301,15 @@ class LifeMonitorInstallation(Installation.Installation):
         assert isinstance(full_name_or_id, (str, int)), full_name_or_id
         url_base = "/repositories/" if isinstance(full_name_or_id, int) else "/repos/"
         url = f"{url_base}{full_name_or_id}"
+        auth_token = self.auth.token
         if lazy:
-            return GithubWorkflowRepository(
-                self._requester, {}, {"url": url}, completed=False, ref=ref, rev=rev
+            return InstallationGithubWorkflowRepository(
+                self._requester, {}, {"url": url}, completed=False,
+                ref=ref, rev=rev, auth_token=auth_token
             )
         headers, data = self._requester.requestJsonAndCheck("GET", url)
-        return InstallationGithubWorkflowRepository(self._requester, headers, data, completed=True, ref=ref, rev=rev)
+        return InstallationGithubWorkflowRepository(self._requester, headers, data, completed=True,
+                                                    ref=ref, rev=rev, auth_token=auth_token)
 
     def get_repos(self) -> List[InstallationGithubWorkflowRepository]:
         url_parameters = dict()
