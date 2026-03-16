@@ -260,7 +260,7 @@ class TestingService(db.Model, ModelMixin):
             logger.debug("Service instance %r for URL %r found in DB", instance, url)
             if instance:
                 return instance
-            # try to instanciate the service if the it has not been registered yet
+            # try to instantiate the service if the it has not been registered yet
             logger.debug("No service for URL %r.  Registering a service of type %r now",
                          url, service_type)
             return cls.service_type_registry.get_class(service_type)(url)

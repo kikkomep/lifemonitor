@@ -10,6 +10,6 @@ ENV SECRET_TOKEN="Bearer 1234567890"
 # Set default data path
 ENV DATA_PATH="/data"
 
-# Default entrpoint
+# Default entrypoint
 ENTRYPOINT [ "python3" ]
 CMD [ "/app.py" ]

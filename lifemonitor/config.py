@@ -24,16 +24,29 @@ import os
 import re
 from base64 import b64encode
 from logging.config import dictConfig
-from typing import List, Type
+from typing import Any, Iterable, List, Mapping, Type
 
 import dotenv
 from flask import current_app
 
 from .db import db_uri
+from .utils import boolean_value
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 logger = logging.getLogger(__name__)
+
+
+def _iter_config_keys(config: Any) -> Iterable[str]:
+    if isinstance(config, Mapping):
+        return config.keys()
+    return (_ for _ in dir(config) if _.isupper())
+
+
+def _get_config_value(config: Any, key: str, default=None):
+    if isinstance(config, Mapping):
+        return config.get(key, default)
+    return getattr(config, key, default)
 
 
 def load_settings(config=None):
@@ -66,20 +79,31 @@ def load_proxy_entries(config=None):
         result['default'] = {'name': 'default', 'url': get_external_server_url()}
     except KeyError:
         pass
-    for k in config:
+
+    for k in _iter_config_keys(config):
         service_match = pattern.match(k)
         if service_match:
             try:
                 service_name = service_match.group(1)
-                service_url = config[f"PROXY_{service_name}_URL"]
+                service_url = _get_config_value(config, f"PROXY_{service_name}_URL")
+                service_ssl_verify = _get_config_value(config, f"PROXY_{service_name}_SSL_VERIFY", True)
+                if isinstance(service_ssl_verify, str):
+                    service_ssl_verify = boolean_value(service_ssl_verify.strip())
+                if not service_url:
+                    continue
                 logger.info(f"Read proxy entry '{service_name.lower()}': {service_url}")
                 result[service_name.lower()] = {
                     'name': service_name.lower(),
-                    'url': service_url
+                    'url': service_url,
+                    'ssl_verify': service_ssl_verify
                 }
-            except (KeyError, IndexError) as e:
+            except (KeyError, IndexError, ValueError) as e:
                 logger.error(f"Error when reading entry '{service_match}': {str(e)}")
     return result
+
+
+def get_proxy_instance_names(config=None) -> List[str]:
+    return sorted(load_proxy_entries(config).keys())
 
 
 class BaseConfig:
@@ -142,6 +166,7 @@ class DevelopmentConfig(BaseConfig):
     CONFIG_NAME = "development"
     # Add a random secret (required to enable HTTP sessions)
     SECRET_KEY = os.getenv("DEV_SECRET_KEY", BaseConfig.SECRET_KEY)
+    WTF_CSRF_SECRET_KEY = SECRET_KEY
     DEBUG = True
     LOG_LEVEL = "DEBUG"
     TESTING = False
@@ -151,6 +176,7 @@ class DevelopmentConfig(BaseConfig):
 class ProductionConfig(BaseConfig):
     CONFIG_NAME = "production"
     SECRET_KEY = os.getenv("PROD_SECRET_KEY", BaseConfig.SECRET_KEY)
+    WTF_CSRF_SECRET_KEY = SECRET_KEY
     TESTING = False
     CACHE_TYPE = "flask_caching.backends.rediscache.RedisCache"
 
@@ -224,6 +250,9 @@ def get_config_by_name(name, settings=None):
         if settings:
             for k, v in settings.items():
                 setattr(config, k, v)
+        csrf_secret = getattr(config, "WTF_CSRF_SECRET_KEY", None)
+        if getattr(config, "SECRET_KEY", None) and not csrf_secret:
+            setattr(config, "WTF_CSRF_SECRET_KEY", getattr(config, "SECRET_KEY"))
         return config
     except KeyError:
         logger.warning("Unable to load the configuration %s: using 'production'", name)
@@ -258,7 +287,7 @@ class LogFilter(logging.Filter):
 
 BLACK, RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE = range(8)
 
-# These are the sequences need to get colored ouput
+# These are the sequences need to get colored output
 RESET_SEQ = "\033[0m"
 COLOR_SEQ = "\033[1;%dm"
 BOLD_SEQ = "\033[1m"

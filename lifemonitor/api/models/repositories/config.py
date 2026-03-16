@@ -29,6 +29,7 @@ from typing import Any, Dict, List, Optional
 import yaml
 
 import lifemonitor.api.models as models
+from lifemonitor import config as lm_config
 from lifemonitor.schemas.validators import (ConfigFileValidator,
                                             ValidationResult)
 from lifemonitor.utils import match_ref
@@ -126,7 +127,7 @@ class WorkflowRepositoryConfig(RepositoryFile):
     def _get_refs_list(self, refs="branches,tags") -> List[Dict[str, Any]]:
         on_push = self._raw_data.get('push', None)
         if on_push and refs:
-            return [_ for ref in refs.split(",") for _ in on_push.get(ref, [])]
+            return [_ for ref in refs.split(",") for _ in (on_push.get(ref) or [])]
         return []
 
     def _get_ref_settings(self, ref: str, ref_type: str) -> Optional[Dict]:
@@ -139,7 +140,8 @@ class WorkflowRepositoryConfig(RepositoryFile):
         if not ref_pattern:
             return None
         logger.debug(f"ref {ref} matched with pattern {ref_pattern}")
-        return next((r for r in self._raw_data['push']['branches' if ref_type == 'branch' else 'tags'] if r["name"] == ref_pattern[1]), None)
+        refs = self._raw_data.get('push', {}).get('branches' if ref_type == 'branch' else 'tags') or []
+        return next((r for r in refs if r["name"] == ref_pattern[1]), None)
 
     def get_ref_settings(self, ref: str) -> Optional[Dict]:
         return self._get_ref_settings(ref, 'branch') or self._get_ref_settings(ref, 'tag') or None
@@ -202,12 +204,16 @@ class WorkflowRepositoryConfig(RepositoryFile):
     def new(cls, repository_path: str, workflow_title: Optional[str] = None, public: bool = False, main_branch: str = "main") -> WorkflowRepositoryConfig:
         tmpl = TemplateRepositoryFile(repository_path="lifemonitor/templates/repositories/base", name=cls.TEMPLATE_FILENAME)
         registries = ["wfhub", "wfhubdev"]
+        proxy_instances = lm_config.get_proxy_instance_names(lm_config.get_config())
+        if not proxy_instances:
+            proxy_instances = ["default"]
         issue_types = models.WorkflowRepositoryIssue.all()
         os.makedirs(repository_path, exist_ok=True)
         template_args = dict(
             public=public,
             issues=issue_types,
-            registries=registries)
+            registries=registries,
+            lifemonitor_instances=proxy_instances)
         if workflow_title:
             template_args['workflow_name'] = workflow_title
         if main_branch:

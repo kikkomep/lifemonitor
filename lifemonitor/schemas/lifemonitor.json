@@ -5,12 +5,12 @@
   "type": "object",
   "properties": {
     "name": {
-      "description": "worfklow name (override name defined on the RO-Crate metadata)",
+      "description": "workflow name (override name defined on the RO-Crate metadata)",
       "type": "string",
       "minLength": 1
     },
     "public": {
-      "description": "worfklow visibility",
+      "description": "workflow visibility",
       "type": "boolean",
       "default": false
     },
@@ -85,7 +85,7 @@
           "default": true
         },
         "lifemonitor_instance": {
-          "description": "Specify the LifeMonitor instance -- 'production' or 'developement' to be notified.",
+          "description": "Specify the LifeMonitor instance -- 'production' or 'development' to be notified.",
           "type": "string",
           "minLength": 1
         }

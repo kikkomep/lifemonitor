@@ -5,31 +5,31 @@
 // Icon Colors
 .swal2-icon {
   &.swal2-info {
-    border-color: ligthen($info, 20%);
+    border-color: lighten($info, 20%);
     color: $info;
   }
 
   &.swal2-warning {
-    border-color: ligthen($warning, 20%);
+    border-color: lighten($warning, 20%);
     color: $warning;
   }
 
   &.swal2-error {
-    border-color: ligthen($danger, 20%);
+    border-color: lighten($danger, 20%);
     color: $danger;
   }
 
   &.swal2-question {
-    border-color: ligthen($secondary, 20%);
+    border-color: lighten($secondary, 20%);
     color: $secondary;
   }
 
   &.swal2-success {
-    border-color: ligthen($success, 20%);
+    border-color: lighten($success, 20%);
     color: $success;
 
     .swal2-success-ring {
-      border-color: ligthen($success, 20%);
+      border-color: lighten($success, 20%);
     }
 
     [class^='swal2-success-line'] {

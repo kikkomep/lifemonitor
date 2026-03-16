@@ -87,7 +87,7 @@ jobs:
             ${{ env.pythonLocation }}-openapi-spec-validator
       - name: Install OpenAPI Spec Validator
         if: steps.openapi-spec-validator-cache.outputs.cache-hit != 'true'
-        run: pip install openapi-spec-validator
+        run: pip install openapi-spec-validator==0.7.2
       - name: Run checks
         run: openapi-spec-validator specs/api.yaml
 

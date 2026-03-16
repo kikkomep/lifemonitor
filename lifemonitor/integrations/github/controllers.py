@@ -21,15 +21,16 @@
 from __future__ import annotations
 
 import logging
-import os
 import uuid
 from tempfile import TemporaryDirectory
 from typing import Any, Callable, Dict, List, Optional, Union
+from urllib.parse import urljoin
 
 import requests
-from flask import (Blueprint, Flask, current_app, redirect, render_template,
-                   request)
+from flask import (Blueprint, Flask, current_app, has_app_context,
+                   has_request_context, redirect, render_template, request)
 from flask_login import login_required
+from github import GithubException
 from github.PullRequest import PullRequest
 
 from lifemonitor import cache
@@ -50,7 +51,8 @@ from lifemonitor.integrations.github.issues import GithubIssue
 from lifemonitor.integrations.github.notifications import \
     GithubWorkflowVersionNotification
 from lifemonitor.integrations.github.settings import GithubUserSettings
-from lifemonitor.integrations.github.utils import delete_branch
+from lifemonitor.integrations.github.utils import (
+    delete_branch, get_existing_branches_for_deletion)
 from lifemonitor.integrations.github.wizards import GithubWizard
 from lifemonitor.tasks import Scheduler
 from lifemonitor.utils import (bool_from_string, get_git_repo_revision,
@@ -60,6 +62,7 @@ from . import services
 
 # Config a module level logger
 logger = logging.getLogger(__name__)
+FORWARDED_BY_HEADER = "X-LM-Forwarded-By"
 
 
 def ping(event: GithubEvent):
@@ -104,7 +107,7 @@ def refresh_workflow_builds(event: GithubEvent):
             for i in instances:
                 workflow_version = i.test_suite.workflow_version
                 if workflow_version.version in refs or (not workflow_version.has_revision() and not workflow_version.next_version):
-                    logger.warning("Version %r to uodate", workflow_version)
+                    logger.warning("Version %r to update", workflow_version)
                     i.get_test_build(f"{github_workflow_run.id}_{github_workflow_run.raw_data['run_attempt']}")
                     i.test_suite.workflow_version.status
                 else:
@@ -210,12 +213,52 @@ def installation_repositories(event: GithubEvent):
                         __check_for_issues_and_register__(repo_info, settings,
                                                           event.sender.user.registry_settings, True)
 
-        elif event.action == 'deleted':
-            installation = event.installation
-            logger.debug("App Installation: %r", installation)
+        elif event.action in ['deleted', 'removed']:
+            logger.debug("Deleting installation data for installation %r (action=%s)", event.installation_id, event.action)
 
-            repositories = event.repositories_removed
-            logger.debug("App installed on Repositories: %r", repositories)
+            repositories_payload = event.payload.get('repositories_removed') or event.payload.get('repositories') or []
+            logger.debug("Repositories removed from installation: %r", repositories_payload)
+
+            if not repositories_payload and event.action == 'deleted':
+                tracked_refs = services.get_tracked_repository_refs(event)
+                logger.debug("Falling back to tracked repositories from local registry: %r", tracked_refs)
+                repositories_payload = [
+                    {
+                        'id': 0,
+                        'name': repo_full_name.split('/')[-1],
+                        'full_name': repo_full_name,
+                        'url': f"https://api.github.com/repos/{repo_full_name}",
+                        'clone_url': f"https://github.com/{repo_full_name}.git",
+                        'owner': {'id': 0, 'login': repo_full_name.split('/')[0]},
+                    }
+                    for repo_full_name in tracked_refs
+                ]
+
+            for repo in repositories_payload:
+                repo_full_name = repo.get('full_name', None)
+                if not repo_full_name:
+                    logger.warning("Skipping repository without full_name in installation.%s payload: %r", event.action, repo)
+                    continue
+
+                repo_refs = services.get_repository_refs_for_full_name(event, repo_full_name)
+                logger.debug("Found refs for '%s': %r", repo_full_name, repo_refs)
+                if not repo_refs:
+                    logger.warning("No tracked refs found for repository '%s' in installation %r", repo_full_name, event.installation_id)
+                    continue
+
+                for ref in repo_refs:
+                    repo_event_payload = dict(event.payload)
+                    repo_event_payload.pop('repositories', None)
+                    repo_event_payload.pop('repositories_added', None)
+                    repo_event_payload.pop('repositories_removed', None)
+                    repo_event_payload['repository'] = repo
+                    repo_event_payload['ref'] = ref
+                    repo_event = GithubEvent(event.headers, repo_event_payload)
+                    __delete_repository_reference__(repo_event.repository_reference)
+
+            if event.action == 'deleted':
+                deleted_registries = services.delete_event_github_registries(event)
+                logger.debug("Deleted %d github registries for installation %r", deleted_registries, event.installation_id)
 
     except Exception as e:
         logger.error(str(e))
@@ -227,41 +270,83 @@ def __notify_workflow_version_event__(repo_reference: GithubRepositoryReference,
                                       workflow_version: Union[WorkflowVersion, Dict],
                                       action: str):
     try:
+        def _build_repository_data() -> Dict[str, Any]:
+            repository_data = dict(repo_reference.event.payload.get('repository', {}))
+            repository_data['full_name'] = repository_data.get('full_name', repo_reference.full_name)
+            repository_data['ref'] = repo_reference.ref
+            repository_data['html_url'] = repository_data.get(
+                'html_url',
+                f"https://github.com/{repository_data['full_name']}",
+            )
+            return repository_data
+
+        def _resolve_submitter() -> Optional[User]:
+            if isinstance(workflow_version, WorkflowVersion):
+                return workflow_version.submitter
+            submitter = None
+            submitter_data = workflow_version.get('submitter', {}) if isinstance(workflow_version, dict) else {}
+            submitter_id = submitter_data.get('id', None)
+            if submitter_id is not None:
+                submitter = User.find_by_id(submitter_id)
+            if submitter is None:
+                try:
+                    sender = repo_reference.event.sender
+                    submitter = sender.user if sender else None
+                except Exception as e:
+                    if logger.isEnabledFor(logging.DEBUG):
+                        logger.exception(e)
+            return submitter
+
         notification_enabled = True
-        repo: GithubWorkflowRepository = repo_reference.repository
         pattern = None
-        ref_type = 'branches' if repo_reference.branch else 'tags'
-        try:
-            if hasattr(repo.config, ref_type):
-                ref_list = getattr(repo.config, ref_type)
-                ref = repo_reference.branch or repo_reference.tag
-                _, pattern = match_ref(ref, ref_list)
-                if pattern:
-                    notification_enabled = ref_list[pattern].get('enable_notifications', True)
-                    logger.debug("Notifications enabled for '%s': %r", pattern, notification_enabled)
-                else:
-                    logger.debug("No notification setting found for repo %s (ref: %s)", repo.full_name, ref)
-        except AttributeError as e:
-            if logger.isEnabledFor(logging.DEBUG):
-                logger.exception(e)
+        if action == 'deleted':
+            if isinstance(workflow_version, dict):
+                notification_enabled = workflow_version.get('_notification_enabled', True)
+                if notification_enabled is None:
+                    notification_enabled = True
+            else:
+                notification_enabled = services.get_repository_ref_notifications_enabled(
+                    repo_reference.event,
+                    repo_reference.full_name,
+                    repo_reference.ref,
+                    default=True,
+                )
+        else:
+            repo: GithubWorkflowRepository = repo_reference.repository
+            ref_type = 'branches' if repo_reference.branch else 'tags'
+            try:
+                if hasattr(repo.config, ref_type):
+                    ref_list = getattr(repo.config, ref_type)
+                    ref = repo_reference.branch or repo_reference.tag
+                    _, pattern = match_ref(ref, ref_list)
+                    if pattern:
+                        notification_enabled = ref_list[pattern].get('enable_notifications', True)
+                        logger.debug("Notifications enabled for '%s': %r", pattern, notification_enabled)
+                    else:
+                        logger.debug("No notification setting found for repo %s (ref: %s)", repo.full_name, ref)
+            except AttributeError as e:
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.exception(e)
+            services.update_repository_ref_notifications(
+                repo_reference.event,
+                repo_reference.full_name,
+                repo_reference.ref,
+                notification_enabled,
+            )
         logger.debug("Notifications enabled: %r", notification_enabled)
         if notification_enabled:
-            logger.debug(f"Setting notification for action '{action}' on repo '{repo.full_name}' (ref: {repo.ref})")
-            submitter = None
-            if isinstance(workflow_version, WorkflowVersion):
-                submitter = workflow_version.submitter
-            else:
-                sender = repo_reference.event.sender
-                submitter = sender.user if sender else None
+            logger.debug("Setting notification for action '%s' on repo '%s' (ref: %s)",
+                         action, repo_reference.full_name, repo_reference.ref)
+            submitter = _resolve_submitter()
             if submitter:
                 version = workflow_version if isinstance(workflow_version, dict) else serializers.WorkflowVersionSchema(exclude=('meta', 'links')).dump(workflow_version)
-                repo_data = repo.raw_data
-                repo_data['ref'] = repo.ref
+                repo_data = _build_repository_data()
                 n = GithubWorkflowVersionNotification(workflow_version=version, repository=repo_data, action=action, users=[submitter])
                 n.save()
-                logger.debug(f"Setting notification for action '{action}' on repo '{repo.full_name}' (ref: {repo.ref})")
+                logger.debug("Setting notification for action '%s' on repo '%s' (ref: %s)",
+                             action, repo_reference.full_name, repo_reference.ref)
             else:
-                logger.warning("Unable to find user identity associated to repo: %r", repo)
+                logger.warning("Unable to find user identity associated to repo '%s'", repo_reference.full_name)
         else:
             logger.warning("Notification disabled for %r (ref %r)", repo_reference.full_name, pattern)
     except Exception as e:
@@ -312,11 +397,31 @@ def __skip_branch_or_tag__(repo_info: GithubRepositoryReference,
     return True
 
 
-def __forward_event__(event: GithubEvent) -> Optional[Dict]:
-    repo_info = event.repository_reference
+def __resolve_event_forwarding_target__(event: GithubEvent, proxy_entries: Dict[str, Dict[str, Any]]) -> Optional[Dict]:
+    try:
+        repo_info = event.repository_reference
+    except ValueError as e:
+        raise e
     logger.debug("Repo reference: %r", repo_info)
 
-    repo: GithubWorkflowRepository = repo_info.repository
+    try:
+        repo: GithubWorkflowRepository = repo_info.repository
+    except GithubException as e:
+        logger.warning(
+            "Unable to resolve repository for event '%s' while computing forwarding target: %s. "
+            "Falling back to default instance.",
+            event.type,
+            str(e),
+        )
+        return None
+    except Exception as e:
+        logger.warning(
+            "Unable to resolve repository for event '%s' while computing forwarding target: %s. "
+            "Falling back to default instance.",
+            event.type,
+            str(e),
+        )
+        return None
     logger.debug("Repository: %r", repo)
 
     config: WorkflowRepositoryConfig = repo.config
@@ -324,35 +429,44 @@ def __forward_event__(event: GithubEvent) -> Optional[Dict]:
         logger.debug("No config file found")
         return None
 
-    logger.error("Workflow repository config: %r", config._raw_data)
+    logger.debug("Workflow repository config: %r", config._raw_data)
 
     ref = repo_info.branch or repo_info.tag
-    logger.error("Ref: %s", ref)
+    logger.debug("Ref: %s", ref)
 
-    ref_settings = repo.config.get_ref_settings(ref)
-    logger.warning("Repo ref settings: %r", ref_settings)
+    ref_settings = config.get_ref_settings(ref)
+    logger.debug("Repo ref settings: %r", ref_settings)
 
-    default_instance_info = current_app.config['PROXY_ENTRIES']['default']
+    default_instance_info = proxy_entries.get('default')
+    if not default_instance_info:
+        logger.warning("Missing default proxy entry in PROXY_ENTRIES")
+        return None
     logger.debug("Default LM instance: %r", default_instance_info)
 
     if ref_settings:
+        if 'lifemonitor_instance' in ref_settings:
+            lm_instance_name = ref_settings.get('lifemonitor_instance')
+            if lm_instance_name is not None and not str(lm_instance_name).strip():
+                logger.warning(
+                    "Skipping event handling for ref '%s': empty 'lifemonitor_instance' in repository configuration",
+                    ref,
+                )
+                return {'skip': True}
+
         lm_instance_name = ref_settings.get('lifemonitor_instance', None)
         if lm_instance_name:
-            lm_instance_info = current_app.config['PROXY_ENTRIES'][lm_instance_name]
-            assert lm_instance_info, "Undefined instance info"
-            if lm_instance_info['url'] != default_instance_info['url']:
-                logger.warning("Using LM instance: %r", lm_instance_info)
-                redirect_url = os.path.join(lm_instance_info['url'], 'integrations/github')
-                logger.debug("Redirecting to: %r", redirect_url)
-                response = requests.request(
-                    method=request.method,
-                    url=redirect_url,
-                    headers={key: value for (key, value) in request.headers if key != 'Host'},
-                    data=request.get_data(),
-                    cookies=request.cookies,
-                    allow_redirects=False,
-                    stream=True)
-                logger.debug("Respose: %r", response.content)
+            lm_instance_name = str(lm_instance_name).strip().lower()
+            lm_instance_info = proxy_entries.get(lm_instance_name)
+            if not lm_instance_info:
+                logger.warning(
+                    "Unknown LifeMonitor instance '%s' in repository configuration (available: %s). "
+                    "Falling back to default instance.",
+                    lm_instance_name,
+                    sorted(proxy_entries.keys()),
+                )
+                return None
+
+            if lm_instance_info['url'].rstrip('/') != default_instance_info['url'].rstrip('/'):
                 return lm_instance_info
         else:
             logger.debug("No settings found for ref: %s", ref)
@@ -360,6 +474,142 @@ def __forward_event__(event: GithubEvent) -> Optional[Dict]:
     # Fall back to the default/current LifeMonitor instance
     logger.warning("Using default lifemonitor: %s", default_instance_info)
     return None
+
+
+def __resolve_multi_repo_forwarding_target__(event: GithubEvent,
+                                             proxy_entries: Dict[str, Dict[str, Any]]) -> Optional[Dict]:
+    payload = event.payload if isinstance(event.payload, dict) else {}
+    repositories = payload.get('repositories') or payload.get('repositories_added') or payload.get('repositories_removed') or []
+    if not repositories:
+        return None
+
+    target_ids = set()
+    forward_target = None
+    for repo in repositories:
+        repo_payload = dict(payload)
+        repo_payload.pop('repositories', None)
+        repo_payload.pop('repositories_added', None)
+        repo_payload.pop('repositories_removed', None)
+        repo_payload['repository'] = repo
+
+        if not repo_payload.get('ref'):
+            default_branch = repo.get('default_branch') if isinstance(repo, dict) else None
+            if default_branch:
+                repo_payload['ref'] = f"refs/heads/{default_branch}"
+
+        repo_event = GithubEvent(event.headers, repo_payload)
+        target = __resolve_event_forwarding_target__(repo_event, proxy_entries)
+        if target and target.get('skip') is True:
+            return target
+
+        if target is None:
+            target_ids.add('default')
+            continue
+
+        target_url = target.get('url', '').rstrip('/')
+        target_ids.add(target_url)
+        forward_target = target
+
+    if len(target_ids) > 1:
+        logger.warning("Multiple LM forwarding targets for event '%s': %r. Keeping event on current instance.",
+                       event.type, sorted(target_ids))
+        return None
+
+    if target_ids == {'default'}:
+        return None
+
+    return forward_target
+
+
+def __forward_payload_to_instance__(instance_info: Dict[str, Any]) -> Dict[str, Any]:
+    redirect_url = urljoin(f"{instance_info['url'].rstrip('/')}/", 'integrations/github')
+    logger.warning("Redirecting to: %r", redirect_url)
+    headers = {key: value for (key, value) in request.headers if key != 'Host'}
+    headers[FORWARDED_BY_HEADER] = current_app.config.get('NAME', 'lifemonitor')
+    response = requests.request(
+        method=request.method,
+        url=redirect_url,
+        headers=headers,
+        data=request.get_data(),
+        allow_redirects=False,
+        timeout=30,
+        verify=instance_info.get('ssl_verify', True)
+    )
+    if response.status_code >= 400:
+        response_text = response.text if response.text is not None else ""
+        response_excerpt = response_text[:500]
+        logger.error(
+            "Forwarding failed to '%s' (%s): status=%s body=%s",
+            instance_info.get('name', 'unknown'),
+            redirect_url,
+            response.status_code,
+            response_excerpt,
+        )
+        raise RuntimeError(
+            "Unable to forward event to {name}: status={status} url={url} body={body}".format(
+                name=instance_info.get('name', 'unknown'),
+                status=response.status_code,
+                url=redirect_url,
+                body=response_excerpt,
+            )
+        )
+    logger.info(
+        "Forwarded event to '%s' (%s) with status %s",
+        instance_info.get('name', 'unknown'),
+        redirect_url,
+        response.status_code,
+    )
+    return instance_info
+
+
+def __forward_event__(event: GithubEvent) -> Optional[Dict]:
+    if has_request_context() and request.headers.get(FORWARDED_BY_HEADER):
+        logger.debug("Skipping forwarding for event '%s': request already forwarded by '%s'",
+                     event.type, request.headers.get(FORWARDED_BY_HEADER))
+        return None
+
+    if not has_app_context():
+        logger.debug("Skipping forwarding for event '%s': no app context", event.type)
+        return None
+
+    proxy_entries = current_app.config.get('PROXY_ENTRIES', {})
+    default_instance_info = proxy_entries.get('default')
+    if not default_instance_info:
+        logger.warning("Missing default proxy entry in PROXY_ENTRIES")
+        return None
+
+    payload = event.payload if isinstance(event.payload, dict) else {}
+    is_multi_repo_event = any(k in payload for k in ('repositories', 'repositories_added', 'repositories_removed')) \
+        and 'repository' not in payload
+
+    try:
+        if is_multi_repo_event:
+            lm_instance_info = __resolve_multi_repo_forwarding_target__(event, proxy_entries)
+        else:
+            lm_instance_info = __resolve_event_forwarding_target__(event, proxy_entries)
+    except ValueError as e:
+        logger.debug("Skipping event forwarding for event '%s': %s", event.type, str(e))
+        return None
+    except Exception as e:
+        logger.warning(
+            "Skipping forwarding for event '%s' because target resolution failed: %s",
+            event.type,
+            str(e),
+        )
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.exception(e)
+        return None
+
+    if not lm_instance_info:
+        return None
+    if lm_instance_info.get('skip') is True:
+        return lm_instance_info
+
+    if lm_instance_info['url'].rstrip('/') == default_instance_info['url'].rstrip('/'):
+        return None
+
+    logger.warning("Using LM instance: %r", lm_instance_info)
+    return __forward_payload_to_instance__(lm_instance_info)
 
 
 def __check_for_issues_and_register__(repo_info: GithubRepositoryReference,
@@ -452,19 +702,14 @@ def delete(event: GithubEvent):
     repo_info = event.repository_reference
     logger.debug("Repo reference: %r", repo_info)
 
-    repo: GithubWorkflowRepository = repo_info.repository
-    logger.debug("Repository: %r", repo)
+    return __delete_repository_reference__(repo_info)
 
-    logger.debug("Ref: %r", repo.ref)
-    logger.debug("Refs: %r", repo.git_refs_url)
-    logger.debug("Tree: %r", repo.trees_url)
-    logger.debug("Commit: %r", repo.rev)
 
-    logger.warning("Is Tag: %s", repo_info.tag)
-    logger.warning("Is Branch: %s", repo_info.branch)
+def __delete_repository_reference__(repo_info: GithubRepositoryReference):
+    logger.debug("Deleting repository reference: %s (ref=%s)", repo_info.full_name, repo_info.ref)
 
     # workflow submitter
-    submitter = services.identify_workflow_version_submitter(event.repository_reference)
+    submitter = services.identify_workflow_version_submitter(repo_info)
     if not submitter:
         logger.warning("Unable to identify the submitter of the workflow version")
         return
@@ -545,13 +790,25 @@ def __delete_support_branches__(event: GithubEvent):
         if current_step:
             support_branches.append(current_step.id)
 
+    existing_branches = get_existing_branches_for_deletion(
+        event.repository_reference.repository,
+        support_branches,
+    )
+
     # delete support branches
     logger.warning("Support branches to delete: %r", support_branches)
     for support_branch in support_branches:
         try:
             logger.debug("Trying to delete support branch: %s ...", support_branch)
-            delete_branch(event.repository_reference.repository, support_branch)
-            logger.debug("Support branch %s deleted", support_branch)
+            deleted = delete_branch(
+                event.repository_reference.repository,
+                support_branch,
+                existing_branches=existing_branches,
+            )
+            if deleted:
+                logger.debug("Support branch %s deleted", support_branch)
+            else:
+                logger.debug("Support branch %s not deleted", support_branch)
         except Exception as e:
             if logger.isEnabledFor(logging.DEBUG):
                 logger.exception(e)
@@ -676,6 +933,9 @@ def issue_comment(event: GithubEvent):
     if wizard:
         step = wizard.current_step
         logger.debug("The current step: %r (wizard: %r)", step, step.wizard if step else None)
+        if not step:
+            logger.debug("No active step found for wizard %r", wizard.title)
+            return f"No active step found for wizard {wizard.title}", 204
 
         if isinstance(step, QuestionStep):
             answer = step.get_answer()
@@ -714,7 +974,14 @@ def issue_comment(event: GithubEvent):
             else:
                 # Unable to understand user answer
                 logger.debug("Unable to understand user answer")
-                event.comment.create_reaction("confused")
+                try:
+                    event.comment.create_reaction("confused")
+                except GithubException as e:
+                    logger.warning(
+                        "Unable to create reaction on issue comment (status=%s): %s",
+                        getattr(e, "status", None),
+                        e,
+                    )
                 wizard.io_handler.write(step, append_help=True)
 
         return f"Processed step {step.title} of wizard {wizard.title}", 204
@@ -849,9 +1116,7 @@ def handle_event():
             logger.debug(msg)
             return msg, 204
     except ValueError as e:
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.exception(e)
-        logger.debug(str(e))
+        logger.debug(f"No branch reference found on the event payload: {str(e)}")
 
     # check the author of the current pull_request
     if event.pusher_name == event.application.bot:
@@ -868,10 +1133,12 @@ def handle_event():
     try:
         forwarded_to = __forward_event__(event)
         if forwarded_to:
+            if forwarded_to.get('skip') is True:
+                return "Event skipped by repository configuration", 204
             return f"Event forwarded to LifeMonitor instance '{forwarded_to['name']}' (url: {forwarded_to['url']})"
     except Exception as e:
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(e)
+        logger.exception("Unable to forward GitHub event: %s", e)
+        return "Unable to forward event", 502
 
     # Submit event to an async handler
     event_handler = __event_handlers__.get(event.type, None)
@@ -885,7 +1152,12 @@ def handle_event():
         logger.debug("Current app: %r", app)
         scheduler: Scheduler = app.scheduler
         logger.debug("Current app scheduler: %r", scheduler)
-        scheduler.run_job('githubEventHandler', event.to_json())
+        scheduler.run_job(
+            'githubEventHandler',
+            event.to_json(),
+            job_id=f"githubEventHandler-{uuid.uuid4()}",
+            replace_existing=False,
+        )
         return "OK", 200
 
 

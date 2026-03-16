@@ -28,6 +28,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from lifemonitor.api.models import TestingService, Workflow
 from lifemonitor.api.models.testsuites.testbuild import TestBuild
 from lifemonitor.api.models.testsuites.testinstance import TestInstance
+from lifemonitor.api.services import LifeMonitor
 from lifemonitor.cache import Timeout, cache
 from lifemonitor.tasks.models import JobSettings
 from lifemonitor.tasks.scheduler import schedule
@@ -38,6 +39,8 @@ logger = logging.getLogger(__name__)
 
 
 logger.info("Importing task definitions")
+
+lm = LifeMonitor.get_instance()
 
 
 @schedule(trigger=IntervalTrigger(seconds=Timeout.BUILD_REFRESH),
@@ -106,6 +109,14 @@ def check_last_build():
         logger.info(f"Update of all non Github test instances completed in {elapsed_time:.2f} seconds.")
 
     all_elapsed_time = time.time() - all_start
+    try:
+        logger.info("Refreshing workflow stats cache...")
+        lm.refresh_workflows_stats_cache()
+        logger.info("Refreshing workflow stats cache... DONE")
+    except Exception as e:
+        logger.error("Error when refreshing workflow stats cache: %s", str(e))
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.exception(e)
     logger.info("Github GraphQL Rate limit status after check_last_build: %s",
                 gh_service._gh_graphql_service.get_rate_limit() if gh_service else "N/A")
     logger.info("Github REST Rate limit status after check_last_build: %s",

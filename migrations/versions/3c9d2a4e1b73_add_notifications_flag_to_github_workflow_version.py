@@ -6,6 +6,7 @@
 # to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
+#
 # The above copyright notice and this permission notice shall be included in all
 # copies or substantial portions of the Software.
 #
@@ -17,30 +18,32 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-apiVersion: v2
-name: lifemonitor
-description: Helm chartWorkflow testing and monitoring service
-icon: https://github.com/crs4/life_monitor/blob/master/docs/life_monitor_logo.png
-type: application
+"""Add notification policy to GithubWorkflowVersion
 
-# This is the chart version. This version number should be incremented each time you make changes
-# to the chart and its templates, including the app version.
-# Versions are expected to follow Semantic Versioning (https://semver.org/)
-version: 0.14.0
+Revision ID: 3c9d2a4e1b73
+Revises: 17bc254d1628
+Create Date: 2026-03-05 15:10:00.000000
 
-# This is the version number of the application being deployed. This version number should be
-# incremented each time you make changes to the application. Versions are not expected to
-# follow Semantic Versioning. They should reflect the version the application is using.
-appVersion: 0.21.0
+"""
 
-# Chart dependencies
-dependencies:
-  - name: nginx
-    version: 13.2.28
-    repository: https://charts.bitnami.com/bitnami
-  - name: postgresql
-    version: 10.1.1
-    repository: https://charts.bitnami.com/bitnami
-  - name: redis
-    version: 15.3.2
-    repository: https://charts.bitnami.com/bitnami
+from alembic import op
+import sqlalchemy as sa
+
+
+# revision identifiers, used by Alembic.
+revision = '3c9d2a4e1b73'
+down_revision = '17bc254d1628'
+branch_labels = None
+depends_on = None
+
+
+def upgrade():
+    op.add_column(
+        'github_workflow_version',
+        sa.Column('notifications_enabled', sa.Boolean(), nullable=True, server_default=sa.true()),
+    )
+    op.alter_column('github_workflow_version', 'notifications_enabled', server_default=None)
+
+
+def downgrade():
+    op.drop_column('github_workflow_version', 'notifications_enabled')

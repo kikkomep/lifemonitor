@@ -48,7 +48,7 @@ class GitRepositoryWithoutMainBranch(WorkflowRepositoryIssue):
 
 
 class RepositoryNotInitialised(WorkflowRepositoryIssue):
-    name = "Repository not intialised"
+    name = "Repository not initialised"
     description = "No workflow and crate metadata found on this repository."
     labels = ['best-practices']
     depends_on = [GitRepositoryWithoutMainBranch]
@@ -74,9 +74,10 @@ class MissingROCrateFile(WorkflowRepositoryIssue):
         "The <code>ro-crate-metadata.json</code> should be placed on the root of this repository."
     labels = ['metadata']
     depends_on = [MissingWorkflowFile]
+    enable_change_update = True
 
     def check(self, repo: WorkflowRepository) -> bool:
-        if repo.metadata is None:
+        if not repo.has_metadata():
             metadata = repo.generate_metadata()
             self.add_change(metadata.repository_file)
             return True

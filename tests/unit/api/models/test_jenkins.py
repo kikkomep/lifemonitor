@@ -97,7 +97,7 @@ def test_latest_builds(jenkins_service, test_instance):
     last_build = builds[0]  # builds are always ordered from the latest executed
     build = jenkins_service.get_last_test_build(test_instance)
     logger.debug("First build from the build list: %r", last_build.id)
-    logger.debug("ID of the lastest build: %r", build.id)
+    logger.debug("ID of the latest build: %r", build.id)
     assert last_build.id == build.id, "Invalid build ID"
 
 

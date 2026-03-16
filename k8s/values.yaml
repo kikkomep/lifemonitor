@@ -147,8 +147,10 @@ proxy:
   instances: []
   # - name: production
   #   url: https://api.lifemonitor.eu
+  #.  ssl_verify: true
   # - name: development
   #   url: https://api.dev.lifemonitor.eu
+  #   ssl_verify: true
 
 # Settings for the LifeMonitor Web Socket Server
 wss:
@@ -261,6 +263,7 @@ lifemonitor:
   log_level: INFO
 
   # secret_key: "<SECRET_KEY>"
+  # secretKey: "<SECRET_KEY>"  # backward-compatible alias
 
   # Warning message for maintenance mode
   warning_message:

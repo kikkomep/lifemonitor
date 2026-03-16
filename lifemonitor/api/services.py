@@ -20,9 +20,12 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Union
+
+from flask import current_app
 
 import lifemonitor.exceptions as lm_exceptions
 from lifemonitor.api import models
@@ -34,6 +37,7 @@ from lifemonitor.auth.models import (EventType,
 from lifemonitor.auth.oauth2.client import providers
 from lifemonitor.auth.oauth2.client.models import OAuthIdentity
 from lifemonitor.auth.oauth2.server import server
+from lifemonitor.cache import Timeout, cache
 from lifemonitor.models import PaginationInfo
 from lifemonitor.tasks.models import Job
 from lifemonitor.utils import (OpenApiSpecs, ROCrateLinkContext,
@@ -45,6 +49,7 @@ logger = logging.getLogger()
 
 class LifeMonitor:
     __instance = None
+    WORKFLOW_STATS_CACHE_PREFIX = "lifemonitor-workflow-stats-cache:"
 
     @classmethod
     def get_instance(cls) -> LifeMonitor:
@@ -829,7 +834,22 @@ class LifeMonitor:
     @classmethod
     def get_workflows_stats(cls, workflows: Optional[List[models.Workflow]] = None,
                             status: bool = True) -> Dict[str, Any]:
-        # Reference to the list of workflows
+        workflows = workflows if workflows is not None else models.Workflow.all()
+        if not cls._is_stats_cache_available():
+            return cls._compute_workflows_stats(workflows=workflows, status=status)
+        cache_key = cls._make_workflows_stats_cache_key(workflows, status=status)
+        stats = cache.get(cache_key, prefix=cls.WORKFLOW_STATS_CACHE_PREFIX)
+        if stats is None:
+            with cache.lock(cache_key, timeout=Timeout.NONE):
+                stats = cache.get(cache_key, prefix=cls.WORKFLOW_STATS_CACHE_PREFIX)
+                if stats is None:
+                    stats = cls._compute_workflows_stats(workflows=workflows, status=status)
+                    cache.set(cache_key, stats, timeout=Timeout.NONE, prefix=cls.WORKFLOW_STATS_CACHE_PREFIX)
+        return stats
+
+    @classmethod
+    def _compute_workflows_stats(cls, workflows: Optional[List[models.Workflow]] = None,
+                                 status: bool = True) -> Dict[str, Any]:
         workflows = workflows if workflows is not None else models.Workflow.all()
         workflow_versions = [v for w in workflows for v in w.versions.values()]
         test_suites = [s for wv in workflow_versions for s in wv.test_suites]
@@ -847,13 +867,26 @@ class LifeMonitor:
 
         # Workflows status stats
         if status:
-            stats["workflows_by_status"] = cls.get_workflows_status_stats(workflows)
+            stats["workflows_by_status"] = cls._compute_workflows_status_stats(workflows)
         return stats
 
     @classmethod
     def get_workflows_status_stats(cls, workflows: Optional[List[models.Workflow]] = None):
-        # Reference to the list of workflows
-        # Use provided workflows or all workflows if None
+        workflows = workflows if workflows is not None else models.Workflow.all()
+        if not cls._is_stats_cache_available():
+            return cls._compute_workflows_status_stats(workflows)
+        cache_key = cls._make_workflows_status_cache_key(workflows)
+        stats = cache.get(cache_key, prefix=cls.WORKFLOW_STATS_CACHE_PREFIX)
+        if stats is None:
+            with cache.lock(cache_key, timeout=Timeout.NONE):
+                stats = cache.get(cache_key, prefix=cls.WORKFLOW_STATS_CACHE_PREFIX)
+                if stats is None:
+                    stats = cls._compute_workflows_status_stats(workflows)
+                    cache.set(cache_key, stats, timeout=Timeout.NONE, prefix=cls.WORKFLOW_STATS_CACHE_PREFIX)
+        return stats
+
+    @classmethod
+    def _compute_workflows_status_stats(cls, workflows: Optional[List[models.Workflow]] = None):
         workflows = workflows if workflows is not None else models.Workflow.all()
 
         # Group workflows by aggregated status
@@ -871,3 +904,54 @@ class LifeMonitor:
                 status_counts[status] = 0
             status_counts[status] += 1
         return status_counts
+
+    @classmethod
+    def _make_workflows_scope_signature(cls, workflows: Optional[List[models.Workflow]] = None) -> str:
+        if workflows is None:
+            return "all"
+        if len(workflows) == 0:
+            return "empty"
+        workflow_uuids = sorted({str(w.uuid) for w in workflows})
+        return hashlib.sha256("|".join(workflow_uuids).encode()).hexdigest()
+
+    @classmethod
+    def _make_workflows_stats_cache_key(cls, workflows: Optional[List[models.Workflow]] = None,
+                                        status: bool = True) -> str:
+        scope = cls._make_workflows_scope_signature(workflows)
+        return f"workflows_stats::{scope}::status={str(status).lower()}"
+
+    @classmethod
+    def _make_workflows_status_cache_key(cls, workflows: Optional[List[models.Workflow]] = None) -> str:
+        scope = cls._make_workflows_scope_signature(workflows)
+        return f"workflow_status_stats::{scope}"
+
+    @classmethod
+    def clear_workflows_stats_cache(cls):
+        if not cls._is_stats_cache_available():
+            return
+        cache.delete_keys("*", prefix=cls.WORKFLOW_STATS_CACHE_PREFIX)
+
+    @classmethod
+    def _is_stats_cache_available(cls) -> bool:
+        return bool(getattr(cache, "cache_enabled", False))
+
+    @classmethod
+    def refresh_workflows_stats_cache(cls):
+        cls.clear_workflows_stats_cache()
+        cls.get_workflows_stats(status=True)
+        cls.get_workflows_status_stats()
+        public_workflows = models.Workflow.get_public_workflows()
+        cls.get_workflows_stats(public_workflows, status=True)
+        cls.get_workflows_status_stats(public_workflows)
+
+    @classmethod
+    def enqueue_workflows_stats_cache_refresh(cls):
+        try:
+            app = current_app._get_current_object()
+            scheduler = getattr(app, "scheduler", None)
+            if scheduler:
+                scheduler.run_job("refresh_workflow_stats_cache", replace_existing=True)
+                return
+        except Exception as e:
+            logger.debug("Unable to schedule async workflow stats refresh: %s", e)
+        cls.refresh_workflows_stats_cache()
