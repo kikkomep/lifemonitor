@@ -29,13 +29,6 @@ from typing import Dict, List
 
 import jwt
 import requests
-from lifemonitor.api.models.repositories.github import (
-    GithubWorkflowRepository, InstallationGithubWorkflowRepository)
-from lifemonitor.auth.oauth2.client.models import (
-    OAuthIdentity, OAuthIdentityNotFoundException)
-from lifemonitor.exceptions import IllegalStateException, LifeMonitorException
-from lifemonitor.integrations.github.registry import GithubWorkflowRegistry
-
 from github import Github
 from github import GithubIntegration as GithubIntegrationBase
 from github import Installation
@@ -45,6 +38,12 @@ from github.PaginatedList import PaginatedList
 from github.Repository import Repository as GithubRepository
 from github.Requester import Requester
 
+from lifemonitor.api.models.repositories.github import \
+    InstallationGithubWorkflowRepository
+from lifemonitor.auth.oauth2.client.models import (
+    OAuthIdentity, OAuthIdentityNotFoundException)
+from lifemonitor.exceptions import IllegalStateException, LifeMonitorException
+from lifemonitor.integrations.github.registry import GithubWorkflowRegistry
 from lifemonitor.integrations.github.utils import CachedGithubRequester
 
 from .config import (DEFAULT_BASE_URL, DEFAULT_PER_PAGE, DEFAULT_TIMEOUT,
